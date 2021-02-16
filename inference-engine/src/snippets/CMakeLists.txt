@@ -33,7 +33,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE inference_engine_transformatio
 target_link_libraries(${TARGET_NAME} PUBLIC ngraph inference_engine_transformations
                                      PRIVATE ngraph_reference)
 
-target_include_directories(${TARGET_NAME} PUBLIC ${PUBLIC_HEADERS_DIR}
+target_include_directories(${TARGET_NAME} PUBLIC $<BUILD_INTERFACE:${PUBLIC_HEADERS_DIR}>
                                           PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_cpplint_target(${TARGET_NAME}_cpplint FOR_TARGETS ${TARGET_NAME})
@@ -53,15 +53,15 @@ openvino_developer_export_targets(COMPONENT inference_engine TARGETS ${TARGET_NA
 # install
 
 # TODO: uncomment once snippets are integrated into CPU plugin
-# if(BUILD_SHARED_LIBS)
-#     install(TARGETS ${TARGET_NAME}
-#             RUNTIME DESTINATION ${IE_CPACK_RUNTIME_PATH} COMPONENT core
-#             LIBRARY DESTINATION ${IE_CPACK_LIBRARY_PATH} COMPONENT core)
-# else()
-#     ov_install_static_lib(${TARGET_NAME} core)
-# endif()
+ if(BUILD_SHARED_LIBS)
+     install(TARGETS ${TARGET_NAME}
+             RUNTIME DESTINATION ${IE_CPACK_RUNTIME_PATH} COMPONENT core
+             LIBRARY DESTINATION ${IE_CPACK_LIBRARY_PATH} COMPONENT core)
+ else()
+     ov_install_static_lib(${TARGET_NAME} core)
+ endif()
 
 # TODO: remove once install commands above are commented out
-install(TARGETS ${TARGET_NAME}
-        RUNTIME DESTINATION ${IE_CPACK_RUNTIME_PATH} COMPONENT tests EXCLUDE_FROM_ALL
-        LIBRARY DESTINATION ${IE_CPACK_LIBRARY_PATH} COMPONENT tests EXCLUDE_FROM_ALL)
+#install(TARGETS ${TARGET_NAME}
+#        RUNTIME DESTINATION ${IE_CPACK_RUNTIME_PATH} COMPONENT tests EXCLUDE_FROM_ALL
+#        LIBRARY DESTINATION ${IE_CPACK_LIBRARY_PATH} COMPONENT tests EXCLUDE_FROM_ALL)
