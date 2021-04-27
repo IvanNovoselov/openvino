@@ -34,6 +34,42 @@ op::v1::BinaryConvolution::BinaryConvolution(const Output<Node>& data,
     , m_pad_value(pad_value)
     , m_auto_pad(auto_pad)
 {
+    // NB! This is for debug purposes
+    auto k_val =
+            (std::dynamic_pointer_cast<ngraph::op::Constant>(kernel.get_node_shared_ptr()))
+            ->get_data_ptr<ngraph::element::Type_t::u1>();
+    std::cerr << "Kernel value: " << k_val[0] << "\n";
+    std::cerr << "Strides: ";
+    for (auto s : strides)
+        std::cerr << s << " ";
+    std::cerr << "\n";
+    std::cerr << "Pads begin: ";
+    std::cerr << pads_begin << "\n";
+
+    std::cerr << "Pads end: ";
+    std::cerr << pads_end << "\n";
+
+    std::cerr << "Dilations: ";
+    for (auto s : dilations)
+        std::cerr << s << " ";
+    std::cerr << "\n";
+
+    std::cerr << "Pads value: ";
+    std::cerr << pad_value << "\n";
+
+    std::cerr << "Pads type: ";
+    std::cerr << auto_pad << "\n";
+
+//    auto ih =
+//            (std::dynamic_pointer_cast<ngraph::op::Constant>(input_high.get_node_shared_ptr()))->get_data_ptr<float>();
+//    auto il =
+//            (std::dynamic_pointer_cast<ngraph::op::Constant>(input_low.get_node_shared_ptr()))->get_data_ptr<float>();
+//    std::cout << "Inputs " << ih[0] << " | " << il[0] << "\n";
+//    auto oh =
+//         (std::dynamic_pointer_cast<ngraph::op::Constant>(output_high.get_node_shared_ptr()))->get_data_ptr<float>();
+//    auto ol =
+//            (std::dynamic_pointer_cast<ngraph::op::Constant>(output_low.get_node_shared_ptr()))->get_data_ptr<float>();
+//    std::cout << "Outputs " << oh[0] << " | " << ol[0] << "\n";
     constructor_validate_and_infer_types();
 }
 

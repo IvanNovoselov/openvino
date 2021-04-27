@@ -83,6 +83,10 @@ public:
 
     template<class T>
     static void Compare(const T *expected, const T *actual, std::size_t size, T threshold) {
+        std::cerr << "Supplementary output info:\n";
+        for (std::size_t i = 0; i < size; ++i)
+            std::cerr << actual[i] << " | " << expected[i] << " = " << actual[i] - expected[i] << "\n";
+        std::cerr << "\n";
         for (std::size_t i = 0; i < size; ++i) {
             const auto &ref = expected[i];
             const auto &res = actual[i];

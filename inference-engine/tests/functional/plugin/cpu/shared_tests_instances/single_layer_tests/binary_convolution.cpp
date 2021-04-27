@@ -11,6 +11,44 @@ using namespace LayerTestsDefinitions;
 
 namespace {
 
+
+/*** DEBUG ***/
+namespace custom_debug {
+    const std::vector<InferenceEngine::Precision> netPrecisions = {InferenceEngine::Precision::FP16};
+
+    const std::vector<std::vector<size_t>> kernels = {{1, 1}};
+    const std::vector<std::vector<size_t>> strides = {{1, 1}};
+    const std::vector<std::vector<ptrdiff_t>> padsBegin = {{0, 0}};
+    const std::vector<std::vector<ptrdiff_t>> padsEnd = {{0, 0}};
+    const std::vector<std::vector<size_t>> dilations = {{1, 1}};
+    const std::vector<size_t> numOutChannels = {64};
+    const std::vector<float> padValues = {-1};
+
+    const auto binConv2DParams_ExplicitPadding = ::testing::Combine(
+            ::testing::ValuesIn(kernels),
+            ::testing::ValuesIn(strides),
+            ::testing::ValuesIn(padsBegin),
+            ::testing::ValuesIn(padsEnd),
+            ::testing::ValuesIn(dilations),
+            ::testing::ValuesIn(numOutChannels),
+            ::testing::Values(ngraph::op::PadType::EXPLICIT),
+            ::testing::ValuesIn(padValues));
+
+    INSTANTIATE_TEST_CASE_P(
+            smoke_BinaryConvolution2D_ExplicitPadding, BinaryConvolutionLayerTest,
+            ::testing::Combine(
+                    binConv2DParams_ExplicitPadding,
+                    ::testing::ValuesIn(netPrecisions),
+                    ::testing::Values(InferenceEngine::Precision::UNSPECIFIED),
+                    ::testing::Values(InferenceEngine::Precision::UNSPECIFIED),
+                    ::testing::Values(InferenceEngine::Layout::ANY),
+                    ::testing::Values(InferenceEngine::Layout::ANY),
+                    ::testing::Values(std::vector<size_t>({1, 64, 56, 56})),
+                    ::testing::Values(CommonTestUtils::DEVICE_CPU)),
+            BinaryConvolutionLayerTest::getTestCaseName);
+} //namespace custom_debug
+/*** DEBUG ***/
+
 const std::vector<InferenceEngine::Precision> netPrecisions = {
     InferenceEngine::Precision::FP32, InferenceEngine::Precision::FP16,
     InferenceEngine::Precision::I32};

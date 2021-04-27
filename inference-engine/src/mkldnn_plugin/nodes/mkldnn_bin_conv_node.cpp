@@ -876,15 +876,16 @@ private:
 MKLDNNBinaryConvolutionNode::MKLDNNBinaryConvolutionNode(const InferenceEngine::CNNLayerPtr& layer,
                                                          const mkldnn::engine& eng, MKLDNNWeightsSharing::Ptr &cache)
         : MKLDNNNode(layer, eng, cache) {
-    if (mayiuse(x64::avx512_common)) {
-        implType = impl_desc_type::jit_avx512;
-    } else if (mayiuse(x64::avx2)) {
-        implType = impl_desc_type::jit_avx2;
-    } else if (mayiuse(x64::sse41)) {
-        implType = impl_desc_type::jit_sse42;
-    } else {
-        implType = impl_desc_type::ref;
-    }
+    implType = impl_desc_type::ref;
+//    if (mayiuse(x64::avx512_common)) {
+//        implType = impl_desc_type::jit_avx512;
+//    } else if (mayiuse(x64::avx2)) {
+//        implType = impl_desc_type::jit_avx2;
+//    } else if (mayiuse(x64::sse41)) {
+//        implType = impl_desc_type::jit_sse42;
+//    } else {
+//        implType = impl_desc_type::ref;
+//    }
 }
 
 void MKLDNNBinaryConvolutionNode::getSupportedDescriptors() {
@@ -945,6 +946,8 @@ void MKLDNNBinaryConvolutionNode::getSupportedDescriptors() {
     auto allPads = getPaddings(*binConvLayer);
     invertVectorCopyUtoI(allPads.begin, paddingL);
     invertVectorCopyUtoI(allPads.end, paddingR);
+
+    std::cerr << "Pads value: " << pad_value << "\n";
 }
 
 void MKLDNNBinaryConvolutionNode::initSupportedPrimitiveDescriptors() {
