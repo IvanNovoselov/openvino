@@ -236,7 +236,10 @@ InferenceEngine::Blob::Ptr generate(const std::shared_ptr<ngraph::op::v0::PRelu>
             FuncTestUtils::createAndFillBlobWithFloatArray(info.getTensorDesc(), negativeSlope.data(), negativeSlope.size());
         }
         default: {
-            return Activation::generate(info, node->get_input_element_type(0).is_signed());
+            //return Activation::generate(info, node->get_input_element_type(0).is_signed());
+            return FuncTestUtils::createAndFillBlob(info.getTensorDesc(), 0, -10, 1);
+            //float values[] = {-10, 0, -10, -10, -10};
+            //return FuncTestUtils::createAndFillBlobWithFloatArray(info.getTensorDesc(), values, 5);
         }
     }
 }
