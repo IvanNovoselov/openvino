@@ -463,10 +463,19 @@ InferenceEngine::Blob::Ptr generate(const std::shared_ptr<ngraph::op::v4::Mish> 
 InferenceEngine::Blob::Ptr generate(const std::shared_ptr<ngraph::op::v4::Proposal> node,
                                     const InferenceEngine::InputInfo& info,
                                     size_t port) {
-    if (port == 0) {
-        return FuncTestUtils::createAndFillBlobFloat(info.getTensorDesc(), 1, 0, 1000, 8234231);
+    switch (port) {
+        case 0: return FuncTestUtils::createAndFillBlobFloat(info.getTensorDesc(), 1, 0, 1000, 8234231);
+        case 1: return FuncTestUtils::createAndFillBlobFloatNormalDistribution(info.getTensorDesc(), 0.0f, 0.2f, 7235346);
+//        case 2: {
+//        }
     }
-    return FuncTestUtils::createAndFillBlobFloatNormalDistribution(info.getTensorDesc(), 0.0f, 0.2f, 7235346);
+    float img_shape[] = {255., 255., 1.};
+    return FuncTestUtils::createAndFillBlobWithFloatArray(info.getTensorDesc(), img_shape, 3);
+
+//    if (port == 0) {
+//        return FuncTestUtils::createAndFillBlobFloat(info.getTensorDesc(), 1, 0, 1000, 8234231);
+//    }
+//    return FuncTestUtils::createAndFillBlobFloatNormalDistribution(info.getTensorDesc(), 0.0f, 0.2f, 7235346);
 }
 
 InferenceEngine::Blob::Ptr generate(const std::shared_ptr<ngraph::op::v4::SoftPlus> node,

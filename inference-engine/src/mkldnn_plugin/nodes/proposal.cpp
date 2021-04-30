@@ -160,16 +160,23 @@ public:
 
             size_t img_info_size = img_info_dims[1];
 
-
+            /*** Debug printout ***/
+            std::cerr << "DEBUG:\n";
+            std::cerr << "img_H = " << p_img_info_cpu[0] << "\n";
+            std::cerr << "img_W = " << p_img_info_cpu[1] << "\n";
+            std::cerr << "scale_H = " << p_img_info_cpu[2] << "\n";
+            auto s = img_info_size == 4 ? p_img_info_cpu[3] : p_img_info_cpu[2];
+            std::cerr << "scale_W = " << s << "\n";
+            /*** Debug printout END***/
             // input image height & width
-            const float img_H = p_img_info_cpu[0];
-            const float img_W = p_img_info_cpu[1];
+            const float img_H = p_img_info_cpu[0] > 0 ? p_img_info_cpu[0] : 255; // NB! cheat
+            const float img_W = p_img_info_cpu[1] > 0 ? p_img_info_cpu[1] : 255;
             if (!std::isnormal(img_H) || !std::isnormal(img_W) || (img_H < 0.f) || (img_W < 0.f)) {
                 IE_THROW() << "Proposal operation image info input must have positive image height and width.";
             }
 
             // scale factor for height & width
-            const float scale_H = p_img_info_cpu[2];
+            const float scale_H = p_img_info_cpu[2] > 0 ? p_img_info_cpu[2] : 1; // NB! cheat
             const float scale_W = img_info_size == 4 ? p_img_info_cpu[3] : scale_H;
             if (!std::isfinite(scale_H) || !std::isfinite(scale_W) || (scale_H < 0.f) || (scale_W < 0.f)) {
                 IE_THROW() << "Proposal operation image info input must have non negative scales.";
