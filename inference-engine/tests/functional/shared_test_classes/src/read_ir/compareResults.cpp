@@ -52,6 +52,15 @@ namespace Proposal {
 template <class T>
 void Compare(const T *expected, const T *actual, std::size_t size,
              T threshold, const std::size_t output_index, size_t& num_selected_boxes) {
+    /*** Printout for DEBUG purposes ***/
+    std::cerr << "OUT INDEX :" << output_index << "\n";
+    std::cerr << "Actual | Expected | Ac-Ex\n";
+    std::cerr << "-------------------------\n";
+    for (std::size_t i = 0; i < 10; ++i)
+        std::cerr << i << " | " << actual[i] << " | " << expected[i] << " | " << actual[i] - expected[i] << "\n";
+    for (std::size_t i = size - 10; i < size; ++i)
+        std::cerr << i << " | " << actual[i] << " | " << expected[i] << " | " << actual[i] - expected[i] << "\n";
+    /*** Printout for DEBUG purposes END***/
     for (std::size_t i = 0; i < size; ++i) {
         const auto &ref = expected[i];
         const auto &res = actual[i];

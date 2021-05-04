@@ -376,7 +376,6 @@ namespace ngraph
                     const T* p_d_anchor_item = bbox_deltas;
                     T* p_roi_item = output;
                     T* p_prob_item = attrs.infer_probs ? out_probs : nullptr;
-
                     // bottom shape (batch_size * (2 * num_anchors) * H * W)
                     const unsigned int bottom_H = class_probs_shape[2];
                     const unsigned int bottom_W = class_probs_shape[3];
@@ -464,6 +463,19 @@ namespace ngraph
                                       attrs.clip_after_nms,
                                       p_probs);
                     }
+                    /*** DEBUG PRINOUT ***/
+                    std::cerr << "IN-REF printput. line#" << __LINE__ << "\n";
+                    std::cerr << "OUTPUT";
+                    for (int i = 0; i < 10; i++)
+                        std::cerr << output[i] << " ";
+                    std::cerr << "\n";
+                    if (out_probs) {
+                        std::cerr << "output probs";
+                        for (int i = 0; i < 10; i++)
+                            std::cerr << out_probs[i] << " ";
+                        std::cerr << "\n";
+                    }
+                    /*** DEBUG PRINTOUT END ***/
                 }
             } // namespace details
 

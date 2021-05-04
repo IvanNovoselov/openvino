@@ -149,6 +149,9 @@ op::v4::Proposal::Proposal(const Output<Node>& class_probs,
     : v0::Proposal(class_probs, class_bbox_deltas, image_shape, attrs)
 {
     constructor_validate_and_infer_types();
+    // NB!!! This is a possible fix to allign with CPU impl.
+    //if(get_output_size() == 2)
+    //      m_attrs.infer_probs = true;
 }
 
 void op::v4::Proposal::validate_and_infer_types()

@@ -169,14 +169,14 @@ public:
             std::cerr << "scale_W = " << s << "\n";
             /*** Debug printout END***/
             // input image height & width
-            const float img_H = p_img_info_cpu[0] > 0 ? p_img_info_cpu[0] : 255; // NB! cheat
-            const float img_W = p_img_info_cpu[1] > 0 ? p_img_info_cpu[1] : 255;
+            const float img_H = p_img_info_cpu[0];
+            const float img_W = p_img_info_cpu[1];
             if (!std::isnormal(img_H) || !std::isnormal(img_W) || (img_H < 0.f) || (img_W < 0.f)) {
                 IE_THROW() << "Proposal operation image info input must have positive image height and width.";
             }
 
             // scale factor for height & width
-            const float scale_H = p_img_info_cpu[2] > 0 ? p_img_info_cpu[2] : 1; // NB! cheat
+            const float scale_H = p_img_info_cpu[2];
             const float scale_W = img_info_size == 4 ? p_img_info_cpu[3] : scale_H;
             if (!std::isfinite(scale_H) || !std::isfinite(scale_W) || (scale_H < 0.f) || (scale_W < 0.f)) {
                 IE_THROW() << "Proposal operation image info input must have non negative scales.";
@@ -184,7 +184,19 @@ public:
 
             XARCH::proposal_exec(p_bottom_item, p_d_anchor_item, dims0,
                     {img_H, img_W, scale_H, scale_W}, anchors.data(), roi_indices.data(), p_roi_item, p_prob_item, conf);
-
+            /*** DEBUG PRINOUT ***/
+            std::cerr << "IN-NODE printput. line#" << __LINE__ << "\n";
+            std::cerr << "P_ROI_ITEM = out[0]";
+            for (int i = 0; i < 10; i++)
+                std::cerr << p_roi_item[i] << " ";
+            std::cerr << "\n";
+            if (p_prob_item) {
+                std::cerr << "P_PROB_ITEM = out[1]";
+                for (int i = 0; i < 10; i++)
+                    std::cerr << p_prob_item[i] << " ";
+                std::cerr << "\n";
+            }
+            /*** DEBUG PRINTOUT END ***/
             return OK;
         } catch (const InferenceEngine::Exception& e) {
             if (resp) {

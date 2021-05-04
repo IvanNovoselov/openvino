@@ -469,7 +469,7 @@ InferenceEngine::Blob::Ptr generate(const std::shared_ptr<ngraph::op::v4::Propos
 //        case 2: {
 //        }
     }
-    float img_shape[] = {255., 255., 1.};
+    float img_shape[] = {225., 225., 1.};
     return FuncTestUtils::createAndFillBlobWithFloatArray(info.getTensorDesc(), img_shape, 3);
 
 //    if (port == 0) {
