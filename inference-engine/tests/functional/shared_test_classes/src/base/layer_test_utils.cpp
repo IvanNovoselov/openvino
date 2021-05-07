@@ -327,7 +327,49 @@ void LayerTestsCommon::Compare(const std::vector<std::vector<std::uint8_t>> &exp
 void LayerTestsCommon::Validate() {
     auto expectedOutputs = CalculateRefs();
     const auto &actualOutputs = GetOutputs();
-
+    /*** Printout for DEBUG purposes ***/
+    {
+        std::cerr << "Inputs printout from Validate (line #" << __LINE__ << ")\n";
+        for (std::size_t i = 0; i < inputs.size(); ++i) {
+            std::cerr << "Printing input #" << i << "\n";
+            auto blob = inputs[i];
+            auto desc = blob->getTensorDesc();
+            std::cerr << "Input #" << i << " has shape " << desc.getDims().size() << "\n";
+            int num_elem = 1;
+            for (auto &n : desc.getDims()) {
+                num_elem *= n;
+            }
+            switch (desc.getPrecision()) {
+                case InferenceEngine::Precision::FP32: {
+                    std::cerr << "FP32 Input detected\n";
+                    auto gen_data = blob->cbuffer().as<float *>();
+                    for (int j = 0; j < num_elem; j++)
+                        std::cerr << gen_data[j] << "\n";
+                    std::cerr << "\n";
+                    break;
+                }
+                case InferenceEngine::Precision::I32: {
+                    std::cerr << "I32 Input detected\n";
+                    auto gen_data = blob->cbuffer().as<int32_t *>();
+                    for (int j = 0; j < num_elem; j++)
+                        std::cerr << gen_data[j] << "\n";
+                    std::cerr << "\n";
+                    break;
+                }
+                case InferenceEngine::Precision::I64: {
+                    std::cerr << "I64 Input detected\n";
+                    auto gen_data = blob->cbuffer().as<int64_t *>();
+                    for (int j = 0; j < num_elem; j++)
+                        std::cerr << gen_data[j] << "\n";
+                    std::cerr << "\n";
+                    break;
+                }
+                default:
+                    std::cerr << "Unsopported precision\n";
+            }
+        }
+    }
+    /*** Printout for DEBUG purposes END***/
     if (expectedOutputs.empty()) {
         return;
     }

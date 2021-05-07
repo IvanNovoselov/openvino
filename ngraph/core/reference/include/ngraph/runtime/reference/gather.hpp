@@ -31,7 +31,19 @@ namespace ngraph
                     shape_size(span(data_shape).subspan(batch_dims, axis - batch_dims));
                 int64_t indices_size = shape_size(span(indices_shape).subspan(batch_dims));
                 int64_t inner_size = shape_size(span(data_shape).subspan(axis + 1));
-
+                /*** NB! for debug purposes ***/
+                std::cerr << "Here are REF data:\n";
+                for (size_t i = 0; i < shape_size(data_shape); i++)
+                    std::cerr << data[i] << " ";
+                std::cerr << "\n";
+                std::cerr << "Here are REF indices:\n";
+                for (size_t i = 0; i < shape_size(indices_shape); i++)
+                    std::cerr << indices[i] << " ";
+                std::cerr << "\n";
+                std::cerr << "Here are REF axis:\n";
+                    std::cerr << axis << " ";
+                std::cerr << "\n";
+                /*** NB! for debug purposes END ***/
                 int64_t batch_data_mul = shape_size(span(data_shape).subspan(batch_dims));
                 int64_t batch_out_mul = shape_size(span(out_shape).subspan(batch_dims));
                 int64_t batch_indices_mul = shape_size(span(indices_shape).subspan(batch_dims));

@@ -560,6 +560,23 @@ InferenceEngine::Blob::Ptr generate(const std::shared_ptr<ngraph::op::v5::Round>
     return Activation::generate(info, node->get_input_element_type(0).is_signed(), -10, 20, 4);
 }
 
+/*** NB this is added to fit Gather ***/
+InferenceEngine::Blob::Ptr generate(const std::shared_ptr<ngraph::op::v1::Gather> node,
+                                    const InferenceEngine::InputInfo& info,
+                                    size_t port) {
+    if (port == 1) {
+        auto data_shape = node->get_input_shape(0);
+        uint32_t axis = 0;
+        uint32_t range = data_shape[axis];
+        std::cerr << "MY SHAPE " << data_shape << "\n";
+        return FuncTestUtils::createAndFillBlob(info.getTensorDesc(), range);
+        //return FuncTestUtils::createAndFillBlob(info.getTensorDesc());
+    } else {
+        return FuncTestUtils::createAndFillBlob(info.getTensorDesc());
+    }
+}
+/*** NB this is added to fit Gather END ***/
+
 template<typename T>
 InferenceEngine::Blob::Ptr generateInput(const std::shared_ptr<ngraph::Node> node,
                                          const InferenceEngine::InputInfo& info,
