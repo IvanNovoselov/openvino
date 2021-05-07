@@ -559,6 +559,20 @@ InferenceEngine::Blob::Ptr generate(const std::shared_ptr<ngraph::op::v5::Round>
     return Activation::generate(info, node->get_input_element_type(0).is_signed(), -10, 20, 4);
 }
 
+InferenceEngine::Blob::Ptr generate(const std::shared_ptr<ngraph::op::v1::Gather> node,
+                                    const InferenceEngine::InputInfo& info,
+                                    size_t port) {
+    if (port == 1) {
+        auto data_shape = node->get_input_shape(0);
+        int64_t axis_value = node->get_axis();
+        if ( (axis_value < 0) || (axis_value >= data_shape.size()) )
+            IE_THROW() << "Invalid axis value. Expected in [0, " << data_shape.size() - 1 << "], got " << axis_value;
+        return FuncTestUtils::createAndFillBlob(info.getTensorDesc(), data_shape[axis_value]);
+    } else {
+        return FuncTestUtils::createAndFillBlob(info.getTensorDesc());
+    }
+}
+
 template<typename T>
 InferenceEngine::Blob::Ptr generateInput(const std::shared_ptr<ngraph::Node> node,
                                          const InferenceEngine::InputInfo& info,
