@@ -105,6 +105,11 @@ InferenceEngine::Blob::Ptr ActivationLayerTest::GenerateInput(const InferenceEng
             data_start_from = -100;
             data_range = 200;
             resolution = 32768;
+        }
+        case ngraph::helpers::ActivationTypes::PReLu: {
+            data_start_from = -10;
+            data_range = 0;
+            resolution = 1;
             break;
         }
         default: {
@@ -250,5 +255,4 @@ void ActivationDynamicLayerTest::Run() {
     // no inference and checks are done here -- just shape check because we miss CNNNetwork functionality
     // to handle dynamic inputs-outputs and test functionality to generate blob of a certain shape
 }
-
 }  // namespace LayerTestsDefinitions
