@@ -19,7 +19,7 @@ const std::vector<InferenceEngine::Precision> inputPrecisions = {
 
 const std::vector<InferenceEngine::Precision> netPrecisions = {
         InferenceEngine::Precision::FP32,
-        InferenceEngine::Precision::FP16
+//        InferenceEngine::Precision::FP16
 };
 
 const std::map<ActivationTypes, std::vector<std::vector<float>>> activationTypes = {
@@ -56,8 +56,8 @@ const std::map<ActivationTypes, std::vector<std::vector<float>>> activationTypes
 };
 
 const std::map<ActivationTypes, std::vector<std::vector<float>>> activationParamTypes = {
-    {PReLu, {{-0.01f}}},
-    {LeakyRelu, {{0.01f}}}
+    {PReLu, {{0.1, 10}}},
+  //  {LeakyRelu, {{0.01f}}}
 };
 
 std::map<std::vector<size_t>, std::vector<std::vector<size_t>>> basic = {
@@ -66,8 +66,14 @@ std::map<std::vector<size_t>, std::vector<std::vector<size_t>>> basic = {
 };
 
 std::map<std::vector<size_t>, std::vector<std::vector<size_t>>> preluBasic = {
-        {{1, 50}, {{1}, {50}}},
-        {{1, 128}, {{1}, {128}}},
+//        {{1, 50}, {{1}, {50}}},
+//        {{1, 128}, {{1}, {128}}},
+        {{1, 2, 1, 2}, {{2}}},
+//        {{1, 128}, {{1}, {128}}},
+//        {{20, 128}, {{20}, {128}, {20, 128}}},
+//        {{1, 20, 128}, {{1}, {20}, {128}, {20, 128}}},
+//        {{1, 20, 128, 128}, {{1}, {20}, {128}, {128, 128}, {20, 128, 128}}},
+//        {{1, 20, 20, 128, 128}, {{1}, {20}, {128}, {128, 128}, {20, 128, 128}, {20, 20, 128, 128}}},
 };
 
 const auto basicCases = ::testing::Combine(

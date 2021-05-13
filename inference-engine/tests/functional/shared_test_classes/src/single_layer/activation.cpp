@@ -95,6 +95,12 @@ InferenceEngine::Blob::Ptr ActivationLayerTest::GenerateInput(const InferenceEng
             resolution = 4;
             break;
         }
+        case ngraph::helpers::ActivationTypes::PReLu: {
+            data_start_from = -10;
+            data_range = 0;
+            resolution = 1;
+            break;
+        }
         default: {
             data_start_from = -10;
             data_range = 20;

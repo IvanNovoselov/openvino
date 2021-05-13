@@ -37,6 +37,8 @@ namespace ngraph
                        const Shape& slope_shape)
             {
                 int cnt = 0;
+                std::cerr << "Ref impl arg_shape: " << arg_shape << "\n";
+                std::cerr << "Ref impl slope_shape: " << slope_shape << "\n";
                 for (size_t i = 0; i < shape_size(arg_shape); ++i)
                 {
                     out[i] =

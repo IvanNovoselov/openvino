@@ -226,16 +226,6 @@ InferenceEngine::Blob::Ptr LayerTestsCommon::GenerateInput(const InferenceEngine
     return FuncTestUtils::createAndFillBlob(info.getTensorDesc());
 }
 
-void LayerTestsCommon::Compare(const std::vector<std::vector<std::uint8_t>> &expectedOutputs,
-                               const std::vector<InferenceEngine::Blob::Ptr> &actualOutputs,
-                               float threshold) {
-        for (std::size_t outputIndex = 0; outputIndex < expectedOutputs.size(); ++outputIndex) {
-        const auto &expected = expectedOutputs[outputIndex];
-        const auto &actual = actualOutputs[outputIndex];
-        Compare(expected, actual, threshold);
-    }
-}
-
 void LayerTestsCommon::Compare(const std::vector<std::uint8_t> &expected, const InferenceEngine::Blob::Ptr &actual) {
     ASSERT_EQ(expected.size(), actual->byteSize());
     const auto &expectedBuffer = expected.data();
@@ -461,9 +451,10 @@ void LayerTestsCommon::Validate() {
     {
         std::cerr << "Inputs printout from Validate (line #" << __LINE__ << ")\n";
         for (std::size_t i = 0; i < inputs.size(); ++i) {
-            std::cerr << "Printing input #" << i << "\n";
+            std::cerr << "Printing input #" << i;
             auto blob = inputs[i];
             auto desc = blob->getTensorDesc();
+            std::cerr << " ( " << desc.getLayout() << " layout )" << "\n";
             int num_elem = 1;
             for (auto &n : desc.getDims())
                 num_elem *= n;
