@@ -448,7 +448,29 @@ void LayerTestsCommon::Compare(const std::vector<std::vector<std::uint8_t>> &exp
 void LayerTestsCommon::Validate() {
     auto expectedOutputs = CalculateRefs();
     const auto &actualOutputs = GetOutputs();
-
+    /*** Printout for DEBUG purposes ***/
+    {
+        std::cerr << "Inputs printout from Validate (line #" << __LINE__ << ")\n";
+        for (std::size_t i = 0; i < inputs.size(); ++i) {
+            std::cerr << "Printing input #" << i << "\n";
+            auto blob = inputs[i];
+            auto desc = blob->getTensorDesc();
+            int num_elem = 1;
+            for (auto &n : desc.getDims())
+                num_elem *= n;
+            if (desc.getPrecision() == InferenceEngine::Precision::FP32) {
+                auto gen_data = blob->cbuffer().as<float *>();
+                std::cerr << "FP32 Input detected\n";
+                for (int j = 0; j < num_elem; j++)
+                    //for (int j = 0; j < 10; j++)
+                    std::cerr << gen_data[j] << "\n";
+                std::cerr << "\n";
+            } else {
+                std::cerr << "Unsopported precision\n";
+            }
+        }
+    }
+    /*** Printout for DEBUG purposes END***/
     if (expectedOutputs.empty()) {
         return;
     }
