@@ -57,6 +57,7 @@ private:
     bool isOptimized = false;
     bool canUseOptimizedNspc2Ncsp = false;
     bool canUseOptimizedNcsp2Nspc = false;
+    bool canUseDnnlJit = true;
 
     void optimizedNspc2Ncsp();
     void optimizedNcsp2Nspc();

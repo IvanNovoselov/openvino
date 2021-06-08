@@ -68,8 +68,22 @@ void MKLDNNReorderNode::initSupportedPrimitiveDescriptors() {
         config.inConfs[0].desc = MKLDNNMemoryDesc(getParentEdgeAt(0)->getDims(), inputDataType, memory::format_tag::any);
         config.outConfs[0].desc = MKLDNNMemoryDesc(getChildEdgeAt(0)->getDims(), outputDataType, memory::format_tag::any);
     }
+    // NB! DEBUG
+    //if (this->getExecIndex() == 248)
+    if (this->getName() =="split_3.tmp_0/VariadicSplit_abcd_aBcd8b_concat_5.tmp_0" )
+        std::cerr << "\n\nThis is the suspect\n\n";
 
-    supportedPrimitiveDescriptors.emplace_back(config, impl_desc_type::reorder, MKLDNNMemory::Convert(config.outConfs[0].desc.getLayout()));
+    // NB! DEBUG OVER
+    if (parent->isInplace() && input.getDims()[0] > 1) {
+        canUseDnnlJit = false;
+        supportedPrimitiveDescriptors.emplace_back(config, impl_desc_type::ref, MKLDNNMemory::Convert(config.outConfs[0].desc.getLayout()));
+    } else {
+                supportedPrimitiveDescriptors.emplace_back(config, impl_desc_type::jit,
+                                                           MKLDNNMemory::Convert(config.outConfs[0].desc.getLayout()));
+
+//        supportedPrimitiveDescriptors.emplace_back(config, impl_desc_type::reorder,
+//                                                   MKLDNNMemory::Convert(config.outConfs[0].desc.getLayout()));
+    }
 }
 
 void MKLDNNReorderNode::createPrimitive() {
@@ -117,6 +131,9 @@ void MKLDNNReorderNode::createReorderPrimitive(const mkldnn::memory::desc &srcDe
 
     mkldnn::primitive_attr attr;
 
+    if (this->getName() =="split_3.tmp_0/VariadicSplit_abcd_aBcd8b_concat_5.tmp_0" )
+        std::cerr << "\n\nThis is the suspect\n\n";
+
     if (_scales) {
         std::vector<float> scales;
 
@@ -141,8 +158,10 @@ void MKLDNNReorderNode::createReorderPrimitive(const mkldnn::memory::desc &srcDe
             return false;
 
         auto info = pd.impl_info_str();
-        supportedPrimitiveDescriptors[0].setImplementationType(parse_impl_name(info));
-
+        if (canUseDnnlJit)
+            supportedPrimitiveDescriptors[0].setImplementationType(parse_impl_name(info));
+        else
+            supportedPrimitiveDescriptors[0].setImplementationType(impl_desc_type::ref);
         prim.reset(new mkldnn::reorder(pd));
         return true;
     };
@@ -181,7 +200,13 @@ void MKLDNNReorderNode::createReorderPrimitive(const mkldnn::memory::desc &srcDe
 }
 
 const std::vector<impl_desc_type>& MKLDNNReorderNode::getPrimitivesPriority() {
-    implPriorities = {impl_desc_type::reorder};
+    //if (this->getExecIndex() == 248)
+    if (this->getName() =="split_3.tmp_0/VariadicSplit_abcd_aBcd8b_concat_5.tmp_0" )
+        std::cerr << "\n\nThis is the suspect\n\n";
+    if (canUseDnnlJit)
+        implPriorities = {impl_desc_type::jit, impl_desc_type::ref};
+    else
+        implPriorities = {impl_desc_type::ref};
     return implPriorities;
 }
 
@@ -245,6 +270,8 @@ void MKLDNNReorderNode::optimizedNspc2Ncsp() {
 }
 
 void MKLDNNReorderNode::execute(mkldnn::stream strm) {
+    if (this->getName() =="split_3.tmp_0/VariadicSplit_abcd_aBcd8b_concat_5.tmp_0" )
+        std::cerr << "\n\nThis is the suspect\n\n";
     if (isOptimized)
         return;
 
