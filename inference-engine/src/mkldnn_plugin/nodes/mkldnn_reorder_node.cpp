@@ -45,6 +45,9 @@ void MKLDNNReorderNode::initSupportedPrimitiveDescriptors() {
     auto parent = getParentEdgeAt(0)->getParent();
     auto child = getChildEdgeAt(0)->getChild();
 
+    if (this->getName() =="split_3.tmp_0/VariadicSplit_abcd_aBcd8b_concat_5.tmp_0" )
+        std::cerr << "\n\nThis is the suspect\n\n";
+
     InferenceEngine::LayerConfig config;
     config.dynBatchSupport = true;
     config.inConfs.resize(1);
@@ -74,16 +77,18 @@ void MKLDNNReorderNode::initSupportedPrimitiveDescriptors() {
         std::cerr << "\n\nThis is the suspect\n\n";
 
     // NB! DEBUG OVER
-    if (parent->isInplace() && input.getDims()[0] > 1) {
-        canUseDnnlJit = false;
-        supportedPrimitiveDescriptors.emplace_back(config, impl_desc_type::ref, MKLDNNMemory::Convert(config.outConfs[0].desc.getLayout()));
-    } else {
-                supportedPrimitiveDescriptors.emplace_back(config, impl_desc_type::jit,
-                                                           MKLDNNMemory::Convert(config.outConfs[0].desc.getLayout()));
+    canUseDnnlJit = false;
+    supportedPrimitiveDescriptors.emplace_back(config, impl_desc_type::reorder, MKLDNNMemory::Convert(config.outConfs[0].desc.getLayout()));
+//    if (parent->isInplace() && input.getDims()[0] > 1) {
+//        canUseDnnlJit = false;
+//        supportedPrimitiveDescriptors.emplace_back(config, impl_desc_type::ref_any, MKLDNNMemory::Convert(config.outConfs[0].desc.getLayout()));
+//    } else {
+//                supportedPrimitiveDescriptors.emplace_back(config, impl_desc_type::jit,
+//                                                           MKLDNNMemory::Convert(config.outConfs[0].desc.getLayout()));
 
 //        supportedPrimitiveDescriptors.emplace_back(config, impl_desc_type::reorder,
 //                                                   MKLDNNMemory::Convert(config.outConfs[0].desc.getLayout()));
-    }
+//    }
 }
 
 void MKLDNNReorderNode::createPrimitive() {
@@ -116,6 +121,8 @@ void MKLDNNReorderNode::createPrimitive() {
             // oneDNN doesn't provide JIT reorder impl for non-avx2 targets so we fallback on simple c++ implementation which shows better perf
             canUseOptimizedNcsp2Nspc = true;
         } else {
+            if (this->getName() =="split_3.tmp_0/VariadicSplit_abcd_aBcd8b_concat_5.tmp_0" )
+                std::cerr << "\n\nThis is the suspect\n\n";
             createReorderPrimitive(srcMemPtr->GetDescriptor(), srcMemPtr->GetPrimitive().get_data_handle(),
                                    dstMemPtr->GetDescriptor(), dstMemPtr->GetPrimitive().get_data_handle());
         }
@@ -149,19 +156,47 @@ void MKLDNNReorderNode::createReorderPrimitive(const mkldnn::memory::desc &srcDe
 
         attr.set_output_scales(mask, scales);
     }
-
+//
+//    memory::desc in_candidate = getParentEdgeAt(0)->getMemory().GetDescriptor();
+//    MKLDNNDescriptor desc(std::shared_ptr<mkldnn::reorder>(
+//            new softmax_forward::desc(prop_kind::forward_scoring, in_candidate, axis)));
+//    descs[0] = desc;
+//    std::shared_ptr<softmax_forward::desc> selected_desc_ptr = descs[0];
+//
+//    const PrimitiveDescInfo *selected_pd = getSelectedPrimitiveDescriptor();
+//    if (selected_pd == nullptr)
+//        IE_THROW() << "Preferable primitive descriptor is not set for node " << getName() << ".";
+//
+//    auto prim_desc = softmax_forward::primitive_desc(*selected_desc_ptr, getEngine());
+//    primitive_desc_iterator itpd = descs[0].createPrimitiveDescriptorIterator(getEngine());
+//
+//    while (itpd) {
+//        impl_desc_type impl_type = parse_impl_name(itpd.impl_info_str());
+//        auto primitiveDescriptor = getSelectedPrimitiveDescriptor();
+//        if ((primitiveDescriptor != nullptr) && (impl_type == primitiveDescriptor->getImplementationType())) {
+//            prim_desc = itpd.get();
+//            break;
+//        }
+//        if (!itpd.next_impl())
+//            break;
+//    }
+//
     auto createReorder = [&]() -> bool {
         // No autoblocking. Reorder can be applied as is
         reorder::primitive_desc pd = mkldnn::reorder::primitive_desc(src_blocked->GetPrimitive(), dst_blocked->GetPrimitive(), attr, true);
+        //primitive_desc_iterator itpd = pd.createPrimitiveDescriptorIterator(getEngine());
 
+        if (this->getName() =="split_3.tmp_0/VariadicSplit_abcd_aBcd8b_concat_5.tmp_0" )
+            std::cerr << "\n\n" << pd.impl_info_str() << "\n\n";
         if (!pd)
             return false;
 
+ //       pd.impl_info_str();
         auto info = pd.impl_info_str();
-        if (canUseDnnlJit)
+//        if (canUseDnnlJit)
             supportedPrimitiveDescriptors[0].setImplementationType(parse_impl_name(info));
-        else
-            supportedPrimitiveDescriptors[0].setImplementationType(impl_desc_type::ref);
+//        else
+ //           supportedPrimitiveDescriptors[0].setImplementationType(impl_desc_type::ref);
         prim.reset(new mkldnn::reorder(pd));
         return true;
     };
@@ -272,6 +307,8 @@ void MKLDNNReorderNode::optimizedNspc2Ncsp() {
 void MKLDNNReorderNode::execute(mkldnn::stream strm) {
     if (this->getName() =="split_3.tmp_0/VariadicSplit_abcd_aBcd8b_concat_5.tmp_0" )
         std::cerr << "\n\nThis is the suspect\n\n";
+    if (this->getName() == "split_3.tmp_0/VariadicSplit_abcd_aBcd8b_conv2d_13.tmp_0" )
+        std::cerr << "\n\nThis is the suspect split #249\n\n";
     if (isOptimized)
         return;
 
