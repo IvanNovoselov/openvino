@@ -247,13 +247,25 @@ static auto argmax_rank(const std::vector<DataConfig>& conf) -> size_t {
     size_t max_rank_out_desc_idx = 0;
     auto i = 0;
     for (auto& d : conf) {
-        if (max_rank_out_desc < d.desc.getBlockingDesc().getBlockDims().size()) {
+        const auto desc_rank = d.desc.getBlockingDesc().getBlockDims().size();
+        if (max_rank_out_desc < desc_rank) {
             max_rank_out_desc_idx = i;
-            max_rank_out_desc =  d.desc.getBlockingDesc().getBlockDims().size();
+            max_rank_out_desc =  desc_rank;
+        } else if (max_rank_out_desc == desc_rank) {
+            const auto max_rank_dims = conf[max_rank_out_desc_idx].desc.getBlockingDesc().getBlockDims();
+            const auto desc_dims = d.desc.getBlockingDesc().getBlockDims();
+            for (int j = 0; j < desc_rank; j++) {
+                if (desc_dims[j] > max_rank_dims[j]) {
+                    max_rank_out_desc_idx = i;
+                    max_rank_out_desc =  desc_rank;
+                    break;
+                }
+            }
         }
         i++;
     }
     std::cout << "max_rank_out_desc " << max_rank_out_desc << " max_rank_out_desc_idx " << max_rank_out_desc_idx << std::endl;
+
     return max_rank_out_desc_idx;
 }
 
@@ -367,7 +379,9 @@ void MKLDNNSnippetNode::define_shedule() {
         offsets_out.resize(outputNum);
         for (int i = 0; i < outputNum; i++) {
             offsets_out[i].resize(tensorRank, 1);
-            offset_out_calc(offsets_out[i], dims_out[i]);
+            //offset_out_calc(offsets_out[i], dims_out[i]);
+            // NB!
+            offset_in_calc(offsets_out[i], dims_out[i], dims_out[max_rank_out_desc_idx]);
 
             for (int j = 0; j < tensorRank; j++) {
                 offsets_out[i][j] *= config.outConfs[i].desc.getPrecision().size();
@@ -438,6 +452,8 @@ void MKLDNNSnippetNode::define_shedule() {
     };
 
     // store to use as an execution domain
+    // NB!
+    //max_rank_out_desc_idx = getName() == "759" ? 1 : argmax_rank(config.outConfs);
     max_rank_out_desc_idx = argmax_rank(config.outConfs);
 
     // initialize by maximum output dimension. Dimensions of outputs should be broadcastable
@@ -506,6 +522,10 @@ void MKLDNNSnippetNode::shedule_6d(const std::vector<uint8_t *>& outputs, const 
 
     // Add code to collapse inner dimensions.
     // Callargs are scheduling invariant.
+//    if (getName() == "759") {
+//        std::cerr << "This is the failing subgraph\n";
+//        dom = dims_out[1];
+//    }
 
     // < N, C, H, W > < 1, 1, N, C*H*W>
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
