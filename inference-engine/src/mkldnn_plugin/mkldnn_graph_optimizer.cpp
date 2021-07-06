@@ -80,12 +80,12 @@ void MKLDNNGraphOptimizer::ApplyCommonGraphOptimizations(MKLDNNGraph &graph) {
     graph.RemoveDroppedNodes();
 
     OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "FuseConvolutionAndSimpleOperationThroughMaxPool");
-    FuseConvolutionAndSimpleOperationThroughMaxPool(graph);
-    graph.RemoveDroppedNodes();
+//    FuseConvolutionAndSimpleOperationThroughMaxPool(graph);
+//    graph.RemoveDroppedNodes();
 
     OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "FuseConvolutionAndSimpleOperation");
-    FuseConvolutionAndSimpleOperation(graph);
-    graph.RemoveDroppedNodes();
+//    FuseConvolutionAndSimpleOperation(graph);
+//    graph.RemoveDroppedNodes();
 
     OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "RemoveDroppedEdges");
     graph.SortTopologically();
@@ -104,12 +104,12 @@ void MKLDNNGraphOptimizer::ApplyCommonGraphOptimizations(MKLDNNGraph &graph) {
     graph.RemoveDroppedNodes();
 
     OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "FuseConvolutionSumAndConvolutionSumActivation");
-    FuseConvolutionSumAndConvolutionSumActivation(graph);
-    graph.RemoveDroppedNodes();
+//    FuseConvolutionSumAndConvolutionSumActivation(graph);
+//    graph.RemoveDroppedNodes();
 
     OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "FuseConvolutionAndSimpleOperation");
-    FuseConvolutionAndSimpleOperation(graph);
-    graph.RemoveDroppedNodes();
+//    FuseConvolutionAndSimpleOperation(graph);
+//    graph.RemoveDroppedNodes();
 
     OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "FuseFullyConnectedAndSimpleOperation");
     FuseFullyConnectedAndSimpleOperation(graph);
