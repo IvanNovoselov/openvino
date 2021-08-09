@@ -104,7 +104,7 @@ StatusCode InferenceEngineException::getStatus() const {
     } else if (dynamic_cast<const InferCancelled*>(this) != nullptr) {
         return INFER_CANCELLED;
     } else {
-        assert(!"Unreachable"); return OK;
+        assert(!"Unreachable_test"); return OK;
     }
 }
 }  // namespace details
