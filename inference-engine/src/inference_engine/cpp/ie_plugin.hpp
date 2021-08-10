@@ -61,6 +61,7 @@ public:
     }
 
     details::SOPointer<IExecutableNetworkInternal> LoadNetwork(const CNNNetwork& network, const std::map<std::string, std::string>& config) {
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         PLUGIN_CALL_STATEMENT(return {_so, _ptr->LoadNetwork(network, config)});
     }
 

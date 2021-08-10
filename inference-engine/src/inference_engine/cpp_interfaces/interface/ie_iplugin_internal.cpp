@@ -20,6 +20,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <iostream>
 
 namespace InferenceEngine {
 
@@ -114,15 +115,18 @@ std::map<std::string, std::shared_ptr<const T>> const_map_cast(const std::map<st
 std::shared_ptr<IExecutableNetworkInternal> IInferencePlugin::LoadNetwork(const CNNNetwork& network,
                                                                           const std::map<std::string, std::string>& config,
                                                                           const std::shared_ptr<RemoteContext>& context) {
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     std::shared_ptr<IExecutableNetworkInternal> impl;
     if (nullptr == context) {
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         impl = LoadExeNetworkImpl(network, config);
     } else {
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         impl = LoadExeNetworkImpl(network, context, config);
     }
 
     SetExeNetworkInfo(impl, const_map_cast(network.getInputsInfo()), const_map_cast(network.getOutputsInfo()));
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     return impl;
 }
 

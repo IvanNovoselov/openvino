@@ -270,14 +270,17 @@ class Core::Impl : public ICore {
                                                 const std::string& modelPath = std::string(),
                                                 bool forceDisableCache = false) {
         OV_ITT_SCOPED_TASK(itt::domains::IE, "Core::Impl::LoadNetworkImpl");
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         SoExecutableNetworkInternal execNetwork;
         execNetwork = context ? plugin.LoadNetwork(network, context, parsedConfig) :
                                 plugin.LoadNetwork(network, parsedConfig);
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         auto cacheManager = coreConfig.getCacheConfig()._cacheManager;
         if (!forceDisableCache && cacheManager && DeviceSupportsImportExport(plugin)) {
             try {
                 // need to export network for further import from "cache"
                 OV_ITT_SCOPE(FIRST_INFERENCE, itt::domains::IE_LT, "Core::LoadNetwork::Export");
+                std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
                 cacheManager->writeCacheEntry(blobID, [&](std::ostream& networkStream) {
                     networkStream << CompiledBlobHeader(GetInferenceEngineVersion()->buildNumber,
                                                         NetworkCompilationContext::calculateFileInfo(modelPath));
@@ -288,6 +291,7 @@ class Core::Impl : public ICore {
                 throw;
             }
         }
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         return execNetwork;
     }
 
@@ -514,6 +518,7 @@ public:
                                             const std::string& deviceName,
                                             const std::map<std::string, std::string>& config) override {
         OV_ITT_SCOPE(FIRST_INFERENCE, itt::domains::IE_LT, "Core::LoadNetwork::CNN");
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         bool forceDisableCache = config.count(CONFIG_KEY_INTERNAL(FORCE_DISABLE_CACHE)) > 0;
         auto parsed = parseDeviceNameIntoConfig(deviceName, config);
         if (forceDisableCache) {
@@ -527,13 +532,16 @@ public:
             auto hash = CalculateNetworkHash(network, parsed._deviceName, plugin, parsed._config);
             bool loadedFromCache = false;
             auto lock = cacheGuard.getHashLock(hash);
+            std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
             res = LoadNetworkFromCache(cacheManager, hash, plugin, parsed._config, nullptr, loadedFromCache);
             if (!loadedFromCache) {
                 res = LoadNetworkImpl(network, plugin, parsed._config, nullptr, hash, {}, forceDisableCache);
             }
         } else {
+            std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
             res = LoadNetworkImpl(network, plugin, parsed._config, nullptr, {}, {}, forceDisableCache);
         }
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         return res;
     }
 
@@ -941,7 +949,9 @@ CNNNetwork Core::ReadNetwork(const std::string& model, const Blob::CPtr& weights
 
 ExecutableNetwork Core::LoadNetwork(const CNNNetwork& network, const std::string& deviceName,
                                     const std::map<std::string, std::string>& config) {
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     auto exec = _impl->LoadNetwork(network, deviceName, config);
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     return { exec, exec };
 }
 

@@ -17,6 +17,7 @@
 #include <exec_graph_info.hpp>
 
 #include <ngraph/opsets/opset.hpp>
+#include <iostream>
 
 namespace ExecGraphInfoSerialization {
 //
@@ -104,7 +105,7 @@ StatusCode InferenceEngineException::getStatus() const {
     } else if (dynamic_cast<const InferCancelled*>(this) != nullptr) {
         return INFER_CANCELLED;
     } else {
-        assert(!"Unreachable_test"); return OK;
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl; assert(!"Unreachable"); return OK;
     }
 }
 }  // namespace details
