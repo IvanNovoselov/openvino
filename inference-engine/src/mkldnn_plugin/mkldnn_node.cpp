@@ -1230,6 +1230,7 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
         if (ex.getStatus() != NOT_IMPLEMENTED) {
             throw;
         } else {
+            std::cerr << "NOT_IMPLEMENTED exception throw is consumed" << std::endl;
             errorMessage += getExceptionDescWithoutStatus(ex);
         }
         IE_SUPPRESS_DEPRECATED_END
@@ -1245,6 +1246,7 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
             if (ex.getStatus() != NOT_IMPLEMENTED) {
                 throw;
             } else {
+                std::cerr << "NOT_IMPLEMENTED exception throw is consumed" << std::endl;
                 errorMessage += getExceptionDescWithoutStatus(ex);
             }
             IE_SUPPRESS_DEPRECATED_END
@@ -1261,6 +1263,7 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
             if (ex.getStatus() != NOT_IMPLEMENTED) {
                 throw;
             } else {
+                std::cerr << "NOT_IMPLEMENTED exception throw is consumed" << std::endl;
                 errorMessage += getExceptionDescWithoutStatus(ex);
             }
             IE_SUPPRESS_DEPRECATED_END

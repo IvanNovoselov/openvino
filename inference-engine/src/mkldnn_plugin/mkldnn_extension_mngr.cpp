@@ -37,12 +37,15 @@ std::shared_ptr<InferenceEngine::ILayerImplFactory> MKLDNNExtensionManager::Crea
         ResponseDesc responseDesc;
         StatusCode rc = GENERAL_ERROR;
         ILayerImplFactory* factory_ptr = nullptr;
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         if (auto mkldnnExt = dynamic_cast<Extensions::Cpu::MKLDNNExtensions*>(ext.get()))
             rc = mkldnnExt->getFactoryFor(factory_ptr, op, &responseDesc);
         if (rc != OK) {
             factory = nullptr;
+            std::cerr <<  " | Factory initialization failed | " << __LINE__ << std::endl;
             continue;
         } else {
+            std::cerr <<  " | Factory initialization fOk | " << __LINE__ << std::endl;
             factory.reset(factory_ptr);
         }
         if (factory) {

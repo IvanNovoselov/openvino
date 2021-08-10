@@ -23,15 +23,11 @@
 # pragma GCC diagnostic ignored "-Wreturn-type"
 #endif
 
-/*#define PLUGIN_CALL_STATEMENT(...)                                                                \
+#define PLUGIN_CALL_STATEMENT(...)                                                                \
     if (!_ptr) IE_THROW() << "Wrapper used in the PLUGIN_CALL_STATEMENT was not initialized.";    \
     try {                                                                                         \
         __VA_ARGS__;                                                                              \
     } catch(...) {details::Rethrow();}
-*/
-#define PLUGIN_CALL_STATEMENT(...)                                                                \
-    if (!_ptr) IE_THROW() << "Wrapper used in the PLUGIN_CALL_STATEMENT was not initialized.";    \
-    __VA_ARGS__;
 
 namespace InferenceEngine {
 /**
