@@ -42,6 +42,7 @@ MKLDNNExecNetwork::MKLDNNExecNetwork(const InferenceEngine::CNNNetwork &network,
     _name{network.getName()},
     _numaNodesWeights(numaNodesWeights),
         _network(network) {
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     auto function = network.getFunction();
     if (function == nullptr) {
         IE_THROW() << "CPU plug-in doesn't support not ngraph-based model!";
@@ -54,7 +55,7 @@ MKLDNNExecNetwork::MKLDNNExecNetwork(const InferenceEngine::CNNNetwork &network,
             IE_THROW() << "MKLDNNGraph::CreateGraph: such topology cannot be compiled for dynamic batch!";
         }
     }
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     if (cfg.exclusiveAsyncRequests) {
         // special case when all InferRequests are muxed into a single queue
         _taskExecutor = InferenceEngine::ExecutorManager::getInstance()->getExecutor("CPU");
@@ -69,14 +70,14 @@ MKLDNNExecNetwork::MKLDNNExecNetwork(const InferenceEngine::CNNNetwork &network,
     } else {
         _callbackExecutor = _taskExecutor;
     }
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     // Workaround for initializing friendly names for all the OPs
     // Otherwise they are initialized concurrently without thread safety.
     // TODO: Can be removed after 57069 is done.
     for (const auto& op : _network.getFunction()->get_ops()) {
         op->get_friendly_name();
     }
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     int streams = std::max(1, _cfg.streamExecutorConfig._streams);
     std::vector<Task> tasks; tasks.resize(streams);
     _graphs.resize(streams);
@@ -86,11 +87,13 @@ MKLDNNExecNetwork::MKLDNNExecNetwork(const InferenceEngine::CNNNetwork &network,
                 MKLDNNExecNetwork::GetGraph();
             };
         }
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         _taskExecutor->runAndWait(tasks);
+        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     } else {
         MKLDNNExecNetwork::GetGraph();
     }
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     // Save all MemoryLayer data tensors. Will use insight about mechanics
     // of MemoryLayer implementation. It uses output edge of MemoryLayer
     // producer as storage for tensor to keep it between infer calls.
@@ -100,7 +103,7 @@ MKLDNNExecNetwork::MKLDNNExecNetwork(const InferenceEngine::CNNNetwork &network,
                 auto memoryNode = dynamic_cast<MKLDNNMemoryInputNode*>(node.get());
                 auto state_store = memoryNode->getStore();
                 auto state_name = memoryNode->getId();
-
+                std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
                 // Remove suffix with pair ID. Internal information.
                 auto suffix_idx = state_name.find("/id=");
                 if (suffix_idx != std::string::npos)
@@ -110,6 +113,7 @@ MKLDNNExecNetwork::MKLDNNExecNetwork(const InferenceEngine::CNNNetwork &network,
             }
         }
     }
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
 }
 
 MKLDNNExecNetwork::Graph::Lock MKLDNNExecNetwork::GetGraph() {
