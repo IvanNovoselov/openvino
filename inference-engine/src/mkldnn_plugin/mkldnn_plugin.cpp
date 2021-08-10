@@ -406,7 +406,9 @@ Engine::LoadExeNetworkImpl(const InferenceEngine::CNNNetwork &network, const std
     std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     Transformation(clonedNetwork, conf);
     std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
-    return std::make_shared<MKLDNNExecNetwork>(clonedNetwork, conf, extensionManager, weightsSharing);
+    auto r = std::make_shared<MKLDNNExecNetwork>(clonedNetwork, conf, extensionManager, weightsSharing);
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
+    return r;
 }
 
 void Engine::SetConfig(const std::map<std::string, std::string> &config) {

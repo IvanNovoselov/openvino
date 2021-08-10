@@ -124,7 +124,7 @@ std::shared_ptr<IExecutableNetworkInternal> IInferencePlugin::LoadNetwork(const 
         std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
         impl = LoadExeNetworkImpl(network, context, config);
     }
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     SetExeNetworkInfo(impl, const_map_cast(network.getInputsInfo()), const_map_cast(network.getOutputsInfo()));
     std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     return impl;
