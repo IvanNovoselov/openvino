@@ -29,14 +29,30 @@ void ITaskExecutor::runAndWait(const std::vector<Task>& tasks) {
     // So wait() and get() for each future moved to separate loops
     int i = 0;
     for (auto&& future : futures) {
-        std::cerr << "runAndWait wait:" << i++ << std::endl;
-        future.wait();
+        std::cerr << "runAndWait wait:" << i++ << std::endl << std::flush;
+        try {
+            future.wait();
+        } catch (std::future_error const & err) {
+            std::cerr << "Future wait error " << err.what() << std::endl << std::flush;
+            throw;
+        } catch (...) {
+            std::cerr << "Unknown future wait error " << std::endl << std::flush;
+            throw;
+        }
     }
-    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl << std::flush;
     i = 0;
     for (auto&& future : futures) {
-        std::cerr << "runAndWait get:" << i++ << std::endl;
-        future.get();
+        std::cerr << "runAndWait get:" << i++ << std::endl << std::flush;
+        try {
+            future.get();
+        } catch (std::future_error const & err) {
+            std::cerr << "Future get error " << err.what() << std::endl << std::flush;
+            throw;
+        } catch (...) {
+            std::cerr << "Unknown future get error " << std::endl << std::flush;
+            throw;
+        }
     }
 }
 }  // namespace InferenceEngine
