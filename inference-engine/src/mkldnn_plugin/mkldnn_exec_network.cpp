@@ -79,9 +79,12 @@ MKLDNNExecNetwork::MKLDNNExecNetwork(const InferenceEngine::CNNNetwork &network,
     }
     std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     int streams = std::max(1, _cfg.streamExecutorConfig._streams);
+    std::cerr << __FILE__ << " | NUMBER_OF_STREAMS | " << streams << std::endl;
+    std::cerr << __FILE__ << " | streamExecutorConfig | " << _cfg.streamExecutorConfig._streams << std::endl;
     std::vector<Task> tasks; tasks.resize(streams);
     _graphs.resize(streams);
     if (_cfg.streamExecutorConfig._streams != 0) {
+        std::cerr << __FILE__ << " | passed on line!!! | " << __LINE__ << std::endl;
         for (auto&& task : tasks) {
             task = [this] {
                 MKLDNNExecNetwork::GetGraph();
