@@ -105,7 +105,7 @@ StatusCode InferenceEngineException::getStatus() const {
     } else if (dynamic_cast<const InferCancelled*>(this) != nullptr) {
         return INFER_CANCELLED;
     } else {
-        std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl; assert(!"Unreachable"); return OK;
+        std::cerr << __FILE__ << "  | " << this->what() << std::endl; assert(!"Unreachable"); return OK;
     }
 }
 }  // namespace details
