@@ -372,7 +372,7 @@ static void Transformation(CNNNetwork& clonedNetwork, const Config& conf) {
 InferenceEngine::IExecutableNetworkInternal::Ptr
 Engine::LoadExeNetworkImpl(const InferenceEngine::CNNNetwork &network, const std::map<std::string, std::string> &config) {
     OV_ITT_SCOPED_TASK(itt::domains::MKLDNNPlugin, "Engine::LoadExeNetworkImpl");
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     // verification of supported input
     InferenceEngine::InputsDataMap _networkInputs = network.getInputsInfo();
     for (const auto &ii : _networkInputs) {
@@ -391,7 +391,7 @@ Engine::LoadExeNetworkImpl(const InferenceEngine::CNNNetwork &network, const std
                                << "Input image format " << input_precision << " is not supported yet...";
         }
     }
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     // TODO: handle input precision differently - per input and not one per network...
 
     // TODO: Clarify the behavior of SetConfig method. Skip eng_config or not?
@@ -401,11 +401,11 @@ Engine::LoadExeNetworkImpl(const InferenceEngine::CNNNetwork &network, const std
     if (conf.enableDynamicBatch) {
         conf.batchLimit = static_cast<int>(network.getBatchSize());
     }
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     CNNNetwork clonedNetwork = InferenceEngine::details::cloneNetwork(network);
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     Transformation(clonedNetwork, conf);
-
+    std::cerr << __FILE__ << " | passed on line | " << __LINE__ << std::endl;
     return std::make_shared<MKLDNNExecNetwork>(clonedNetwork, conf, extensionManager, weightsSharing);
 }
 
