@@ -1228,6 +1228,10 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
     } catch (const InferenceEngine::Exception& ex) {
         IE_SUPPRESS_DEPRECATED_START
         if (ex.getStatus() != NOT_IMPLEMENTED) {
+            std::cerr << "NOT_IMPLEMENTED is going to be thrown" << std::endl;
+            std::cerr << "What: " << ex.what() << std::endl;
+            std::cerr << "Status: " << ex.getStatus() << std::endl;
+            std::cerr << "Convertible: " << (dynamic_cast<const NotImplemented*>(&ex) != nullptr) << std::endl;
             throw;
         } else {
             std::cerr << "NOT_IMPLEMENTED exception throw is consumed" << std::endl;
