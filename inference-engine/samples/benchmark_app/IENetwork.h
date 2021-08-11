@@ -15,12 +15,12 @@
 // #include "inference_engine.hpp"
 
 #ifndef plugin_path
-#define plugin_path  "/usr/local/lib64/plugins.xml"
-//"plugins.xml"
-#define xml_path  "/tmp/ngraph_ir.xml"
-//"ngraph_ir.xml"
-#define bin_path  "/tmp/ngraph_ir.bin"
-//"ngraph_ir.bin"
+#define plugin_path ""
+#define xml_path  "ngraph_ir.xml"
+#define bin_path  "ngraph_ir.bin"
+//#define plugin_path  "/usr/local/lib64/plugins.xml"
+//#define xml_path  "/tmp/ngraph_ir.xml"
+//#define bin_path  "/tmp/ngraph_ir.bin"
 #endif
 
 
