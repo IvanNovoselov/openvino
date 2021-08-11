@@ -83,7 +83,7 @@ const char* currentExceptionTypeName() {
 StatusCode InferenceEngineException::getStatus() const {
     if (dynamic_cast<const GeneralError*>(this) != nullptr) {
         return GENERAL_ERROR;
-    } else if (dynamic_cast<const NotImplemented*>(this) != nullptr) {
+    } else if (dynamic_cast<const InferenceEngine::NotImplemented*>(this) != nullptr) {
         return NOT_IMPLEMENTED;
     } else if (dynamic_cast<const NetworkNotLoaded*>(this) != nullptr) {
         return NETWORK_NOT_LOADED;

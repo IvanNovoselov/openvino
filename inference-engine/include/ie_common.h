@@ -297,6 +297,7 @@ INFERENCE_ENGINE_API_CLASS(InferenceEngineException) : public std::runtime_error
     using std::runtime_error::runtime_error;
     bool hasStatus() const {return true;}
     StatusCode getStatus() const;
+    virtual ~InferenceEngineException() {}
 };
 }  // namespace details
 
