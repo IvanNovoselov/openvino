@@ -74,6 +74,9 @@ void Rethrow() {
       catch (const std::exception& e) {IE_THROW() << e.what();}
       catch(...) {IE_THROW(Unexpected);}
 }
+InferenceEngineException::~InferenceEngineException() {
+    std::cerr << "exception " << this->what() << " is destructed" << std::endl;
+}
 
 IE_SUPPRESS_DEPRECATED_START
 const char* currentExceptionTypeName() {
