@@ -18,7 +18,7 @@
 
 #include <ngraph/opsets/opset.hpp>
 #include <iostream>
-
+#include <cxxabi.h>
 namespace ExecGraphInfoSerialization {
 //
 // exec_graph_info.hpp
@@ -76,7 +76,10 @@ void Rethrow() {
 }
 
 IE_SUPPRESS_DEPRECATED_START
-
+const char* currentExceptionTypeName() {
+    int status;
+    return abi::__cxa_demangle(abi::__cxa_current_exception_type()->name(), 0, 0, &status);
+}
 StatusCode InferenceEngineException::getStatus() const {
     if (dynamic_cast<const GeneralError*>(this) != nullptr) {
         return GENERAL_ERROR;
@@ -105,7 +108,9 @@ StatusCode InferenceEngineException::getStatus() const {
     } else if (dynamic_cast<const InferCancelled*>(this) != nullptr) {
         return INFER_CANCELLED;
     } else {
-        std::cerr << __FILE__ << "  | " << this->what() << std::endl; assert(!"Unreachable"); return OK;
+        std::cerr << __FILE__ << "  | " << this->what() << std::endl;
+        std::cerr << "exception type:" << currentExceptionTypeName() << std::endl;
+        assert(!"Unreachable"); return OK;
     }
 }
 }  // namespace details
