@@ -1234,10 +1234,13 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
             std::cerr << "Convertible: " << (dynamic_cast<const NotImplemented*>(&ex) != nullptr) << std::endl;
             throw;
         } else {
-            std::cerr << "NOT_IMPLEMENTED exception throw is consumed" << std::endl;
+            std::cerr << "NOT_IMPLEMENTED is consumed. Status: " << ex.getStatus() << std::endl;
             errorMessage += getExceptionDescWithoutStatus(ex);
         }
         IE_SUPPRESS_DEPRECATED_END
+    } catch (const std::exception& ex) {
+        std::cerr << "Unhandled exception: " << ex.what() << std::endl;
+        std::cerr << "Convertible: " << (dynamic_cast<const NotImplemented*>(&ex) != nullptr) << std::endl;
     }
 
     if (newNode == nullptr) {

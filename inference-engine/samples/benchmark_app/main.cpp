@@ -11,7 +11,7 @@
 #include "IENetwork.h"
 #include <iostream>
 
-
+using namespace InferenceEngine;
 namespace android {
 namespace hardware {
 namespace neuralnetworks {

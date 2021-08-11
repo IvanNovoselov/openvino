@@ -51,7 +51,7 @@ bool IENetwork::loadNetwork() {
             return false;
         }
     } catch (const std::exception& ex) {
-        std::cerr << "%s Exception !!!" << ex.what() << std::endl;
+        std::cerr << "Exception !!! " << ex.what() << std::endl;
     }
 
     return true;
