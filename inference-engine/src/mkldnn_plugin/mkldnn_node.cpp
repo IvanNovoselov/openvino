@@ -1235,8 +1235,8 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
             std::cerr << "Status: " << ex.getStatus() << std::endl;
             throw;
         } else {
-            std::cerr << "NOT_IMPLEMENTED is consumed. Status: " << ex.getStatus() << std::endl;
-            errorMessage += getExceptionDescWithoutStatus(ex);
+            std::cerr << "NOT_IMPLEMENTED is consumed. " << std::endl;
+            errorMessage += "";//getExceptionDescWithoutStatus(ex);
         }
         IE_SUPPRESS_DEPRECATED_END
     } catch (const std::exception& ex) {
@@ -1251,11 +1251,12 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
                 newNode = ol.release();
         } catch (const InferenceEngine::Exception& ex) {
             IE_SUPPRESS_DEPRECATED_START
-            if (ex.getStatus() != NOT_IMPLEMENTED) {
+            //if (ex.getStatus() != NOT_IMPLEMENTED) {
+            if (dynamic_cast<const NotImplemented*>(&ex) == nullptr) {
                 throw;
             } else {
                 std::cerr << "NOT_IMPLEMENTED exception throw is consumed" << std::endl;
-                errorMessage += getExceptionDescWithoutStatus(ex);
+                errorMessage += " ";//getExceptionDescWithoutStatus(ex);
             }
             IE_SUPPRESS_DEPRECATED_END
         }
@@ -1268,11 +1269,12 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
                 newNode = ol.release();
         } catch (const InferenceEngine::Exception& ex) {
             IE_SUPPRESS_DEPRECATED_START
-            if (ex.getStatus() != NOT_IMPLEMENTED) {
-                throw;
+            //if (ex.getStatus() != NOT_IMPLEMENTED) {
+            if (dynamic_cast<const InferenceEngine::NotImplemented*>(&ex) == nullptr) {
+                    throw;
             } else {
                 std::cerr << "NOT_IMPLEMENTED exception throw is consumed" << std::endl;
-                errorMessage += getExceptionDescWithoutStatus(ex);
+                errorMessage += " ";//getExceptionDescWithoutStatus(ex);
             }
             IE_SUPPRESS_DEPRECATED_END
         }

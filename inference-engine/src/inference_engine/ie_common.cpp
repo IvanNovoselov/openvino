@@ -84,6 +84,22 @@ const char* currentExceptionTypeName() {
     return abi::__cxa_demangle(abi::__cxa_current_exception_type()->name(), 0, 0, &status);
 }
 StatusCode InferenceEngineException::getStatus() const {
+//    try {
+//        throw this;
+//    } catch (const GeneralError& a) {
+//        return GENERAL_ERROR;
+//    } catch (const NotImplemented& a) {
+//        return NOT_IMPLEMENTED;
+//    } catch (...) {
+//        std::cerr << __FILE__ << "  | " << this->what() << std::endl;
+//        int status;
+//        std::cerr << "exception type name: " <<  abi::__cxa_current_exception_type()->name() << std::endl;
+//        std::cerr << "exception type: " <<
+//        abi::__cxa_demangle(abi::__cxa_current_exception_type()->name(), 0, 0, &status)
+//        << std::endl;
+//
+//        assert(!"Unreachable"); return OK;
+//    }
     if (dynamic_cast<const GeneralError*>(this) != nullptr) {
         return GENERAL_ERROR;
     } else if (dynamic_cast<const InferenceEngine::NotImplemented*>(this) != nullptr) {
