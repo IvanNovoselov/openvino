@@ -79,14 +79,14 @@ InferenceEngineException::~InferenceEngineException() {
 }
 
 IE_SUPPRESS_DEPRECATED_START
-const char* currentExceptionTypeName() {
-    int status;
-    return abi::__cxa_demangle(abi::__cxa_current_exception_type()->name(), 0, 0, &status);
-}
+//const char* currentExceptionTypeName() {
+//    int status;
+//    return abi::__cxa_demangle(abi::__cxa_current_exception_type()->name(), 0, 0, &status);
+//}
 StatusCode InferenceEngineException::getStatus() const {
     if (dynamic_cast<const GeneralError*>(this) != nullptr) {
         return GENERAL_ERROR;
-    } else if (dynamic_cast<const InferenceEngine::NotImplemented*>(this) != nullptr) {
+    } else if (dynamic_cast<const NotImplemented*>(this) != nullptr) {
         return NOT_IMPLEMENTED;
     } else if (dynamic_cast<const NetworkNotLoaded*>(this) != nullptr) {
         return NETWORK_NOT_LOADED;
@@ -112,7 +112,21 @@ StatusCode InferenceEngineException::getStatus() const {
         return INFER_CANCELLED;
     } else {
         std::cerr << __FILE__ << "  | " << this->what() << std::endl;
-        std::cerr << "exception type:" << currentExceptionTypeName() << std::endl;
+        auto demangle = [](const std::type_info* ti){
+            int status;
+            return abi::__cxa_demangle(ti->name(), 0, 0, &status);
+        };
+        std::cerr << "current exception type:" << demangle(abi::__cxa_current_exception_type()) << std::endl;
+        std::cerr << "current exception hash:" << abi::__cxa_current_exception_type()->hash_code() << std::endl;
+        std::cerr << "Not impl type:" << demangle(&typeid(NotImplemented)) << std::endl;
+        std::cerr << "Not impl hash:" << typeid(NotImplemented).hash_code() << std::endl;
+        std::cerr << "this type:" << demangle(&typeid(this)) << std::endl;
+        std::cerr << "this hash:" << typeid(this).hash_code() << std::endl;
+        auto a = static_cast<const InferenceEngine::NotImplemented*>(this);
+        std::cerr << "a name:" << demangle(&typeid(a)) << std::endl;
+        std::cerr << "a hash:" << typeid(a).hash_code() << std::endl;
+        std::cerr << "IE:Not impl type:" << demangle(&typeid(InferenceEngine::NotImplemented)) << std::endl;
+        std::cerr << "IE:Not impl hash:" << typeid(InferenceEngine::NotImplemented).hash_code() << std::endl;
         assert(!"Unreachable"); return OK;
     }
 }

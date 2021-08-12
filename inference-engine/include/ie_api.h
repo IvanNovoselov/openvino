@@ -28,9 +28,9 @@
 #  endif
 # else
 #  define INFERENCE_ENGINE_CDECL __attribute__((cdecl))
-#  define INFERENCE_ENGINE_API(...) extern "C" __attribute__((visibility("default"))) __VA_ARGS__
-#  define INFERENCE_ENGINE_API_CPP(...) __attribute__((visibility("default"))) __VA_ARGS__
-#  define INFERENCE_ENGINE_API_CLASS(...) __attribute__((visibility("default"))) __VA_ARGS__
+#  define INFERENCE_ENGINE_API(...) extern "C" __attribute__((__visibility__("default"))) __VA_ARGS__
+#  define INFERENCE_ENGINE_API_CPP(...) __attribute__((__visibility__("default"))) __VA_ARGS__
+#  define INFERENCE_ENGINE_API_CLASS(...) __attribute__((__visibility__("default"))) __VA_ARGS__
 # endif
 #endif
 
