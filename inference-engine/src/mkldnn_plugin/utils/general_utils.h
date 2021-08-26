@@ -49,7 +49,7 @@ std::unique_ptr<T> make_unique(Args&&... args) {
 inline std::string getExceptionDescWithoutStatus(const InferenceEngine::Exception& ex) {
     std::string desc = ex.what();
     IE_SUPPRESS_DEPRECATED_START
-    if (ex.getStatus() != 0) {
+    if (dynamic_cast<const InferenceEngine::NotImplemented*>(&ex) != 0) {
         size_t pos = desc.find("]");
         if (pos != std::string::npos) {
             if (desc.size() == pos + 1) {

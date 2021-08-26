@@ -1179,7 +1179,7 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
                 newNode = ol.release();
         } catch (const InferenceEngine::Exception& ex) {
             IE_SUPPRESS_DEPRECATED_START
-            if (ex.getStatus() != NOT_IMPLEMENTED) {
+            if (dynamic_cast<const NotImplemented*>(&ex) != nullptr) {
                 throw;
             } else {
                 errorMessage += getExceptionDescWithoutStatus(ex);
@@ -1195,7 +1195,7 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
                 newNode = ol.release();
         } catch (const InferenceEngine::Exception& ex) {
             IE_SUPPRESS_DEPRECATED_START
-            if (ex.getStatus() != NOT_IMPLEMENTED) {
+            if (dynamic_cast<const NotImplemented*>(&ex) != nullptr) {
                 throw;
             } else {
                 errorMessage += getExceptionDescWithoutStatus(ex);
