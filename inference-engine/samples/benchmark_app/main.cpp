@@ -560,13 +560,13 @@ int main(int argc, char* argv[]) {
         // Time limit
         uint32_t duration_seconds = 0;
         if (FLAGS_t != 0) {
-            // time limit
+//            // time limit
             duration_seconds = FLAGS_t;
         } else if (FLAGS_niter == 0) {
             // default time limit
             duration_seconds = deviceDefaultDeviceDurationInSeconds(device_name);
         }
-        uint64_t duration_nanoseconds = getDurationInNanoseconds(duration_seconds);
+//        uint64_t duration_nanoseconds = getDurationInNanoseconds(duration_seconds);
 
         if (statistics) {
             statistics->addParameters(
@@ -609,9 +609,9 @@ int main(int argc, char* argv[]) {
 
         // ----------------- 10. Measuring performance
         // ------------------------------------------------------------------
-        size_t progressCnt = 0;
+//        size_t progressCnt = 0;
         size_t progressBarTotalCount = progressBarDefaultTotalCount;
-        size_t iteration = 0;
+//        size_t iteration = 0;
 
         std::stringstream ss;
         ss << "Start inference " << FLAGS_api << "hronously";
@@ -659,6 +659,7 @@ int main(int argc, char* argv[]) {
         inferRequestsQueue.waitAll();
         auto duration_ms = double_to_string(inferRequestsQueue.getLatencies()[0]);
         slog::info << "First inference took " << duration_ms << " ms" << slog::endl;
+        /*
         if (statistics)
             statistics->addParameters(StatisticsReport::Category::EXECUTION_RESULTS,
                                       {{"first inference time (ms)", duration_ms}});
@@ -667,9 +668,9 @@ int main(int argc, char* argv[]) {
         auto startTime = Time::now();
         auto execTime = std::chrono::duration_cast<ns>(Time::now() - startTime).count();
 
-        /** Start inference & calculate performance **/
-        /** to align number if iterations to guarantee that last infer requests are
-         * executed in the same conditions **/
+//        Start inference & calculate performance
+//        to align number if iterations to guarantee that last infer requests are
+//          executed in the same conditions
         ProgressBar progressBar(progressBarTotalCount, FLAGS_stream_output, FLAGS_progress);
 
         while ((niter != 0LL && iteration < niter) ||
@@ -752,7 +753,7 @@ int main(int argc, char* argv[]) {
             slog::info << "Inference Engine configuration settings were dumped to " << FLAGS_dump_config << slog::endl;
         }
 #endif
-
+        */
         if (!FLAGS_exec_graph_path.empty()) {
             try {
                 CNNNetwork execGraphInfo = exeNetwork.GetExecGraphInfo();
@@ -762,7 +763,9 @@ int main(int argc, char* argv[]) {
                 slog::err << "Can't get executable graph: " << ex.what() << slog::endl;
             }
         }
-
+        // NB! this is for parsing convenience
+        std::cerr << duration_ms << std::endl;
+        /*
         if (perf_counts) {
             std::vector<std::map<std::string, InferenceEngine::InferenceEngineProfileInfo>> perfCounts;
             for (size_t ireq = 0; ireq < nireq; ireq++) {
@@ -793,6 +796,8 @@ int main(int argc, char* argv[]) {
             std::cout << double_to_string(latency) << " ms" << std::endl;
         }
         std::cout << "Throughput: " << double_to_string(fps) << " FPS" << std::endl;
+
+        */
     } catch (const std::exception& ex) {
         slog::err << ex.what() << slog::endl;
 
