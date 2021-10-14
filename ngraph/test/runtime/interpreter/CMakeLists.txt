@@ -12,7 +12,7 @@ ie_add_vs_version_file(NAME interpreter_backend
 ie_add_api_validator_post_build_step(TARGET interpreter_backend)
 
 target_compile_definitions(interpreter_backend PRIVATE INTERPRETER_BACKEND_EXPORTS)
-target_link_libraries(interpreter_backend PUBLIC ngraph_backend PRIVATE ngraph_reference)
+target_link_libraries(interpreter_backend PUBLIC ngraph_backend IE::inference_engine_snippets PRIVATE ngraph_reference)
 
 install(TARGETS interpreter_backend
         RUNTIME DESTINATION ${IE_CPACK_RUNTIME_PATH} COMPONENT tests EXCLUDE_FROM_ALL
