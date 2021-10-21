@@ -9,7 +9,7 @@
 #include "snippets/pass/insert_load_store.hpp"
 #include "snippets/op/tile.hpp"
 #include "snippets/op/kernel.hpp"
-#include "itt.hpp"
+#include <snippets/itt.hpp>
 
 #include <ngraph/pass/manager.hpp>
 
