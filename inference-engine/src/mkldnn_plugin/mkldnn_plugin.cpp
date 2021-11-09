@@ -120,7 +120,6 @@
 using namespace MKLDNNPlugin;
 using namespace InferenceEngine;
 
-//#define DUMP_TOKENIZATION
 
 Engine::Engine() {
     _pluginName = "CPU";
@@ -427,24 +426,24 @@ static void TransformationUpToCPUSpecificOpSet(std::shared_ptr<ngraph::Function>
         });
         lptManager.run_passes(nGraphFunc);
     }
-    ngraph::pass::Manager postCommonPassManager;
-    postCommonPassManager.register_pass<ngraph::pass::FakeQuantizeDecomposition>();
-    postCommonPassManager.register_pass<ngraph::pass::UnrollTensorIterator>();
-    postCommonPassManager.register_pass<ReshapePRelu>();
+    ngraph::pass::Manager postLPTPassManager;
+    postLPTPassManager.register_pass<ngraph::pass::FakeQuantizeDecomposition>();
+    postLPTPassManager.register_pass<ngraph::pass::UnrollTensorIterator>();
+    postLPTPassManager.register_pass<ReshapePRelu>();
 
-    postCommonPassManager.get_pass_config()->set_callback<ngraph::pass::FakeQuantizeDecomposition>([](const_node_ptr &node) -> bool {
+    postLPTPassManager.get_pass_config()->set_callback<ngraph::pass::FakeQuantizeDecomposition>([](const_node_ptr &node) -> bool {
         std::string errMsg;
         return MKLDNNFakeQuantizeNode::isSupportedOperation(node, errMsg);
     });
-    postCommonPassManager.get_pass_config()->set_callback<ngraph::pass::UnrollTensorIterator>([](const_node_ptr &node) -> bool {
+    postLPTPassManager.get_pass_config()->set_callback<ngraph::pass::UnrollTensorIterator>([](const_node_ptr &node) -> bool {
         // UnrollTI transformation is disabled by default, is turned on by LowLatency transformation
         return node->get_rt_info().count("UNROLL_TI") == 0;
     });
 
-    postCommonPassManager.run_passes(nGraphFunc);
+    postLPTPassManager.run_passes(nGraphFunc);
 
     // todo: implement a more precise check for BF16? Traverse graph and check precisions?
-    const bool enableBF16  = _enforceBF16 && with_cpu_x86_avx512_core();
+    const bool enableBF16  = _enforceBF16 && with_cpu_x86_bfloat16();
 
      if (enableBF16 || useLpt) {
         // forse disable subgraph tokenization. SS doesn't support bf16 & int8 yet.
@@ -452,65 +451,10 @@ static void TransformationUpToCPUSpecificOpSet(std::shared_ptr<ngraph::Function>
     }
 
     if (tokenizeSubgraphs != Config::TokenizationMode::Disabled) {
-#if defined (DUMP_TOKENIZATION)
-        enum class  dump_tokenization_mode {SVG, XML};
-        const auto mode = dump_tokenization_mode::SVG;
-        auto dump_graph = [&](const std::string& base_name, std::shared_ptr<ov::Function> function){
-            switch (mode) {
-                case dump_tokenization_mode::SVG:
-                    ngraph::pass::VisualizeTree(base_name + ".svg").run_on_function(function);
-                    break;
-                case dump_tokenization_mode::XML:
-                    ngraph::pass::Serialize(base_name + ".xml",
-                                            base_name + ".bin").run_on_function(function);
-                    break;
-                default:
-                    IE_THROW() << "This dump tokenization mode is not supported";
-            }
-        };
-//        std::cout << "Tokenization is ON" << std::endl;
-//        for (auto op : nGraphFunc->get_ordered_ops()) {
-//            std::cout << "IN: " << op << std::endl;
-//            if (auto constant = ngraph::as_type_ptr<ngraph::opset1::Constant>(op)) {
-//                std::cout << "constant value " << reinterpret_cast<const float*>(constant->get_data_ptr())[0] << std::endl;
-//            }
-//        }
-        dump_graph("original", nGraphFunc);
-//        std::cout << std::endl << std::endl;
-#endif
         ngraph::pass::Manager tokenization_manager;
         tokenization_manager.register_pass<ngraph::snippets::pass::FilterFused>();
         tokenization_manager.register_pass<ngraph::snippets::pass::TokenizeSnippets>();
         tokenization_manager.run_passes(nGraphFunc);
-#if defined (DUMP_TOKENIZATION)
-        auto formatNodeName = [](const std::string& original_name) {
-            std::string name(original_name);
-            std::replace(name.begin(), name.end(), '\\', '_');
-            std::replace(name.begin(), name.end(), '/', '_');
-            std::replace(name.begin(), name.end(), ' ', '_');
-            std::replace(name.begin(), name.end(), ':', '-');
-            return name;
-        };
-        for (auto op : nGraphFunc->get_ordered_ops()) {
-//            std::cout << "OUT: " << op << std::endl;
-            if (auto subgraph = ngraph::as_type_ptr<ngraph::snippets::op::Subgraph>(op)) {
-//                for (auto& bop : subgraph->get_body()->get_ordered_ops()) {
-//                    std::cout << "out:     " << bop << std::endl;
-//                }
-                const std::string name{std::string("subgraph_") + formatNodeName(op->get_friendly_name())};
-                dump_graph(name, subgraph->get_body());
-            }
-
-            if (auto ti = ngraph::as_type_ptr<ngraph::op::TensorIterator>(op)) {
-//                for (auto& bop : ti->get_body()->get_ordered_ops()) {
-//                    std::cout << "out:     " << bop << std::endl;
-//                }
-                const std::string name{std::string("tensor_iterator_") + formatNodeName(op->get_friendly_name())};
-                dump_graph(name, ti->get_body());
-            }
-        }
-        dump_graph("tokenized", nGraphFunc);
-#endif
     }
 }
 
