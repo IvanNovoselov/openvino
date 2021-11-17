@@ -74,8 +74,10 @@ bool MKLDNNGenericNode::created(const MKLDNNExtensionManager::Ptr &extMgr) {
         if (impls.empty()) {
             extFactory = extMgr->CreateExtensionFactory(ngraphOp);
 
-            if (!extFactory)
+            if (!extFactory) {
+                std::cerr << "I'm going to thorow NOT_IMPLEMENTED: " << __FILE__ << "\n";
                 IE_THROW(NotImplemented);
+            }
 
             std::vector<InferenceEngine::ILayerImpl::Ptr> impls_no_exec;
             InferenceEngine::ResponseDesc resp;

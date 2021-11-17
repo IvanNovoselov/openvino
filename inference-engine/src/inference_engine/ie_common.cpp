@@ -58,7 +58,8 @@ void Rethrow() {
     try {
         throw;
     } catch (const GeneralError& e) {throw e;}
-      catch (const NotImplemented& e) {throw e;}
+      catch (const NotImplemented& e) {
+          std::cerr << "IE rethrowing notImplemented: " << e.what(); throw e;}
       catch (const NetworkNotLoaded& e) {throw e;}
       catch (const ParameterMismatch& e) {throw e;}
       catch (const NotFound& e) {throw e;}
@@ -104,6 +105,7 @@ StatusCode InferenceEngineException::getStatus() const {
     } else if (dynamic_cast<const InferCancelled*>(this) != nullptr) {
         return INFER_CANCELLED;
     } else {
+        std::cerr << "IE getStatus: " << this->what() << " was not handled properly\n";
         assert(!"Unreachable"); return OK;
     }
 }

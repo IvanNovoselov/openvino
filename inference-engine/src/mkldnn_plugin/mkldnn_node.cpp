@@ -1226,15 +1226,17 @@ MKLDNNNode* MKLDNNNode::NodesFactory::create(const std::shared_ptr<ngraph::Node>
         if (ol != nullptr && ol->created(extMgr))
             newNode = ol.release();
     } catch (const InferenceEngine::Exception& ex) {
+        std::cerr << "MKLDNNMode catched: " << ex.what() << " on line: " << __LINE__ << "\n";
         IE_SUPPRESS_DEPRECATED_START
         if (ex.getStatus() != NOT_IMPLEMENTED) {
+            std::cerr << "MKLDNNMode rethrowing: " << ex.what() << " on line: " << __LINE__ << "\n";
             throw;
         } else {
             errorMessage += getExceptionDescWithoutStatus(ex);
         }
         IE_SUPPRESS_DEPRECATED_END
     }
-
+    std::cerr << "MKLDNNMode passed line: " << __LINE__ << "\n";
     if (newNode == nullptr) {
         try {
             std::unique_ptr<MKLDNNNode> ol(createNodeIfRegistered(MKLDNNPlugin, TypeFromName(op->get_type_name()), op, eng, w_cache));
