@@ -314,7 +314,6 @@ void MKLDNNGraph::Replicate(const CNNNetwork &network, const MKLDNNExtensionMana
 
 void MKLDNNGraph::InitGraph() {
     MKLDNNGraphOptimizer optimizer;
-    CPU_DEBUG_CAP_ENABLE(initNodeDumper(config.debugCaps));
 
     SortTopologically();
     InitNodes();
@@ -841,7 +840,7 @@ void MKLDNNGraph::PullOutputData(BlobMap &out) {
 }
 
 inline void MKLDNNGraph::ExecuteNode(const MKLDNNNodePtr& node, const mkldnn::stream& stream) const {
-    DUMP(node, infer_count);
+    DUMP(node, config, infer_count);
     OV_ITT_SCOPED_TASK(itt::domains::MKLDNNPlugin, node->profiling.execute);
 
     if (node->isDynamicNode()) {
@@ -859,7 +858,7 @@ void MKLDNNGraph::Infer(MKLDNNInferRequest* request, int batch) {
     mkldnn::stream stream(eng);
 
     for (const auto& node : executableGraphNodes) {
-        VERBOSE(node, config.debugCaps.verbose);
+        VERBOSE(node, config.verbose);
         PERF(node, config.collectPerfCounters);
 
         if (request)

@@ -576,6 +576,10 @@ public:
         return outputShapes[port];
     }
 
+    const std::vector<InferenceEngine::Blob::Ptr>& getInternalBlobs() const {
+        return internalBlobs;
+    }
+
     /**
     * @brief Return scales and shift if nodes can be executed as ScaleShift, else raise exception
     * If node has only scale or shift value, fill missing value with default values
@@ -652,6 +656,7 @@ protected:
     InPlaceType inplace = InPlaceType::Unknown;
     ConstantType constant = ConstantType::Unknown;
     std::vector<InferenceEngine::Blob::Ptr> internalBlobs;
+
     std::vector<MKLDNNMemoryPtr> internalBlobMemory;
     std::vector<NodeDesc> supportedPrimitiveDescriptors;
     std::unordered_map<int, mkldnn::memory> primArgs;
@@ -668,7 +673,6 @@ protected:
     friend class MKLDNNEdge;
     friend class MKLDNNGraph;
     friend class MKLDNNGraphOptimizer;
-    friend class NodeDumper;
 
     void selectPreferPrimitiveDescriptor(const std::vector<impl_desc_type>& priority, bool ignoreConstInputs);
     bool isConfigDefined(const NodeConfig &config) const;
