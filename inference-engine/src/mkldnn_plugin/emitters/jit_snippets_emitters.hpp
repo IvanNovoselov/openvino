@@ -138,7 +138,6 @@ private:
         const size_t dim = in[2]; // number of tile dimension
         const int reg64_tmp_start { 8 }; // R8, R9, R10, R11, R12, R13, R14, R15 inputs+outputs+1
         Xbyak::Reg64 amount = Xbyak::Reg64(reg64_tmp_start + num_params); // amount
-        Xbyak::Reg64 reg_const_params { dnnl::impl::cpu::x64::abi_param2 };
         std::array<Xbyak::Label, 2> for_body;
         // If R15 is not used, reserve it for use in scalar to avoid redundant push-pop's.
         // todo: Do we need explicitly check that code contains ScalarEmitter?
@@ -162,8 +161,11 @@ private:
             h->pop(amount);
 
             // we need to add offset for ptrs only in external tiles because stores and loaders in internal tiles have default offsets
-            for (auto i = 0; dim > 0 && i < num_params; i++)
-                h->add(regs[i], _jep.scheduler_offsets[i]);
+            for (auto i = 0; dim > 0 && i < num_params; i++) {
+                if (_jep.scheduler_offsets[i] != 0) {
+                    h->add(regs[i], _jep.scheduler_offsets[i]);
+                }
+            }
 
             h->sub(amount, inc);
             h->cmp(amount, inc);

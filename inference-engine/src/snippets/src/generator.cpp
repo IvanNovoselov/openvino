@@ -84,7 +84,7 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ngr
     tile->compile_params = compile_params;
     tiles1D.push_back(std::make_pair(target->get(ngraph::snippets::op::Tile::get_type_info_static())(tile),
                                    std::make_pair(std::vector<size_t>({target->get_lanes(), nptrs, 0}), std::vector<size_t>{})));
-    tile = std::make_shared<ngraph::snippets::op::Tile>(lowered);
+    tile = std::make_shared<ngraph::snippets::op::Tile>(scalar_lowered);
     tile->compile_params = compile_params;
     tiles1D.push_back(std::make_pair(target->get(ngraph::snippets::op::Tile::get_type_info_static())(tile),
                     std::make_pair(std::vector<size_t>{{1, nptrs, 0}}, std::vector<size_t>{})));
