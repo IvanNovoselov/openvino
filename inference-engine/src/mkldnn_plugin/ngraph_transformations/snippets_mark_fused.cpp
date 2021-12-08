@@ -295,16 +295,9 @@ void PropagateIfHasOnlyChild(std::shared_ptr<Node> node, NodeFusingType nodeType
     const bool has_only_child = out.size() == 1 && out[0].get_target_inputs().size() == 1;
     SetNodeFusingType(node, has_only_child ? nodeType : NodeFusingType::FusedTerminator);
 }
-
-void SetTopologicalOrder(std::shared_ptr<Node> node, int64_t order) {
-    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::SetTopologicalOrder")
-    auto &rt = node->get_rt_info();
-    rt["TopologicalOrder"] = order;
-}
 } // namespace
 
 NodeFusingType GetNodeFusingType(std::shared_ptr<Node> node) {
-    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::GetNodeFusingType")
     auto &rt = node->get_rt_info();
     const auto rinfo = rt.find("MayBeFusedInPlugin");
     if (rinfo == rt.end())
@@ -316,16 +309,14 @@ void SetNodeFusingType(std::shared_ptr<Node> node, NodeFusingType nodeType) {
     rt["MayBeFusedInPlugin"] = nodeType;
 }
 
-bool FilterFused::run_on_function(std::shared_ptr<Function> f) {
-    RUN_ON_FUNCTION_SCOPE(FulterFused);
-    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::FilterFused")
+bool SnippetsMarkFused::run_on_function(std::shared_ptr<Function> f) {
+    RUN_ON_FUNCTION_SCOPE(SnippetsMarkFused);
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "SnippetsMarkFused")
     auto ordered_ops = f->get_ordered_ops();
     for (size_t order = 0; order < ordered_ops.size(); order++) {
         auto &node = ordered_ops[order];
         if (ngraph::op::is_constant(node) || ngraph::op::is_parameter(node))
             continue;
-        // Todo: we don't really have to set order for every node, just for subgraph parents and children would be enough
-        SetTopologicalOrder(node, order);
         if (isSuitableConvolutionParent(node)) {
             // Initiate fusing chain
             SetNodeFusingType(node, NodeFusingType::FusedWithConvolution);

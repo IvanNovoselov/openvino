@@ -26,8 +26,10 @@ NGRAPH_RTTI_DEFINITION(ngraph::snippets::pass::StartSubgraph, "Snippets::StartSu
 NGRAPH_RTTI_DEFINITION(ngraph::snippets::pass::AttachToSubgraph, "Snippets::AttachToSubgraph", 0);
 NGRAPH_RTTI_DEFINITION(ngraph::snippets::pass::TokenizeSnippets, "Snippets::TokenizeSnippets", 0);
 
-using namespace ngraph;
-using namespace snippets;
+namespace ngraph {
+namespace snippets {
+namespace pass {
+
 
 namespace {
 
@@ -67,9 +69,9 @@ auto has_subgraph_as_input(std::shared_ptr<Node> node) -> bool {
     return false;
 }
 
-auto is_lo(std::shared_ptr<Node> n) -> bool {
+auto is_lo(std::shared_ptr<Node> &n) -> bool {
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::is_lo")
-    auto is_lob = [](std::shared_ptr<Node> n) -> bool {
+    auto is_lob = [](std::shared_ptr<Node> &n) -> bool {
         return ov::is_type<opset1::Add>(n)
             || ov::is_type<opset1::Divide>(n)
             || ov::is_type<opset1::Equal>(n)
@@ -93,7 +95,7 @@ auto is_lo(std::shared_ptr<Node> n) -> bool {
             || ov::is_type<opset1::Xor>(n);
     };
 
-    auto is_lou = [](std::shared_ptr<Node> n) -> bool {
+    auto is_lou = [](std::shared_ptr<Node> &n) -> bool {
         return ov::is_type<opset1::Abs>(n)
             || ov::is_type<opset1::Clamp>(n)
             || ov::is_type<opset1::Elu>(n)
@@ -112,7 +114,7 @@ auto is_lo(std::shared_ptr<Node> n) -> bool {
     return is_lou(n) || is_lob(n);
 }
 
-auto has_supported_in_out(std::shared_ptr<Node> n) -> bool {
+auto has_supported_in_out(std::shared_ptr<Node> &n) -> bool {
     bool has_only_const_inputs{true};
     for (auto in : n->inputs()) {
         if (in.get_tensor().get_element_type() != ngraph::element::f32) {
@@ -156,7 +158,7 @@ auto has_supported_in_out(std::shared_ptr<Node> n) -> bool {
     return true;
 }
 
-auto has_result_child(std::shared_ptr<Node> node) -> bool {
+auto has_result_child(std::shared_ptr<Node> &node) -> bool {
     for (const auto &child : node->get_users()) {
         if (ov::is_type<ngraph::opset1::Result>(child)) {
             return true;
@@ -165,7 +167,7 @@ auto has_result_child(std::shared_ptr<Node> node) -> bool {
     return false;
 }
 
-auto get_num_result_children(std::shared_ptr<Node> node) -> size_t {
+auto get_num_result_children(std::shared_ptr<Node> &node) -> size_t {
     size_t result = 0;
     for (const auto &child : node->get_users()) {
         if (ov::is_type<ngraph::opset1::Result>(child)) {
@@ -199,11 +201,39 @@ auto update_out_tensor_name(std::shared_ptr<ngraph::snippets::op::Subgraph> subg
 }
 } // namespace
 
-bool ngraph::snippets::pass::AppropriateForSubgraph(std::shared_ptr<Node> n) {
-    return is_lo(n) && has_supported_in_out(n);
+bool AppropriateForSubgraph(std::shared_ptr<Node> node) {
+    return is_lo(node) && has_supported_in_out(node);
 }
 
-ngraph::snippets::pass::StartSubgraph::StartSubgraph() : MatcherPass() {
+void SetSnippetsNodeType(std::shared_ptr<Node> &node, SnippetsNodeType nodeType) {
+    auto &rt = node->get_rt_info();
+    rt["SnippetsNodeType"] = nodeType;
+}
+
+SnippetsNodeType GetSnippetsNodeType(std::shared_ptr<Node> node) {
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::GetSnippetsNodeType")
+    auto &rt = node->get_rt_info();
+    const auto rinfo = rt.find("SnippetsNodeType");
+    if (rinfo == rt.end())
+        return SnippetsNodeType::NotSet;
+    return rinfo->second.as<SnippetsNodeType>();
+}
+
+void SetTopologicalOrder(std::shared_ptr<Node> node, int64_t order) {
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::SetTopologicalOrder")
+    auto &rt = node->get_rt_info();
+    rt["TopologicalOrder"] = order;
+}
+
+int64_t GetTopologicalOrder(std::shared_ptr<Node> node) {
+    auto &rt = node->get_rt_info();
+    const auto rinfo = rt.find("TopologicalOrder");
+    if (rinfo == rt.end())
+        throw ngraph_error("Topological order is required, but not set.");
+    return rinfo->second.as<int64_t>();
+}
+
+StartSubgraph::StartSubgraph() : MatcherPass() {
     MATCHER_SCOPE(StartSubgraph);
     auto label = std::make_shared<pattern::op::Label>(pattern::any_input(),
         [](std::shared_ptr<Node> n) {
@@ -234,7 +264,7 @@ ngraph::snippets::pass::StartSubgraph::StartSubgraph() : MatcherPass() {
     register_matcher(matcher, callback);
 }
 
-ngraph::snippets::pass::AttachToSubgraph::AttachToSubgraph() : MatcherPass() {
+AttachToSubgraph::AttachToSubgraph() : MatcherPass() {
     MATCHER_SCOPE(AttachToSubgraph);
     enum continuation_strategy {
         reset,
@@ -308,27 +338,22 @@ ngraph::snippets::pass::AttachToSubgraph::AttachToSubgraph() : MatcherPass() {
          * The bounds are presumed to be without dependency. The bounds are updated if no dependency is introduced by the node.
         */
         const auto cyclicDependencyIsIntoduced = [&node](const std::shared_ptr<Node>& nodeToExamine, std::pair<int64_t, int64_t>& currentBounds) -> bool {
-            auto getTopologicalOrder = [](const std::shared_ptr<Node>& n) -> int64_t {
-                auto &rt = n->get_rt_info();
-                const auto rinfo = rt.find("TopologicalOrder");
-                assert(rinfo != rt.end() && "TopologicalOrder is not found in rt_info");
-                return rinfo->second.as<int64_t>();
-            };
+
             assert(currentBounds.first < currentBounds.second && "Invalid currentBounds passed");
             const auto &parentNodes = ngraph::as_node_vector(nodeToExamine->input_values());
             const int64_t maxParentOrder = std::accumulate(parentNodes.begin(), parentNodes.end(), currentBounds.first,
-                                                            [&getTopologicalOrder](int64_t maxOrder, std::shared_ptr<Node> n){
+                                                            [](int64_t maxOrder, std::shared_ptr<Node> n){
                                                                 if (ngraph::op::is_constant(n) || ngraph::op::is_parameter(n))
                                                                     return maxOrder;
-                                                                return std::max(maxOrder, getTopologicalOrder(n));
+                                                                return std::max(maxOrder, GetTopologicalOrder(n));
                                                             });
             const auto &childNodes = nodeToExamine->get_users();
             // Skip the node being attached, since it will be a part of subgraph and can't introduce loop dependency
             const int64_t minChildOrder = std::accumulate(childNodes.begin(), childNodes.end(), currentBounds.second,
-                                                            [&getTopologicalOrder, &node](int64_t minOrder, std::shared_ptr<Node> n){
+                                                            [&node](int64_t minOrder, std::shared_ptr<Node> n){
                                                                 if (ngraph::op::is_constant(n) || ngraph::op::is_parameter(n) || n == node)
                                                                     return minOrder;
-                                                                return std::min(minOrder, getTopologicalOrder(n));
+                                                                return std::min(minOrder, GetTopologicalOrder(n));
                                                             });
             if (maxParentOrder < minChildOrder) {
                 currentBounds = std::pair<int64_t, int64_t>(maxParentOrder, minChildOrder);
@@ -547,3 +572,6 @@ ngraph::snippets::pass::AttachToSubgraph::AttachToSubgraph() : MatcherPass() {
     auto matcher = std::make_shared<ngraph::pattern::Matcher>(label);
     register_matcher(matcher, callback);
 }
+} // namespace pass
+} // namespace snippets
+} // namespace ngraph
