@@ -82,8 +82,9 @@
 #include <transformations/op_conversions/fq_decomposition.hpp>
 #include <transformations/utils/utils.hpp>
 #include <snippets/pass/collapse_subgraph.hpp>
-#include <snippets/pass/filter_fused.hpp>
+#include <snippets/pass/enumerate_nodes.hpp>
 #include <snippets/op/subgraph.hpp>
+#include "ngraph_transformations/snippets_mark_fused.hpp"
 
 #include <ngraph/opsets/opset1.hpp>
 #include <ngraph/opsets/opset2.hpp>
@@ -515,7 +516,8 @@ static void TransformationUpToCPUSpecificOpSet(std::shared_ptr<ngraph::Function>
 //        ngraph::pass::Serialize(base_name + ".xml", base_name + ".bin").run_on_function(nGraphFunc);
         std::cerr << "Tokenization passes start" << std::endl;
         ngraph::pass::Manager tokenization_manager;
-        tokenization_manager.register_pass<ngraph::snippets::pass::FilterFused>();
+        tokenization_manager.register_pass<SnippetsMarkFused>();
+        tokenization_manager.register_pass<ngraph::snippets::pass::EnumerateNodes>();
         tokenization_manager.register_pass<ngraph::snippets::pass::TokenizeSnippets>();
         tokenization_manager.run_passes(nGraphFunc);
         std::cerr << "Tokenization passes finished" << std::endl;

@@ -24,13 +24,25 @@ namespace pass {
 //  This is done so the snippets and the plugin skipping transformation won't interfere, otherwise
 //  one transformation might continue skipping chains created by the other one. An alternative solution is to
 //  fix the order of transformations (e.g. snippets skip must always be the first), but this is hardly better.
-enum class SnippetsNodeType : int64_t {SubgraphStart, SubgraphBody,
-    NotSet, SkippedByPlugin, SkippedBySnippets};
-void SetSnippetsNodeType(std::shared_ptr<Node>, SnippetsNodeType);
-SnippetsNodeType GetSnippetsNodeType(std::shared_ptr<Node>);
-void SetTopologicalOrder(std::shared_ptr<Node>, int64_t);
-int64_t GetTopologicalOrder(std::shared_ptr<Node>);
+enum class SnippetsNodeType : int64_t {SubgraphStart, SubgraphBody, NotSet, SkippedByPlugin};
+//void SetSnippetsNodeType(std::shared_ptr<Node>, SnippetsNodeType);
+//SnippetsNodeType GetSnippetsNodeType(std::shared_ptr<Node>);
 bool AppropriateForSubgraph(std::shared_ptr<Node>);
+
+inline void SetSnippetsNodeType(std::shared_ptr<Node> node, SnippetsNodeType nodeType) {
+    auto &rt = node->get_rt_info();
+    rt["SnippetsNodeType"] = nodeType;
+}
+
+inline SnippetsNodeType GetSnippetsNodeType(std::shared_ptr<Node> node) {
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::GetSnippetsNodeType")
+    auto &rt = node->get_rt_info();
+    const auto rinfo = rt.find("SnippetsNodeType");
+    if (rinfo == rt.end())
+        return SnippetsNodeType::NotSet;
+    return rinfo->second.as<SnippetsNodeType>();
+}
+
 
 /**
  * @interface StartSubgraph

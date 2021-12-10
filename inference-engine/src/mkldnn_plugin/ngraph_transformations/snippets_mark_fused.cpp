@@ -1,17 +1,23 @@
 // Copyright (C) 2021 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
-
-#pragma once
-
 #include "snippets_mark_fused.hpp"
-//#include "snippets/pass/filter_fused.hpp"
-//#include "snippets/pass/collapse_subgraph.hpp"
+#include "snippets/pass/collapse_subgraph.hpp"
 #include <ngraph/opsets/opset1.hpp>
-
 using namespace ngraph;
 namespace MKLDNNPlugin {
 namespace {
+NodeFusingType GetNodeFusingType(std::shared_ptr<Node> node) {
+    auto &rt = node->get_rt_info();
+    const auto rinfo = rt.find("MayBeFusedInPlugin");
+    if (rinfo == rt.end())
+        return NodeFusingType::NotSet;
+    return rinfo->second.as<NodeFusingType>();
+}
+void SetNodeFusingType(std::shared_ptr<Node> node, NodeFusingType nodeType) {
+    auto &rt = node->get_rt_info();
+    rt["MayBeFusedInPlugin"] = nodeType;
+}
 std::vector<NodeFusingType> getContinuableChains(std::shared_ptr<Node> node) {
     std::vector<NodeFusingType> result;
     for (const auto& input : node->inputs()) {
@@ -22,32 +28,6 @@ std::vector<NodeFusingType> getContinuableChains(std::shared_ptr<Node> node) {
         }
     }
     return result;
-}
-bool hasIgnoredParent(std::shared_ptr<Node> node) {
-    for (const auto& input : node->inputs()) {
-        const auto parent = input.get_source_output().get_node_shared_ptr();
-        if (GetNodeFusingType(parent) == NodeFusingType::Ignored)
-            return true;
-    }
-    return false;
-}
-bool hasParameterParent(std::shared_ptr<Node> node) {
-    for (const auto& input : node->inputs()) {
-        const auto parent = input.get_source_output().get_node_shared_ptr();
-        if (ov::is_type<ngraph::op::Parameter>(parent))
-            return true;
-    }
-    return false;
-}
-bool hasParentInStartedSubgraph(std::shared_ptr<Node> node) {
-    auto inputs = node->inputs();
-    for (const auto& input : inputs) {
-        const auto parent = input.get_source_output().get_node_shared_ptr();
-        // True for SubgraphStart and SubgraphBody by convention
-        if (GetNodeFusingType(parent) < NodeFusingType::NotSet)
-            return true;
-    }
-    return false;
 }
 int getNumNonConstInputs(std::shared_ptr<Node> node) {
     int num_non_const_inputs = 0;
@@ -297,27 +277,18 @@ void PropagateIfHasOnlyChild(std::shared_ptr<Node> node, NodeFusingType nodeType
 }
 } // namespace
 
-NodeFusingType GetNodeFusingType(std::shared_ptr<Node> node) {
-    auto &rt = node->get_rt_info();
-    const auto rinfo = rt.find("MayBeFusedInPlugin");
-    if (rinfo == rt.end())
-        return NodeFusingType::NotSet;
-    return rinfo->second.as<NodeFusingType>();
-}
-void SetNodeFusingType(std::shared_ptr<Node> node, NodeFusingType nodeType) {
-    auto &rt = node->get_rt_info();
-    rt["MayBeFusedInPlugin"] = nodeType;
-}
-
 bool SnippetsMarkFused::run_on_function(std::shared_ptr<Function> f) {
     RUN_ON_FUNCTION_SCOPE(SnippetsMarkFused);
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "SnippetsMarkFused")
     auto ordered_ops = f->get_ordered_ops();
     for (size_t order = 0; order < ordered_ops.size(); order++) {
         auto &node = ordered_ops[order];
-        if (ngraph::op::is_constant(node) || ngraph::op::is_parameter(node))
+        if (ngraph::op::is_constant(node))
             continue;
-        if (isSuitableConvolutionParent(node)) {
+        if (ngraph::op::is_parameter(node)) {
+            SetNodeFusingType(node, NodeFusingType::IgnoredAfterInputs);
+            continue;
+        } else if (isSuitableConvolutionParent(node)) {
             // Initiate fusing chain
             SetNodeFusingType(node, NodeFusingType::FusedWithConvolution);
             continue;
@@ -352,23 +323,12 @@ bool SnippetsMarkFused::run_on_function(std::shared_ptr<Function> f) {
                 NodeFusingType updatedChainType = fusingChainType;
                 if (isSuitableChildForFusingMatMul(node, updatedChainType))
                     PropagateIfHasOnlyChild(node, updatedChainType);
+            } else if (fusingChainType == NodeFusingType::IgnoredAfterInputs && snippets::pass::AppropriateForSubgraph(node)) {
+                SetNodeFusingType(node, NodeFusingType::IgnoredAfterInputs);
             }
         }
-        if (AppropriateForSubgraph(node)) {
-            // todo: enable u8 support in Snippetst
-            // Ignore eltwise chains starting at Parameter node, since it could be u8
-            if (hasIgnoredParent(node) || hasParameterParent(node)) {
-                SetNodeFusingType(node, NodeFusingType::Ignored);
-                continue;
-            }
-            if (GetNodeFusingType(node) >= NodeFusingType::FusedTerminator)
-                continue;
-            if (hasParentInStartedSubgraph(node)) {
-                SetNodeFusingType(node, NodeFusingType::SubgraphBody);
-            } else {
-                SetNodeFusingType(node, NodeFusingType::SubgraphStart);
-            }
-        }
+        if (GetNodeFusingType(node) != NodeFusingType::NotSet)
+                SetSnippetsNodeType(node, snippets::pass::SnippetsNodeType::SkippedByPlugin);
     }
     return true;
 }

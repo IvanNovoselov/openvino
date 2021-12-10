@@ -6,7 +6,7 @@
 #include <snippets/itt.hpp>
 
 #include "snippets/pass/collapse_subgraph.hpp"
-#include "snippets/pass/filter_fused.hpp"
+#include "snippets/pass/enumerate_nodes.hpp"
 #include "snippets/op/subgraph.hpp"
 
 #include <ngraph/opsets/opset1.hpp>
@@ -158,7 +158,7 @@ auto has_supported_in_out(std::shared_ptr<Node> &n) -> bool {
     return true;
 }
 
-auto has_result_child(std::shared_ptr<Node> &node) -> bool {
+auto has_result_child(std::shared_ptr<Node> node) -> bool {
     for (const auto &child : node->get_users()) {
         if (ov::is_type<ngraph::opset1::Result>(child)) {
             return true;
@@ -204,34 +204,20 @@ auto update_out_tensor_name(std::shared_ptr<ngraph::snippets::op::Subgraph> subg
 bool AppropriateForSubgraph(std::shared_ptr<Node> node) {
     return is_lo(node) && has_supported_in_out(node);
 }
-
-void SetSnippetsNodeType(std::shared_ptr<Node> &node, SnippetsNodeType nodeType) {
-    auto &rt = node->get_rt_info();
-    rt["SnippetsNodeType"] = nodeType;
-}
-
-SnippetsNodeType GetSnippetsNodeType(std::shared_ptr<Node> node) {
-    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::GetSnippetsNodeType")
-    auto &rt = node->get_rt_info();
-    const auto rinfo = rt.find("SnippetsNodeType");
-    if (rinfo == rt.end())
-        return SnippetsNodeType::NotSet;
-    return rinfo->second.as<SnippetsNodeType>();
-}
-
-void SetTopologicalOrder(std::shared_ptr<Node> node, int64_t order) {
-    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::SetTopologicalOrder")
-    auto &rt = node->get_rt_info();
-    rt["TopologicalOrder"] = order;
-}
-
-int64_t GetTopologicalOrder(std::shared_ptr<Node> node) {
-    auto &rt = node->get_rt_info();
-    const auto rinfo = rt.find("TopologicalOrder");
-    if (rinfo == rt.end())
-        throw ngraph_error("Topological order is required, but not set.");
-    return rinfo->second.as<int64_t>();
-}
+//
+//void SetSnippetsNodeType(std::shared_ptr<Node> node, SnippetsNodeType nodeType) {
+//    auto &rt = node->get_rt_info();
+//    rt["SnippetsNodeType"] = nodeType;
+//}
+//
+//SnippetsNodeType GetSnippetsNodeType(std::shared_ptr<Node> node) {
+//    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::GetSnippetsNodeType")
+//    auto &rt = node->get_rt_info();
+//    const auto rinfo = rt.find("SnippetsNodeType");
+//    if (rinfo == rt.end())
+//        return SnippetsNodeType::NotSet;
+//    return rinfo->second.as<SnippetsNodeType>();
+//}
 
 StartSubgraph::StartSubgraph() : MatcherPass() {
     MATCHER_SCOPE(StartSubgraph);
@@ -338,7 +324,6 @@ AttachToSubgraph::AttachToSubgraph() : MatcherPass() {
          * The bounds are presumed to be without dependency. The bounds are updated if no dependency is introduced by the node.
         */
         const auto cyclicDependencyIsIntoduced = [&node](const std::shared_ptr<Node>& nodeToExamine, std::pair<int64_t, int64_t>& currentBounds) -> bool {
-
             assert(currentBounds.first < currentBounds.second && "Invalid currentBounds passed");
             const auto &parentNodes = ngraph::as_node_vector(nodeToExamine->input_values());
             const int64_t maxParentOrder = std::accumulate(parentNodes.begin(), parentNodes.end(), currentBounds.first,
