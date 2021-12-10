@@ -8,7 +8,6 @@
 #include <ngraph/pass/manager.hpp>
 
 #include <snippets/snippets_isa.hpp>
-#include <snippets/pass/enumerate_nodes.hpp>
 #include <snippets/pass/collapse_subgraph.hpp>
 #include <snippets/op/subgraph.hpp>
 

@@ -82,8 +82,6 @@
 #include <transformations/op_conversions/fq_decomposition.hpp>
 #include <transformations/utils/utils.hpp>
 #include <snippets/pass/collapse_subgraph.hpp>
-#include <snippets/pass/enumerate_nodes.hpp>
-#include <snippets/op/subgraph.hpp>
 #include "ngraph_transformations/snippets_mark_fused.hpp"
 
 #include <ngraph/opsets/opset1.hpp>

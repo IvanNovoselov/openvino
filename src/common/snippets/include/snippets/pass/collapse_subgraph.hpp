@@ -27,7 +27,21 @@ namespace pass {
 enum class SnippetsNodeType : int64_t {SubgraphStart, SubgraphBody, NotSet, SkippedByPlugin};
 void SetSnippetsNodeType(std::shared_ptr<Node>, SnippetsNodeType);
 SnippetsNodeType GetSnippetsNodeType(std::shared_ptr<Node>);
+void SetTopologicalOrder(std::shared_ptr<Node>, int64_t);
+int64_t GetTopologicalOrder(std::shared_ptr<Node>);
 bool AppropriateForSubgraph(std::shared_ptr<Node>);
+
+/**
+ * @interface EnumerateNodes
+ * @brief  Snippets rely on topological order to avoid creating cyclic dependencies, so this transformation enumerates nodes in topological order.
+ * @ingroup snippets
+ */
+class EnumerateNodes : public ngraph::pass::FunctionPass {
+public:
+    NGRAPH_RTTI_DECLARATION;
+    EnumerateNodes() : FunctionPass() {}
+    bool run_on_function(std::shared_ptr<ngraph::Function> function) override;
+};
 
 /**
  * @interface StartSubgraph

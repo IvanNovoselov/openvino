@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 #include "snippets_mark_fused.hpp"
-#include "snippets/pass/collapse_subgraph.hpp"
+#include <snippets/pass/collapse_subgraph.hpp>
 #include <ngraph/opsets/opset1.hpp>
+
+NGRAPH_RTTI_DEFINITION(MKLDNNPlugin::SnippetsMarkFused, "SnippetsMarkFused", 0);
+
 using namespace ngraph;
 namespace MKLDNNPlugin {
 namespace {
@@ -278,11 +281,7 @@ void PropagateIfHasOnlyChild(std::shared_ptr<Node> node, NodeFusingType nodeType
 } // namespace
 
 bool SnippetsMarkFused::run_on_function(std::shared_ptr<Function> f) {
-    RUN_ON_FUNCTION_SCOPE(SnippetsMarkFused);
-    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "SnippetsMarkFused")
-    auto ordered_ops = f->get_ordered_ops();
-    for (size_t order = 0; order < ordered_ops.size(); order++) {
-        auto &node = ordered_ops[order];
+    for (auto &node : f->get_ordered_ops()) {
         if (ngraph::op::is_constant(node))
             continue;
         if (ngraph::op::is_parameter(node)) {

@@ -6,7 +6,6 @@
 #include <snippets/itt.hpp>
 
 #include "snippets/pass/collapse_subgraph.hpp"
-#include "snippets/pass/enumerate_nodes.hpp"
 #include "snippets/op/subgraph.hpp"
 
 #include <ngraph/opsets/opset1.hpp>
@@ -22,9 +21,10 @@
 #include <numeric>
 #include <climits>
 
+NGRAPH_RTTI_DEFINITION(ngraph::snippets::pass::TokenizeSnippets, "Snippets::TokenizeSnippets", 0);
+NGRAPH_RTTI_DEFINITION(ngraph::snippets::pass::EnumerateNodes, "Snippets::EnumerateNodes", 0);
 NGRAPH_RTTI_DEFINITION(ngraph::snippets::pass::StartSubgraph, "Snippets::StartSubgraph", 0);
 NGRAPH_RTTI_DEFINITION(ngraph::snippets::pass::AttachToSubgraph, "Snippets::AttachToSubgraph", 0);
-NGRAPH_RTTI_DEFINITION(ngraph::snippets::pass::TokenizeSnippets, "Snippets::TokenizeSnippets", 0);
 
 namespace ngraph {
 namespace snippets {
@@ -219,6 +219,30 @@ SnippetsNodeType GetSnippetsNodeType(std::shared_ptr<Node> node) {
     return rinfo->second.as<SnippetsNodeType>();
 }
 
+void SetTopologicalOrder(std::shared_ptr<Node> node, int64_t order) {
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::SetTopologicalOrder")
+    auto &rt = node->get_rt_info();
+    rt["TopologicalOrder"] = order;
+}
+
+int64_t GetTopologicalOrder(std::shared_ptr<Node> node) {
+    auto &rt = node->get_rt_info();
+    const auto rinfo = rt.find("TopologicalOrder");
+    if (rinfo == rt.end())
+        throw ngraph_error("Topological order is required, but not set.");
+    return rinfo->second.as<int64_t>();
+}
+
+bool EnumerateNodes::run_on_function(std::shared_ptr<Function> f) {
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::EnumerateNodes")
+    int64_t order = 0;
+    // Todo: We don't really have to set order for every node, just for subgraph parents and children would be enough
+    for (auto &node : f->get_ordered_ops()) {
+        SetTopologicalOrder(node, order++);
+    }
+    return true;
+}
+
 StartSubgraph::StartSubgraph() : MatcherPass() {
     MATCHER_SCOPE(StartSubgraph);
     auto label = std::make_shared<pattern::op::Label>(pattern::any_input(),
@@ -250,6 +274,7 @@ StartSubgraph::StartSubgraph() : MatcherPass() {
     auto matcher = std::make_shared<ngraph::pattern::Matcher>(label);
     register_matcher(matcher, callback);
 }
+
 
 AttachToSubgraph::AttachToSubgraph() : MatcherPass() {
     MATCHER_SCOPE(AttachToSubgraph);

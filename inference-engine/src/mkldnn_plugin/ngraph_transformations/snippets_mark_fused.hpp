@@ -4,17 +4,16 @@
 
 #pragma once
 
-#include <transformations_visibility.hpp>
 #include <ngraph/pass/graph_rewrite.hpp>
-#include <snippets/itt.hpp>
 
 namespace MKLDNNPlugin {
 /**
  * @interface SnippetsMarkFused
  * @brief Mark operations that will be fused on plugin side (but not yet in snippets) so they'll be ignored by snippets.
  */
-class TRANSFORMATIONS_API  SnippetsMarkFused : public ngraph::pass::FunctionPass {
+class SnippetsMarkFused : public ngraph::pass::FunctionPass {
 public:
+    NGRAPH_RTTI_DECLARATION;
     SnippetsMarkFused() : FunctionPass() {}
     bool run_on_function(std::shared_ptr<ngraph::Function> function) override;
 };
