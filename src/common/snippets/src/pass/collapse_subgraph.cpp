@@ -204,26 +204,27 @@ auto update_out_tensor_name(std::shared_ptr<ngraph::snippets::op::Subgraph> subg
 bool AppropriateForSubgraph(std::shared_ptr<Node> node) {
     return is_lo(node) && has_supported_in_out(node);
 }
-//
-//void SetSnippetsNodeType(std::shared_ptr<Node> node, SnippetsNodeType nodeType) {
-//    auto &rt = node->get_rt_info();
-//    rt["SnippetsNodeType"] = nodeType;
-//}
-//
-//SnippetsNodeType GetSnippetsNodeType(std::shared_ptr<Node> node) {
-//    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::GetSnippetsNodeType")
-//    auto &rt = node->get_rt_info();
-//    const auto rinfo = rt.find("SnippetsNodeType");
-//    if (rinfo == rt.end())
-//        return SnippetsNodeType::NotSet;
-//    return rinfo->second.as<SnippetsNodeType>();
-//}
+
+void SetSnippetsNodeType(std::shared_ptr<Node> node, SnippetsNodeType nodeType) {
+    auto &rt = node->get_rt_info();
+    rt["SnippetsNodeType"] = nodeType;
+}
+
+SnippetsNodeType GetSnippetsNodeType(std::shared_ptr<Node> node) {
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::GetSnippetsNodeType")
+    auto &rt = node->get_rt_info();
+    const auto rinfo = rt.find("SnippetsNodeType");
+    if (rinfo == rt.end())
+        return SnippetsNodeType::NotSet;
+    return rinfo->second.as<SnippetsNodeType>();
+}
 
 StartSubgraph::StartSubgraph() : MatcherPass() {
     MATCHER_SCOPE(StartSubgraph);
     auto label = std::make_shared<pattern::op::Label>(pattern::any_input(),
         [](std::shared_ptr<Node> n) {
-            return GetSnippetsNodeType(n) == SnippetsNodeType::SubgraphStart;
+            return GetSnippetsNodeType(n) != SnippetsNodeType::SkippedByPlugin &&
+                   AppropriateForSubgraph(n);
         });
     auto callback = [](ngraph::pattern::Matcher &m) -> bool {
         OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::StartSubgraph_callback")
@@ -260,7 +261,9 @@ AttachToSubgraph::AttachToSubgraph() : MatcherPass() {
     continuation_strategy strategy = continuation_strategy::reset;
     auto label = std::make_shared<pattern::op::Label>(pattern::any_input(),
         [](std::shared_ptr<Node> n) {
-            return GetSnippetsNodeType(n) == SnippetsNodeType::SubgraphBody && has_subgraph_as_input(n);
+            return GetSnippetsNodeType(n) != SnippetsNodeType::SkippedByPlugin &&
+                   has_subgraph_as_input(n) &&
+                   AppropriateForSubgraph(n);
         });
     ngraph::graph_rewrite_callback callback = [strategy](ngraph::pattern::Matcher &m) -> bool {
         OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::AttachToSubgraph_callback")
