@@ -15,8 +15,12 @@ endif()
 addIeTargetTest(
         NAME ${TARGET_NAME}
         ROOT ${CMAKE_CURRENT_SOURCE_DIR}
+        INCLUDES
+            $<TARGET_PROPERTY:snippetsNgraphFunctions,SOURCE_DIR>/include
         LINK_LIBRARIES
             inference_engine_lp_transformations
+            inference_engine_snippets
+            snippetsNgraphFunctions
             ${OpenCV_LIBRARIES}
         ADD_CPPLINT
         DEPENDENCIES
