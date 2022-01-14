@@ -162,7 +162,8 @@ void BlobDumper::dumpAsTxt(std::ostream &stream) const {
     " by address 0x" << std::hex << reinterpret_cast<const long long *>(memory->GetData()) << std::dec <<std::endl;
 
     const void *ptr = memory->GetData();
-
+    stream.precision(9);
+    stream << std::fixed;
     switch (desc.getPrecision()) {
         case Precision::FP32 : {
             auto *blob_ptr = reinterpret_cast<const float*>(ptr);
