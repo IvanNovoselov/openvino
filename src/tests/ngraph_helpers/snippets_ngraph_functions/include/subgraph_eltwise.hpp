@@ -37,7 +37,7 @@ public:
 /// Log is not tokenizable, so two Subgraphs are created to avoid loop introduction: Add+HSwish and Multiply.
 //     in1   in2
 //        Add
-//  HSwish   Lod
+//  HSwish   Log
 //      Multiply
 //       Result
 class EltwiseLogLoop {
