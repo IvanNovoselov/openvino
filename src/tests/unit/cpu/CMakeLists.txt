@@ -14,6 +14,7 @@ addIeTargetTest(
         INCLUDES
             $<TARGET_PROPERTY:openvino_intel_cpu_plugin,SOURCE_DIR>/src
             $<TARGET_PROPERTY:openvino::conditional_compilation,INTERFACE_INCLUDE_DIRECTORIES>
+            $<TARGET_PROPERTY:snippetsNgraphFunctions,SOURCE_DIR>/include
         OBJECT_FILES
             ${OBJ_LIB}
         LINK_LIBRARIES
@@ -28,6 +29,7 @@ addIeTargetTest(
             unitTestUtils
             inference_engine_snippets
             ngraphFunctions
+            snippetsNgraphFunctions
         ADD_CPPLINT
         LABELS
             CPU
