@@ -59,9 +59,10 @@ public:
 };
 class SnippetsCollapseSubgraphTests : public TransformationTestsF {
 public:
-    void run(bool serialize = false) {
+    void run(bool serialize_before = false, bool serialize_after = false, bool serialize_ref = false) {
         ASSERT_TRUE(function);
-        if (serialize) {
+        std::string name;
+        if (serialize_before || serialize_after || serialize_ref) {
             auto formatName = [](const std::string& original_name) {
                 std::string name(original_name);
                 std::replace(name.begin(), name.end(), '\\', '_');
@@ -70,13 +71,18 @@ public:
                 std::replace(name.begin(), name.end(), ':', '-');
                 return name;
             };
-            std::string name = formatName(function->get_friendly_name());
+            name = formatName(function->get_friendly_name());
             if (name.empty())
                 name = "subgraph";
-            manager.register_pass<ov::pass::Serialize>(name + ".xml", name + ".bin");
         }
+        if (serialize_ref && function_ref)
+            ov::pass::Serialize(name + "_ref.xml", name + "_ref.bin").run_on_model(function_ref);
+        if (serialize_before)
+            manager.register_pass<ov::pass::Serialize>(name + "_before.xml", name + "_before.bin");
         manager.register_pass<EnumerateNodes>();
         manager.register_pass<TokenizeSnippets>();
+        if (serialize_after)
+            manager.register_pass<ov::pass::Serialize>(name + "_after.xml", name + "_after.bin");
         manager.register_pass<SnippetsRestoreResultInputName>();
     }
 };
