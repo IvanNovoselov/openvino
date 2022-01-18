@@ -6,6 +6,7 @@ set(TARGET_NAME snippetsNgraphFunctions)
 
 set(PUBLIC_HEADERS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 set(SNIPPETS_INCLUDES "$<TARGET_PROPERTY:inference_engine_snippets,SOURCE_DIR>/include")
+set(COMMON_TEST_UTILS_INCLUDES "$<TARGET_PROPERTY:commonTestUtils,INTERFACE_INCLUDE_DIRECTORIES>")
 addIeTarget(
         NAME ${TARGET_NAME}
         TYPE STATIC
@@ -13,6 +14,8 @@ addIeTarget(
         INCLUDES
             PUBLIC
                 ${PUBLIC_HEADERS_DIR}
+                ${IE_TESTS_ROOT}/ie_test_utils
+                ${COMMON_TEST_UTILS_INCLUDES}
             PRIVATE
                 ${SNIPPETS_INCLUDES}
 
@@ -23,9 +26,11 @@ addIeTarget(
                 ngraphFunctions
                 openvino::runtime::dev
                 inference_engine_legacy
+                commonTestUtils
         ADD_CPPLINT
         DEPENDENCIES
             ngraphFunctions
+            commonTestUtils
         DEVELOPER_PACKAGE
             tests
 )

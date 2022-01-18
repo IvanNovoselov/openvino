@@ -8,6 +8,7 @@
 #include <ngraph_transformations/snippets_mark_skipped.hpp>
 
 using namespace MKLDNNPlugin;
+using namespace ngraph::builder::subgraph;
 class SnippetsMarkSkippedTests : public SnippetsCollapseSubgraphTests {
 public:
     void run(bool serialize_before = false, bool serialize_after = false, bool serialize_ref = false) {
@@ -17,28 +18,32 @@ public:
 };
 
 TEST_F(SnippetsMarkSkippedTests, SkipAfterInputs_EltwiseFunction) {
-    function = ngraph::builder::subgraph::EltwiseFunction::getOriginal();
+    const auto &f = EltwiseFunction({{2, 3}, {1, 3}});
+    function = f.getOriginal();
     // None subgraphs are expected, since the whole graph is an eltwise chain after input
-    function_ref = ngraph::builder::subgraph::EltwiseFunction::getOriginal();
+    function_ref = f.getOriginal();
     run();
 }
 
 TEST_F(SnippetsMarkSkippedTests, SkipAfterInputs_MatMulEltwiseBranchesFunction) {
-    function = ngraph::builder::subgraph::MatMulEltwiseBranchesFunction::getOriginal();
+    const auto &f = MatMulEltwiseBranchesFunction(std::vector<Shape> {{1, 3, 4, 4}, {1, 3, 4, 4}});
+    function = f.getOriginal();
     // Fully tokenizable, since inputs are followed by MatMul
-    function_ref = ngraph::builder::subgraph::MatMulEltwiseBranchesFunction::getReference();
+    function_ref = f.getReference();
     run();
 }
 
 TEST_F(SnippetsMarkSkippedTests, SkipConvFused_ConvMulActivation) {
-    function = ngraph::builder::subgraph::ConvMulActivation::getOriginal();
+    const auto &f = ConvMulActivation(std::vector<Shape> {{1, 2, 16, 16}, {1, 2, 1, 16}});
+    function = f.getOriginal();
     // Fully tokenizable, since Mul with 2 inputs isn't fused into Convolution
-    function_ref = ngraph::builder::subgraph::ConvMulActivation::getReference();
+    function_ref = f.getReference();
     run();
 }
 
 TEST_F(SnippetsMarkSkippedTests, SkipConvFused_ConvSumActivation) {
-    function = ngraph::builder::subgraph::ConvMulActivation::getOriginal();
+    const auto &f = ConvMulActivation(std::vector<Shape> {{1, 2, 16, 16}, {1, 2, 1, 1}});
+    function = f.getOriginal();
     // If I replace Multiply with Add in the original function it'll become non-tokenizable
     // due to FuseConvolutionSumAndConvolutionSumActivation fusing.
     const auto& ops = function->get_ops();

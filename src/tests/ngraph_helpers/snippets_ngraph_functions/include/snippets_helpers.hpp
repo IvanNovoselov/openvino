@@ -87,22 +87,38 @@ public:
     }
 };
 /// Base class for snippets-related subgraphs
-/*
 class SnippetsFunctionBase {
 public:
-    virtual void InitOriginal() = 0;
-    virtual void InitReference() = 0;
-    std::shared_ptr<ov::Model> getOriginal() {
-        NGRAPH_CHECK(function != nullptr, "The test requires Model to be defined");
-        return function;
-    }
-    std::shared_ptr<ov::Model> getReference() {
-        NGRAPH_CHECK(function_ref != nullptr, "The test requires Model to be defined");
+    SnippetsFunctionBase() = delete;
+    SnippetsFunctionBase(std::vector<Shape>& inputShapes) : input_shapes{inputShapes} {};
+
+    std::shared_ptr<ov::Model> getReference() const {
+        std::shared_ptr<Model> function_ref = initReference();
+        validate_function(function_ref);
         return function_ref;
     }
+    std::shared_ptr<ov::Model> getOriginal() const {
+        std::shared_ptr<Model> function = initOriginal();
+        validate_function(function);
+        return function;
+    }
+    size_t getNumInputs() const {return input_shapes.size();}
 
 protected:
-    std::shared_ptr<Model> function;
-    std::shared_ptr<Model> function_ref;
+    virtual std::shared_ptr<ov::Model> initOriginal() const = 0;
+    virtual std::shared_ptr<ov::Model> initReference() const  = 0;
+    // only fp32 is currently supported by snippets
+    ov::element::Type_t precision  = element::f32;
+    std::vector<Shape> input_shapes;
+
+private:
+    void validate_function(const std::shared_ptr<Model>& f) const {
+        NGRAPH_CHECK(f != nullptr, "The test requires Model to be defined");
+        const auto &params = f->get_parameters();
+        NGRAPH_CHECK(params.size() == input_shapes.size(),
+                     "Passed input shapes and produced function are inconsistent.");
+        for (size_t i = 0; i < input_shapes.size(); i++)
+            NGRAPH_CHECK(std::equal(input_shapes[i].begin(), input_shapes[i].end(), params[i]->get_shape().begin()),
+                         "Passed input shapes and produced function are inconsistent.");
+    }
 };
-*/
