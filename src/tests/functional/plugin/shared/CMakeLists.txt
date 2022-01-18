@@ -54,6 +54,7 @@ addIeTarget(
                 ngraph_test_util
                 ngraphFunctions
                 lptNgraphFunctions
+                snippetsNgraphFunctions
                 sharedTestClasses
             PRIVATE
                 openvino::util

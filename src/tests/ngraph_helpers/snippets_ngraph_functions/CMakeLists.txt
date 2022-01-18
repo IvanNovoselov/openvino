@@ -16,7 +16,6 @@ addIeTarget(
                 ${PUBLIC_HEADERS_DIR}
                 ${IE_TESTS_ROOT}/ie_test_utils
                 ${COMMON_TEST_UTILS_INCLUDES}
-            PRIVATE
                 ${SNIPPETS_INCLUDES}
 
         ADDITIONAL_SOURCE_DIRS
@@ -27,10 +26,12 @@ addIeTarget(
                 openvino::runtime::dev
                 inference_engine_legacy
                 commonTestUtils
+                inference_engine_snippets
         ADD_CPPLINT
         DEPENDENCIES
             ngraphFunctions
             commonTestUtils
+            inference_engine_snippets
         DEVELOPER_PACKAGE
             tests
 )
