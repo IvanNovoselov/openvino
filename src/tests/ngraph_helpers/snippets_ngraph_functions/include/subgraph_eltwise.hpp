@@ -5,7 +5,7 @@
 #pragma once
 
 #include "ngraph/ngraph.hpp"
-//#include "snippets_helpers.hpp"
+#include "./snippets_helpers.hpp"
 
 namespace ngraph {
 namespace builder {
@@ -17,10 +17,14 @@ namespace subgraph {
 //   /   Subtract
 //  Multiply
 //   Result
-class EltwiseFunction {
+class EltwiseFunction : public SnippetsFunctionBase {
 public:
-    static std::shared_ptr<ov::Model> getOriginal();
-    static std::shared_ptr<ov::Model> getReference();
+    explicit EltwiseFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+        NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
+    }
+private:
+    std::shared_ptr<ov::Model> initOriginal() const override;
+    std::shared_ptr<ov::Model> initReference() const override;
 };
 /// MatMul with two eltwise branches joined with Add just before the Result.
 /// Tokenized by attaching eltwises to separate subgraphs, and then joining them together.
@@ -29,10 +33,21 @@ public:
 //  [Eltwise sequence 1]   [Eltwise sequence 2]
 //                      Add
 //                     Result
-class MatMulEltwiseBranchesFunction {
+class MatMulEltwiseBranchesFunction : public SnippetsFunctionBase {
 public:
-    static std::shared_ptr<ov::Model> getOriginal();
-    static std::shared_ptr<ov::Model> getReference();
+    explicit MatMulEltwiseBranchesFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+            NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
+            NGRAPH_CHECK(input_shapes[0].size() == 4 && input_shapes[1].size() == 4,
+                         "Only 4D input shapes are currently supported by this test");
+            // todo:
+            //  Note that single-element constant are not supported by the test, since they'll be converted
+            //  to snippets::op::Scalar. So a more comlex logics is required to produce reference function.
+            NGRAPH_CHECK(input_shapes[0][1] == input_shapes[1][1], "Channel dimensions must be equal and != 1");
+    }
+
+private:
+    std::shared_ptr<ov::Model> initOriginal() const override;
+    std::shared_ptr<ov::Model> initReference() const override;
 };
 /// Add with HSwish and Log  joined Multiply.
 /// Log is not tokenizable, so two Subgraphs are created to avoid loop introduction: Add+HSwish and Multiply.
@@ -41,10 +56,14 @@ public:
 //  HSwish   Log
 //      Multiply
 //       Result
-class EltwiseLogLoop {
+class EltwiseLogLoop : public SnippetsFunctionBase {
 public:
-    static std::shared_ptr<ov::Model> getOriginal();
-    static std::shared_ptr<ov::Model> getReference();
+    explicit EltwiseLogLoop(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+            NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
+    }
+private:
+    std::shared_ptr<ov::Model> initOriginal() const override;
+    std::shared_ptr<ov::Model> initReference() const override;
 };
 
 }  // namespace subgraph
