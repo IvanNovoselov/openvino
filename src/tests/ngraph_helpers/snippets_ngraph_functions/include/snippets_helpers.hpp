@@ -11,7 +11,7 @@
 #include "common_test_utils/ngraph_test_utils.hpp"
 
 using ngraph::snippets::op::Subgraph;
-using ngraph::pass::InitNodeInfo;
+//using ngraph::pass::InitNodeInfo;
 using ngraph::snippets::pass::EnumerateNodes;
 using ngraph::snippets::pass::TokenizeSnippets;
 using namespace ov;
@@ -86,3 +86,23 @@ public:
         manager.register_pass<SnippetsRestoreResultInputName>();
     }
 };
+/// Base class for snippets-related subgraphs
+/*
+class SnippetsFunctionBase {
+public:
+    virtual void InitOriginal() = 0;
+    virtual void InitReference() = 0;
+    std::shared_ptr<ov::Model> getOriginal() {
+        NGRAPH_CHECK(function != nullptr, "The test requires Model to be defined");
+        return function;
+    }
+    std::shared_ptr<ov::Model> getReference() {
+        NGRAPH_CHECK(function_ref != nullptr, "The test requires Model to be defined");
+        return function_ref;
+    }
+
+protected:
+    std::shared_ptr<Model> function;
+    std::shared_ptr<Model> function_ref;
+};
+*/
