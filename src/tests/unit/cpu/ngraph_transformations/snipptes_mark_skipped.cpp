@@ -34,7 +34,11 @@ TEST_F(SnippetsMarkSkippedTests, SkipAfterInputs_MatMulEltwiseBranchesFunction) 
 }
 
 TEST_F(SnippetsMarkSkippedTests, SkipConvFused_ConvMulActivation) {
-    const auto &f = ConvMulActivation(std::vector<Shape> {{1, 2, 16, 16}, {1, 2, 1, 16}});
+    std::vector<std::shared_ptr<Node>> eltwiseOps {std::make_shared<ov::op::v1::Multiply>(),
+                                                   std::make_shared<ov::op::v0::Tanh>(),
+                                                   std::make_shared<ov::op::v0::Sqrt>()};
+    std::vector<Shape> inputShapes {{1, 2, 16, 16}, {1, 2, 1, 16}};
+    const auto &f = ConvMulActivation(inputShapes, eltwiseOps);
     function = f.getOriginal();
     // Fully tokenizable, since Mul with 2 inputs isn't fused into Convolution
     function_ref = f.getReference();
@@ -42,17 +46,13 @@ TEST_F(SnippetsMarkSkippedTests, SkipConvFused_ConvMulActivation) {
 }
 
 TEST_F(SnippetsMarkSkippedTests, SkipConvFused_ConvSumActivation) {
-    const auto &f = ConvMulActivation(std::vector<Shape> {{1, 2, 16, 16}, {1, 2, 1, 1}});
+    std::vector<std::shared_ptr<Node>> eltwiseOps {std::make_shared<ov::op::v1::Add>(),
+                                                   std::make_shared<ov::op::v0::Tanh>(),
+                                                   std::make_shared<ov::op::v0::Sqrt>()};
+    std::vector<Shape> inputShapes {{1, 2, 16, 16}, {1, 2, 1, 16}};
+    const auto &f = ConvMulActivation(inputShapes, eltwiseOps);
     function = f.getOriginal();
-    // If I replace Multiply with Add in the original function it'll become non-tokenizable
-    // due to FuseConvolutionSumAndConvolutionSumActivation fusing.
-    const auto& ops = function->get_ops();
-    std::shared_ptr<Node> mul = *std::find_if(ops.begin(), ops.end(),
-                                             [](std::shared_ptr<Node> n) {
-                                                        return is_type<op::v1::Multiply>(n);
-                                                    });
-    auto add = std::make_shared<op::v1::Add>(mul->get_input_source_output(0), mul->get_input_source_output(1));
-    function->replace_node(mul, add);
-    function_ref = function;
+    // Not tokenizable, since Add + Eltwises can be fused into Convolution
+    function_ref = f.getOriginal();
     run();
 }

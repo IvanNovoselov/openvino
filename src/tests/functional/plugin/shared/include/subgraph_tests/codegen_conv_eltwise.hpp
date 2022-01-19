@@ -16,6 +16,7 @@ typedef std::tuple<
         InferenceEngine::Precision,  // Network Precision
         InferenceEngine::SizeVector, // Input Shape #0
         InferenceEngine::SizeVector, // Input Shape #1
+        std::shared_ptr<ov::Node>,   // The first binary eltwise op after the Convolution
         std::string                  // Target Device
 > multiInputParams;
 

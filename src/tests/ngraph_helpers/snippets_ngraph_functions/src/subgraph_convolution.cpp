@@ -21,15 +21,17 @@ std::shared_ptr<ov::Model> ConvMulActivation::initOriginal() const {
     auto weights = std::make_shared<op::v0::Constant>(precision, const_shape, const_values);
     auto conv = std::make_shared<op::v1::Convolution>(conv_param, weights, strides, pad_begin, pad_end, strides);
 
-    auto mul_param = std::make_shared<op::v0::Parameter>(element::i32, input_shapes[1]);
-    auto mul_convert = std::make_shared<op::v0::Convert>(mul_param, precision);
+    auto eltwise_param = std::make_shared<op::v0::Parameter>(element::i32, input_shapes[1]);
+    auto eltwise_convert = std::make_shared<op::v0::Convert>(eltwise_param, precision);
 
-//    auto add = std::make_shared<op::v1::Add>(conv, add_convert);
-    auto mul = std::make_shared<op::v1::Multiply>(conv, mul_convert);
-    auto relu = std::make_shared<op::v0::Relu>(mul);
-    auto sqrt = std::make_shared<ngraph::op::v0::Sqrt>(relu);
+    auto eltwise_binary = custom_ops[0]->clone_with_new_inputs({conv->output(0), eltwise_convert->output(0)});
+    auto eltwise_unary_1 = custom_ops[1]->clone_with_new_inputs({eltwise_binary->output(0)});
+    auto eltwise_unary_2 = custom_ops[2]->clone_with_new_inputs({eltwise_unary_1->output(0)});
+    eltwise_binary->set_arguments({conv->output(0), eltwise_convert->output(0)});
+    eltwise_unary_1->set_arguments({eltwise_binary->output(0)});
+    eltwise_unary_2->set_arguments({eltwise_unary_1->output(0)});
 
-    return std::make_shared<ov::Model>(NodeVector{sqrt}, ParameterVector{conv_param, mul_param});
+    return std::make_shared<ov::Model>(NodeVector{eltwise_unary_2}, ParameterVector{conv_param, eltwise_param});
 }
 std::shared_ptr<ov::Model> ConvMulActivation::initReference() const {
     auto conv_param = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
@@ -42,20 +44,20 @@ std::shared_ptr<ov::Model> ConvMulActivation::initReference() const {
     auto weights = std::make_shared<op::v0::Constant>(precision, const_shape, const_values);
     auto conv = std::make_shared<op::v1::Convolution>(conv_param, weights, strides, pad_begin, pad_end, strides);
 
-    auto mul_param = std::make_shared<op::v0::Parameter>(element::i32, input_shapes[1]);
-    auto mul_convert = std::make_shared<op::v0::Convert>(mul_param, precision);
+    auto eltwise_param = std::make_shared<op::v0::Parameter>(element::i32, input_shapes[1]);
+    auto eltwise_convert = std::make_shared<op::v0::Convert>(eltwise_param, precision);
 
     auto indata0 = std::make_shared<op::v0::Parameter>(precision, conv->get_shape());
-    auto indata1 = std::make_shared<op::v0::Parameter>(precision, mul_convert->get_shape());
+    auto indata1 = std::make_shared<op::v0::Parameter>(precision, eltwise_convert->get_shape());
 
-    auto inmul = std::make_shared<op::v1::Multiply>(indata0, indata1);
-    auto inrelu = std::make_shared<op::v0::Relu>(inmul);
-    auto insqrt = std::make_shared<ngraph::op::v0::Sqrt>(inrelu);
+    auto ineltwise_binary = custom_ops[0]->clone_with_new_inputs({indata0->output(0), indata1->output(0)});
+    auto ineltwise_unary_1 = custom_ops[1]->clone_with_new_inputs({ineltwise_binary->output(0)});
+    auto ineltwise_unary_2 = custom_ops[2]->clone_with_new_inputs({ineltwise_unary_1->output(0)});
 
-    auto subgraph = std::make_shared<Subgraph>(NodeVector{conv, mul_convert},
-                                          std::make_shared<ov::Model>(NodeVector{insqrt},
+    auto subgraph = std::make_shared<Subgraph>(NodeVector{conv, eltwise_convert},
+                                          std::make_shared<ov::Model>(NodeVector{ineltwise_unary_2},
                                                                   ParameterVector{indata0, indata1}));
-    return std::make_shared<ov::Model>(NodeVector{subgraph}, ParameterVector{conv_param, mul_param});
+    return std::make_shared<ov::Model>(NodeVector{subgraph}, ParameterVector{conv_param, eltwise_param});
 }
 }  // namespace subgraph
 }  // namespace builder

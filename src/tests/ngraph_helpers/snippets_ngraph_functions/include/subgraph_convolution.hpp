@@ -6,6 +6,7 @@
 
 #include "ngraph/ngraph.hpp"
 #include "snippets_helpers.hpp"
+#include "openvino/op/util/op_types.hpp"
 
 namespace ngraph {
 namespace builder {
@@ -18,11 +19,16 @@ namespace subgraph {
 //           Relu
 //           Sqrt
 //          Result
-class ConvMulActivation : public SnippetsFunctionBase {
+class ConvMulActivation : public SnippetsFunctionCustomizable {
 public:
-    explicit ConvMulActivation(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit ConvMulActivation(std::vector<Shape> inputShapes, std::vector<std::shared_ptr<Node>> customOps)
+            : SnippetsFunctionCustomizable(inputShapes, customOps, {2, 1, 1}) {
             NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
             NGRAPH_CHECK(input_shapes[0].size() == 4, "Only 4D input shapes are currently supported");
+            NGRAPH_CHECK(ov::op::util::is_binary_elementwise_arithmetic(customOps[0]) &&
+                         ov::op::util::is_unary_elementwise_arithmetic(customOps[1]) &&
+                         ov::op::util::is_unary_elementwise_arithmetic(customOps[2]),
+                         "Got invalid custom ops: expected binary and two unary operations");
     }
 private:
     std::shared_ptr<ov::Model> initOriginal() const override;
