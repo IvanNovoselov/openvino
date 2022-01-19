@@ -13,13 +13,14 @@ namespace LayerTestsDefinitions {
 
     std::string CodegenConvEltwise::getTestCaseName(testing::TestParamInfo<LayerTestsDefinitions::multiInputParams> obj) {
         InferenceEngine::Precision netPrecision;
-        InferenceEngine::SizeVector inputShapes0, inputShapes1;
+        InferenceEngine::SizeVector inputShape0, inputShape1;
+        std::shared_ptr<ov::Node> binaryEltwise;
         std::string targetDevice;
-        std::tie(netPrecision, inputShapes0, inputShapes1, targetDevice) = obj.param;
-
+        std::tie(netPrecision, inputShape0, inputShape1, binaryEltwise, targetDevice) = obj.param;
         std::ostringstream result;
-        result << "IS[0]=" << CommonTestUtils::vec2str(inputShapes0) << "_";
-        result << "IS[1]=" << CommonTestUtils::vec2str(inputShapes1) << "_";
+        result << "IS[0]=" << CommonTestUtils::vec2str(inputShape0) << "_";
+        result << "IS[1]=" << CommonTestUtils::vec2str(inputShape1) << "_";
+        result << "Op=" << binaryEltwise->get_type_name() << "_";
         result << "netPRC=" << netPrecision.name() << "_";
         result << "targetDevice=" << targetDevice;
         return result.str();
@@ -29,9 +30,12 @@ namespace LayerTestsDefinitions {
     void CodegenConvEltwise::SetUp() {
         std::vector<size_t> inputShape0, inputShape1;
         InferenceEngine::Precision netPrecision;
-        std::tie(netPrecision, inputShape0, inputShape1, targetDevice) = this->GetParam();
-
-        const auto f  = ngraph::builder::subgraph::ConvMulActivation({inputShape0, inputShape1});
+        std::shared_ptr<ov::Node> binaryEltwise;
+        std::tie(netPrecision, inputShape0, inputShape1, binaryEltwise, targetDevice) = this->GetParam();
+        std::vector<std::shared_ptr<Node>> eltwiseOps {binaryEltwise,
+                                                       std::make_shared<ov::op::v0::Tanh>(),
+                                                       std::make_shared<ov::op::v0::Sqrt>()};
+        const auto f  = ngraph::builder::subgraph::ConvMulActivation({inputShape0, inputShape1}, eltwiseOps);
         function = f.getOriginal();
     }
 
