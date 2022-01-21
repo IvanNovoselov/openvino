@@ -17,6 +17,7 @@ addIeTargetTest(
         ROOT ${CMAKE_CURRENT_SOURCE_DIR}
         INCLUDES
             $<TARGET_PROPERTY:snippetsNgraphFunctions,SOURCE_DIR>/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/snippets/include
         LINK_LIBRARIES
             inference_engine_lp_transformations
             inference_engine_snippets

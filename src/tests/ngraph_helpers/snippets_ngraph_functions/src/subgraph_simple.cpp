@@ -10,6 +10,22 @@ using ngraph::snippets::op::Subgraph;
 namespace ngraph {
 namespace builder {
 namespace subgraph {
+std::shared_ptr<ov::Model> AddFunction::initOriginal() const {
+    auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
+    auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
+    auto add = std::make_shared<op::v1::Add>(data0, data1);
+    return std::make_shared<ov::Model>(NodeVector{add}, ParameterVector{data0, data1});
+}
+std::shared_ptr<ov::Model> AddFunction::initReference() const {
+    auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
+    auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
+    auto indata0 = std::make_shared<op::v0::Parameter>(precision, data0->get_shape());
+    auto indata1 = std::make_shared<op::v0::Parameter>(precision, data1->get_shape());
+    auto add = std::make_shared<Subgraph>(NodeVector{data0, data1},
+                                          std::make_shared<ov::Model>(NodeVector{std::make_shared<op::v1::Add>(indata0, indata1)},
+                                                                      ParameterVector{indata0, indata1}));
+    return std::make_shared<ov::Model>(NodeVector{add}, ParameterVector{data0, data1});
+}
 std::shared_ptr<ov::Model> EltwiseFunction::initOriginal() const {
     auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
@@ -65,10 +81,10 @@ std::shared_ptr<ov::Model> MatMulEltwiseBranchesFunction::initReference() const 
     const std::vector<float> const_values = CommonTestUtils::generate_float_numbers(4, -10., 10.);
     // snippet inputs
     auto non_snippet_op = std::make_shared<op::v0::MatMul>(data_1, data_2);
-    auto mul_const_1 = std::make_shared<snippets::op::Scalar>(precision, Shape{1}, std::vector<float> {const_values[0]});
-    auto add_const_1 = std::make_shared<snippets::op::Scalar>(precision, Shape{1}, std::vector<float> {const_values[1]});
-    auto mul_const_2 = std::make_shared<snippets::op::Scalar>(precision, Shape{1}, std::vector<float> {const_values[2]});
-    auto sub_const_2 = std::make_shared<snippets::op::Scalar>(precision, Shape{1}, std::vector<float> {const_values[3]});
+    auto mul_const_1 = std::make_shared<snippets::op::Scalar>(precision, Shape{1}, const_values[0]);
+    auto add_const_1 = std::make_shared<snippets::op::Scalar>(precision, Shape{1}, const_values[1]);
+    auto mul_const_2 = std::make_shared<snippets::op::Scalar>(precision, Shape{1}, const_values[2]);
+    auto sub_const_2 = std::make_shared<snippets::op::Scalar>(precision, Shape{1}, const_values[3]);
 
     // snippet function
     Shape matMulOutShape = input_shapes[0];
