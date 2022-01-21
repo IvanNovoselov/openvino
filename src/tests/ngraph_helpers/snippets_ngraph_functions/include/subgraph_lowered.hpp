@@ -19,6 +19,21 @@ namespace ngraph {
 namespace builder {
 namespace subgraph {
 
+class AddFunctionLoweredBroadcast : public AddFunction {
+public:
+    explicit AddFunctionLoweredBroadcast(std::vector<Shape> inputShapes, std::vector<Shape> broadcastShapes) :
+        AddFunction(std::move(inputShapes)), broadcast_shapes{std::move(broadcastShapes)} {
+        NGRAPH_CHECK(input_shapes.size() == broadcast_shapes.size(),
+                     "Broadcast shapes should have the same size as input_shapes");
+    }
+
+protected:
+    std::shared_ptr<ov::Model> initLowered() const override;
+
+private:
+    std::vector<Shape> broadcast_shapes;
+};
+
 class EltwiseFunctionLowered : public EltwiseFunction {
 public:
     EltwiseFunctionLowered(std::vector<Shape> inputShapes,

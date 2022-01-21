@@ -11,6 +11,27 @@ using ngraph::snippets::op::Subgraph;
 namespace ngraph {
 namespace builder {
 namespace subgraph {
+std::shared_ptr<ov::Model> AddFunctionLoweredBroadcast::initLowered() const {
+//    auto f = initReference();
+    auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
+    auto load0 = std::make_shared<snippets::op::Load>(data0);
+    std::shared_ptr<Node> add_input0 = load0;
+    if (!broadcast_shapes[0].empty()) {
+        auto broadcast0 = std::make_shared<snippets::op::BroadcastMove>(load0, broadcast_shapes[0]);
+        add_input0 = broadcast0;
+    }
+
+    auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
+    auto load1 = std::make_shared<snippets::op::Load>(data1);
+    std::shared_ptr<Node> add_input1 = load1;
+    if (!broadcast_shapes[1].empty()) {
+        auto broadcast1 = std::make_shared<snippets::op::BroadcastMove>(load1, broadcast_shapes[1]);
+        add_input1 = broadcast1;
+    }
+    auto add = std::make_shared<op::v1::Add>(add_input0, add_input1);
+    auto store = std::make_shared<snippets::op::Store>(add);
+    return std::make_shared<ov::Model>(NodeVector{store}, ParameterVector{data0, data1});
+}
 std::shared_ptr<ov::Model> EltwiseFunctionLowered::initLowered() const {
     auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     auto load0 = std::make_shared<snippets::op::Load>(data0);
