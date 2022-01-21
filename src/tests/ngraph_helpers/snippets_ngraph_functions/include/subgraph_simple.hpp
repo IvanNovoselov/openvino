@@ -7,6 +7,11 @@
 #include "ngraph/ngraph.hpp"
 #include "./snippets_helpers.hpp"
 
+/* This file contains definitions of relatively simple functions (models) that will be used
+ * to test snippets-specific behavior. All the functions are expected to be direct descendants of
+ * SnippetsFunctionBase, so their constructors take only one (inputShapes) argument.
+ */
+
 namespace ngraph {
 namespace builder {
 namespace subgraph {

@@ -105,11 +105,19 @@ public:
         validate_function(function);
         return function;
     }
+    std::shared_ptr<ov::Model> getLowered() const {
+        std::shared_ptr<Model> function_low = initLowered();
+        validate_function(function_low);
+        return function_low;
+    }
     size_t getNumInputs() const {return input_shapes.size();}
 
 protected:
     virtual std::shared_ptr<ov::Model> initOriginal() const = 0;
     virtual std::shared_ptr<ov::Model> initReference() const  = 0;
+    virtual std::shared_ptr<ov::Model> initLowered() const {
+        IE_THROW(NotImplemented) << "initLowered() for this class is not implemented";
+    }
     // only fp32 is currently supported by snippets
     ov::element::Type_t precision  = element::f32;
     std::vector<Shape> input_shapes;
@@ -122,36 +130,5 @@ protected:
         for (size_t i = 0; i < input_shapes.size(); i++)
             NGRAPH_CHECK(std::equal(input_shapes[i].begin(), input_shapes[i].end(), params[i]->get_shape().begin()),
                          "Passed input shapes and produced function are inconsistent.");
-    }
-};
-/// \brief Base class for snippets subgraphs with customizable embedded op sequences. Note that the custom_ops allowed types are
-/// model-specific and expected to be checked inside a child class constructor.
-/// \param  custom_ops  vector of ops to be inserted in the graph. Required vector size and acceptable op types are subgraph-specific.
-/// The ops are expected to be default-constructed to facilitate test development, the class will take care of the ops inputs for you.
-/// \param  customOpsNumInputs  size_t vector that specifies the number of inputs for each of the custom_ops. Not that an rvalue is expected,
-/// since it should be hard-coded along with the Original and Reference functions.
-class SnippetsFunctionCustomizable : public SnippetsFunctionBase {
-public:
-    SnippetsFunctionCustomizable() = delete;
-    SnippetsFunctionCustomizable(std::vector<Shape>& inputShapes,
-                                 std::vector<std::shared_ptr<Node>>& customOps,
-                                 std::vector<size_t>&& customOpsNumInputs)
-    : SnippetsFunctionBase(inputShapes), custom_ops{customOps} {
-        custom_ops_num_inputs = std::move(customOpsNumInputs);
-        NGRAPH_CHECK(custom_ops_num_inputs.size() == custom_ops.size(), "Got inconsistent numbers of custom ops and custom ops inputs");
-        // We need to set dummy inputs to increase input arguments count,
-        // so clone_with_new_inputs() inside initOriginal() and initReference() could pass without errors.
-        ResetCustomOpsInputs();
-    };
-
-protected:
-    std::vector<std::shared_ptr<Node>> custom_ops;
-    std::vector<size_t> custom_ops_num_inputs;
-    void ResetCustomOpsInputs() {
-        auto dummy_input = std::make_shared<ov::op::v0::Parameter>(precision, Shape{});
-        for (size_t i = 0; i < custom_ops.size(); i++) {
-            const NodeVector inputs(custom_ops_num_inputs[i], dummy_input);
-            custom_ops[i]->set_arguments(inputs);
-        }
     }
 };

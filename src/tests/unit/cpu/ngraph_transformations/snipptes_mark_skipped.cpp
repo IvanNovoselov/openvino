@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 #include <gtest/gtest.h>
-#include <subgraph_eltwise.hpp>
-#include <subgraph_convolution.hpp>
+#include <subgraph_simple.hpp>
+#include <subgraph_customizable.hpp>
 #include <snippets_helpers.hpp>
 #include <ngraph_transformations/snippets_mark_skipped.hpp>
 

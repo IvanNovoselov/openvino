@@ -3,7 +3,7 @@
 //
 
 #include <gtest/gtest.h>
-#include <subgraph_eltwise.hpp>
+#include <subgraph_simple.hpp>
 #include <snippets_helpers.hpp>
 using namespace ngraph::builder::subgraph;
 TEST_F(SnippetsCollapseSubgraphTests, EltwiseSubgraph) {
