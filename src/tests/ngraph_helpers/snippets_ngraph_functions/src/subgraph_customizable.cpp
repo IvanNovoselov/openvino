@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "subgraph_convolution.hpp"
+#include "subgraph_customizable.hpp"
 #include <snippets/op/subgraph.hpp>
 #include "common_test_utils/data_utils.hpp"
 using namespace ov;

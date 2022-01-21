@@ -16,7 +16,8 @@
 namespace ngraph {
 namespace snippets {
 namespace op {
-
+//using BlockedShape = std::tuple<ngraph::Shape, ngraph::AxisVector, ngraph::element::Type>;
+//using BlockedShapeVector = std::vector<BlockedShape>;
 /**
  * @interface Subgraph
  * @brief An operation that is implemented by a model
