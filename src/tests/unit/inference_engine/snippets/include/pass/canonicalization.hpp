@@ -12,11 +12,6 @@
 #include "common_test_utils/common_utils.hpp"
 #include "common_test_utils/test_assertions.hpp"
 
-/* This file contains definitions of relatively simple functions (models) that will be used
- * to test snippets-specific behavior. All the functions are expected to be direct descendants of
- * SnippetsFunctionBase, so their constructors take only one (inputShapes) argument.
- */
-
 namespace ngraph {
 namespace builder {
 namespace subgraph {

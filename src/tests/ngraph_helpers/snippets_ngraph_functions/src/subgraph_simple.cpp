@@ -26,6 +26,26 @@ std::shared_ptr<ov::Model> AddFunction::initReference() const {
                                                                       ParameterVector{indata0, indata1}));
     return std::make_shared<ov::Model>(NodeVector{add}, ParameterVector{data0, data1});
 }
+std::shared_ptr<ov::Model> AddConvertFunction::initOriginal() const {
+    auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
+    auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
+    auto convert0 = std::make_shared<op::v0::Convert>(data0, ov::element::f32);
+    auto convert1 = std::make_shared<op::v0::Convert>(data1, ov::element::f32);
+    auto add = std::make_shared<op::v1::Add>(convert0, convert1);
+    return std::make_shared<ov::Model>(NodeVector{add}, ParameterVector{data0, data1});
+}
+std::shared_ptr<ov::Model> AddConvertFunction::initReference() const {
+    auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
+    auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
+    auto convert0 = std::make_shared<op::v0::Convert>(data0, ov::element::f32);
+    auto convert1 = std::make_shared<op::v0::Convert>(data1, ov::element::f32);
+    auto indata0 = std::make_shared<op::v0::Parameter>(ov::element::f32, convert0->get_shape());
+    auto indata1 = std::make_shared<op::v0::Parameter>(ov::element::f32, convert1->get_shape());
+    auto add = std::make_shared<Subgraph>(NodeVector{data0, data1},
+                                          std::make_shared<ov::Model>(NodeVector{std::make_shared<op::v1::Add>(convert0, convert1)},
+                                                                      ParameterVector{indata0, indata1}));
+    return std::make_shared<ov::Model>(NodeVector{add}, ParameterVector{data0, data1});
+}
 std::shared_ptr<ov::Model> EltwiseFunction::initOriginal() const {
     auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);

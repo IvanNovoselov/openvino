@@ -19,13 +19,27 @@ namespace subgraph {
 /// Tokenized simply by starting subgraph.
 // in1   in2
 //    Add
-//   /   Subtract
-//  Multiply
 //   Result
 class AddFunction : public SnippetsFunctionBase {
 public:
     explicit AddFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
         NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
+    }
+protected:
+    std::shared_ptr<ov::Model> initOriginal() const override;
+    std::shared_ptr<ov::Model> initReference() const override;
+};
+/// Add separated from int32 inputs by converts to WA CPU-specific disabling after inputs
+/// Tokenized simply by starting subgraph.
+//   in1       in2
+// Convert   Convert
+//        Add
+//      Result
+class AddConvertFunction : public SnippetsFunctionBase {
+public:
+    explicit AddConvertFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+        NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
+        precision = ov::element::i32;
     }
 protected:
     std::shared_ptr<ov::Model> initOriginal() const override;
