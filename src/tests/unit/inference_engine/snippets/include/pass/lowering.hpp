@@ -67,20 +67,41 @@ public:
 };
 
 class SnippetsLoweringTests : public TransformationTestsF {
-public:
-    void run() {
+private:
+    static void serialize(const std::string& name, const std::shared_ptr<Model>& m) {
+        ov::pass::Serialize(name + ".xml", name + ".bin").run_on_model(m);
+    }
+
+protected:
+    void prepare() {
         ASSERT_TRUE(function);
         serialize("before", function);
         // Check that the function is fully tokenizable and obtain subgraph
-        {
-            ngraph::pass::Manager m;
-            m.register_pass<EnumerateNodes>();
-            m.register_pass<TokenizeSnippets>();
-            m.run_passes(function);
-        }
-//        serialize("tokenized", function);
-        std::shared_ptr<Subgraph> subgraph;
-        for (const auto &op : function->get_ops()) {
+        tokenize(function);
+        getSubgraph(function);
+        serialize("tokenized", subgraph->get_body());
+    }
+    Shape canonicalize(Subgraph::BlockedShapeVector& input_blocked_shapes, Subgraph::BlockedShapeVector& output_blocked_shapes) {
+        return subgraph->canonicalize(output_blocked_shapes, input_blocked_shapes);
+    }
+    void lower() {
+        subgraph->set_generator(std::make_shared<DummyGenerator>());
+        subgraph->generate();
+        function = subgraph->get_body();
+        serialize("lowered", function);
+    }
+
+private:
+    std::shared_ptr<Subgraph> subgraph;
+    static void tokenize(std::shared_ptr<Model>& f) {
+        ngraph::pass::Manager m;
+        m.register_pass<EnumerateNodes>();
+        m.register_pass<TokenizeSnippets>();
+        m.run_passes(f);
+    }
+
+    void getSubgraph(std::shared_ptr<Model>& f) {
+        for (const auto &op : f->get_ops()) {
             bool is_subgraph = is_type<Subgraph>(op);
             if (is_subgraph) {
                 NGRAPH_CHECK(subgraph.use_count() == 0,
@@ -93,24 +114,6 @@ public:
                          is_type<ov::op::v0::Result>(op),
                          "Functions provided for lowering tests is not fully tokenizable");
         }
-        serialize("tokenized", subgraph->get_body());
-        subgraph->set_generator(std::make_shared<DummyGenerator>());
-        Subgraph::BlockedShapeVector empty;
-        NGRAPH_CHECK((input_blocked_shapes == empty && output_blocked_shapes == empty) ||
-                     (input_blocked_shapes != empty && output_blocked_shapes != empty),
-                     "Input and Output blocking shapes must be both set or both empty");
-        if (input_blocked_shapes != empty)
-            subgraph->canonicalize(output_blocked_shapes, input_blocked_shapes);
-        subgraph->generate();
-        function = subgraph->get_body();
-        serialize("lowered", function);
-    }
-    Subgraph::BlockedShapeVector input_blocked_shapes;
-    Subgraph::BlockedShapeVector output_blocked_shapes;
-
-private:
-    static void serialize(const std::string& name, const std::shared_ptr<Model>& m) {
-        ov::pass::Serialize(name + ".xml", name + ".bin").run_on_model(m);
     }
 };
 
