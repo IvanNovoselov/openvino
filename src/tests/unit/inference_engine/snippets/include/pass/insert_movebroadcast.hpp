@@ -56,7 +56,8 @@ TEST_P(SnippetsMoveBroadcastTests, CompareWithRefImpl) {
     const auto &f = AddFunctionLoweredBroadcast(input_shapes, broadcast_shapes);
     function = f.getOriginal();
     function_ref = f.getLowered();
-    run();
+    prepare();
+    lower();
 };
 
 }  // namespace subgraph
