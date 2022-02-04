@@ -5,7 +5,7 @@
 
 #include <vector>
 
-#include "subgraph_tests/codegen_add.hpp"
+#include "snippets/codegen_bert.hpp"
 #include "common_test_utils/test_constants.hpp"
 
 using namespace LayerTestsDefinitions;
@@ -16,17 +16,11 @@ namespace {
             InferenceEngine::Precision::FP32
     };
 
-    INSTANTIATE_TEST_SUITE_P(NoReshape, CodegenAdd,
+    INSTANTIATE_TEST_SUITE_P(NoReshape, CodegenBert,
             ::testing::Combine(
             ::testing::ValuesIn(netPrecisions),
             ::testing::Values(InferenceEngine::SizeVector({1, 42, 16, 64})),
-            ::testing::Values(
-                    InferenceEngine::SizeVector({1, 42, 16, 64})),
-//                              InferenceEngine::SizeVector({1, 42, 16,  1}),
-//                              InferenceEngine::SizeVector({1, 42,  1, 64}),
-//                              InferenceEngine::SizeVector({1,  1, 16, 64})),
-            ::testing::Values(3),
-            ::testing::Values(1),
+            ::testing::Values(InferenceEngine::SizeVector({1, 42, 64, 64})),
             ::testing::Values(CommonTestUtils::DEVICE_CPU)),
-            CodegenAdd::getTestCaseName);
+            CodegenBert::getTestCaseName);
 }  // namespace

@@ -17,7 +17,7 @@
 
 #include "ngraph_functions/pass/convert_prc.hpp"
 
-#include "subgraph_tests/codegen_gelu.hpp"
+#include "snippets/codegen_gelu.hpp"
 
 #include <ngraph/pass/constant_folding.hpp>
 #include <ngraph/pass/visualize_tree.hpp>
