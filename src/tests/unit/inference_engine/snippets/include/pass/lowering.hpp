@@ -62,7 +62,7 @@ public:
 };
 
 class SnippetsLoweringTests : public TransformationTestsF {
-private:
+protected:
     static void serialize(const std::string& name, const std::shared_ptr<Model>& m) {
         ov::pass::Serialize(name + ".xml", name + ".bin").run_on_model(m);
     }
@@ -84,6 +84,7 @@ protected:
         subgraph->generate();
         function = subgraph->get_body();
         serialize("lowered", function);
+        serialize("expected", function_ref);
     }
 
 private:
