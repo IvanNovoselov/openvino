@@ -34,43 +34,18 @@ private:
     std::vector<Shape> broadcast_shapes;
 };
 
-class EltwiseFunctionLowered : public EltwiseFunction {
+class EltwiseFunctionThreeInputsLowered : public EltwiseFunctionThreeInputs {
 public:
-    EltwiseFunctionLowered(std::vector<Shape> inputShapes,
-                                    Subgraph::BlockedShapeVector inputBlockedShapes,
-                                    Subgraph::BlockedShapeVector outputBlockedShapes) :
-                                    EltwiseFunction{std::move(inputShapes)},
-                                    input_blocked_shapes{std::move(inputBlockedShapes)},
-                                    output_blocked_shapes{std::move(outputBlockedShapes)} {
-        // Blocked shapes include Constant that are processed as additional inputs
-        NGRAPH_CHECK(input_shapes.size() <= input_blocked_shapes.size(), "Input shapes and blocked shapes have inconsistent sizes");
-        for (size_t i = 0; i < input_shapes.size(); i++) {
-            Shape shape;
-            AxisVector order;
-            element::Type prec;
-            std::tie(shape, order, prec) = input_blocked_shapes[i];
-            NGRAPH_CHECK(prec == precision, "Invalid input precision provided");
-            NGRAPH_CHECK(shape_size(shape) == shape_size(input_shapes[i]),
-                         "Got invalid input blocked shape. It must have the same num elements as the plain input shape.");
-            NGRAPH_CHECK(shape.size() == order.size(), "Got invalid number of elements in the order AxisVector.");
-        }
-        for (size_t i = 0; i < output_blocked_shapes.size(); i++) {
-            Shape shape;
-            AxisVector order;
-            element::Type prec;
-            std::tie(shape, order, prec) = input_blocked_shapes[i];
-            NGRAPH_CHECK(prec == precision, "Invalid input precision provided");
-            // todo: Can we write more detailed checks for the output blocked shapes?
-            NGRAPH_CHECK(shape.size() == order.size(), "Got invalid number of elements in the order AxisVector.");
-        }
+    explicit EltwiseFunctionThreeInputsLowered(std::vector<Shape> inputShapes, std::vector<Shape> broadcastShapes) :
+            EltwiseFunctionThreeInputs(std::move(inputShapes)), broadcast_shapes{std::move(broadcastShapes)} {
+        NGRAPH_CHECK(input_shapes.size() == broadcast_shapes.size(),
+                     "Broadcast shapes should have the same size as input_shapes");
     }
-    Subgraph::BlockedShapeVector getInputBlockedShapes() const {return input_blocked_shapes;}
-    Subgraph::BlockedShapeVector getOutputBlockedShapes() const {return output_blocked_shapes;}
 
-private:
+protected:
     std::shared_ptr<ov::Model> initLowered() const override;
-    Subgraph::BlockedShapeVector input_blocked_shapes;
-    Subgraph::BlockedShapeVector output_blocked_shapes;
+private:
+    std::vector<Shape> broadcast_shapes;;
 };
 
 }  // namespace subgraph
