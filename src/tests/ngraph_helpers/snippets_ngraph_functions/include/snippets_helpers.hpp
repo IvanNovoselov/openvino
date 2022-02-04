@@ -114,7 +114,9 @@ public:
 
 protected:
     virtual std::shared_ptr<ov::Model> initOriginal() const = 0;
-    virtual std::shared_ptr<ov::Model> initReference() const  = 0;
+    virtual std::shared_ptr<ov::Model> initReference() const {
+        IE_THROW(NotImplemented) << "initReference() for this class is not implemented";
+    }
     virtual std::shared_ptr<ov::Model> initLowered() const {
         IE_THROW(NotImplemented) << "initLowered() for this class is not implemented";
     }
