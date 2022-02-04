@@ -61,6 +61,21 @@ protected:
     std::shared_ptr<ov::Model> initOriginal() const override;
     std::shared_ptr<ov::Model> initReference() const override;
 };
+/// Simple Eltwise graph fully convertible to Subgraph.
+/// Tokenized simply by attaching eltwises.
+// in1   in2   in3   Scalar
+//    Add      Multiply
+//      Subtract
+//       Result
+class EltwiseFunctionThreeInputs : public SnippetsFunctionBase {
+public:
+    explicit EltwiseFunctionThreeInputs(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+        NGRAPH_CHECK(input_shapes.size() == 3, "Got invalid number of input shapes");
+    }
+protected:
+    std::shared_ptr<ov::Model> initOriginal() const override;
+//    std::shared_ptr<ov::Model> initReference() const override;
+};
 /// MatMul with two eltwise branches joined with Add just before the Result.
 /// Tokenized by attaching eltwises to separate subgraphs, and then joining them together.
 //                   in1   in2
