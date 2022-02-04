@@ -17,7 +17,7 @@
 
 #include "ngraph_functions/pass/convert_prc.hpp"
 
-#include "subgraph_tests/codegen_bert.hpp"
+#include "snippets/codegen_bert.hpp"
 
 namespace LayerTestsDefinitions {
 

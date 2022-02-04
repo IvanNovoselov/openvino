@@ -8,7 +8,7 @@
 
 #include "ngraph_functions/pass/convert_prc.hpp"
 
-#include "subgraph_tests/codegen_add.hpp"
+#include "snippets/eltwise_simple.hpp"
 #include "snippets/op/subgraph.hpp"
 #include "subgraph_simple.hpp"
 

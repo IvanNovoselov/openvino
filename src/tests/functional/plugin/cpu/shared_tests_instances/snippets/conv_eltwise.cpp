@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "subgraph_tests/codegen_conv_eltwise.hpp"
+#include "snippets/conv_eltwise.hpp"
 
 using namespace LayerTestsDefinitions;
 

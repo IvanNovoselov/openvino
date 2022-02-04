@@ -5,7 +5,7 @@
 
 #include "common_test_utils/common_utils.hpp"
 #include "functional_test_utils/blob_utils.hpp"
-#include "subgraph_tests/codegen_conv_eltwise.hpp"
+#include "snippets/conv_eltwise.hpp"
 #include "subgraph_customizable.hpp"
 
 
