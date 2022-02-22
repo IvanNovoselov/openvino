@@ -43,7 +43,7 @@ namespace LayerTestsDefinitions {
     }
 
     void CodegenAdd::validateNumSubgraphs() {
-        const auto& compiled_model = executableNetwork.get_runtime_model();
+        const auto& compiled_model = compiledModel.get_runtime_model();
         {
             auto m = ov::clone_model(*compiled_model);
             ov::pass::Serialize("compiled.xml", "compiled.bin").run_on_model(m);
@@ -57,7 +57,7 @@ namespace LayerTestsDefinitions {
                 num_nodes++;
             } else {
                 auto &rt = op->get_rt_info();
-                const auto rinfo = rt.find("SnippetsNodeType");
+                const auto rinfo = rt.find("layerType");
                 ASSERT_NE(rinfo, rt.end()) << "Failed to find layerType in " << op->get_friendly_name()
                                                << "rt_info.";
                 const std::string layerType = rinfo->second.as<std::string>();
