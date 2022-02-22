@@ -60,7 +60,7 @@ public:
 };
 class SnippetsCollapseSubgraphTests : public TransformationTestsF {
 public:
-    void run(bool serialize_before = false, bool serialize_after = false, bool serialize_ref = false) {
+    virtual void run(bool serialize_before = false, bool serialize_after = false, bool serialize_ref = false) {
         ASSERT_TRUE(function);
         std::string name;
         if (serialize_before || serialize_after || serialize_ref) {
