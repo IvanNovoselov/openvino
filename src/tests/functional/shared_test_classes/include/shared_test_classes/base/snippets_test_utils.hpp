@@ -5,11 +5,17 @@
 #pragma once
 
 #include <gtest/gtest.h>
-#include "layer_test_utils.hpp"
+#include "ov_subgraph.hpp"
 
-namespace LayerTestsUtils {
-class SnippetsTestsCommon : public LayerTestsCommon {
+namespace ov {
+namespace test {
+class SnippetsTestsCommon : virtual public ov::test::SubgraphBaseTest {
 protected:
-    void Validate() override;
+    void validateNumSubgraphs();
+    // Expected num nodes and subgraphs in exec graphs depends on the plugin
+    // pipeline, tokenization callback for example. Therefore, they have to be provided manually.
+    size_t ref_num_nodes = 0;
+    size_t ref_num_subgraphs = 0;
 };
-}  // namespace LayerTestsUtils
+}  // namespace test
+}  // namespace ov

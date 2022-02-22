@@ -12,7 +12,7 @@
 #include "shared_test_classes/base/layer_test_utils.hpp"
 #include "ngraph_functions/utils/ngraph_helpers.hpp"
 #include "ngraph_functions/builders.hpp"
-#include "shared_test_classes/base/ov_subgraph.hpp"
+#include "shared_test_classes/base/snippets_test_utils.hpp"
 
 namespace LayerTestsDefinitions {
 
@@ -25,16 +25,18 @@ typedef std::tuple<
         std::string                  // Target Device
 > multiInputParams;
 
-class CodegenAdd : public testing::WithParamInterface<LayerTestsDefinitions::multiInputParams>,
-    virtual public ov::test::SubgraphBaseTest {
+class Add : public testing::WithParamInterface<LayerTestsDefinitions::multiInputParams>,
+                   virtual public ov::test::SnippetsTestsCommon {
 public:
     static std::string getTestCaseName(testing::TestParamInfo<LayerTestsDefinitions::multiInputParams> obj);
 
 protected:
     void SetUp() override;
-    void validateNumSubgraphs();
-    size_t ref_num_nodes;
-    size_t ref_num_subgraphs;
+};
+
+class AddConvert : public Add {
+protected:
+    void SetUp() override;
 };
 
 }  // namespace LayerTestsDefinitions
