@@ -24,7 +24,7 @@
 
 #include <transformations/init_node_info.hpp>
 #include <transformations/utils/utils.hpp>
-
+//  todo: Rewrite this test using Snippets test infrastructure. See add_convert or conv_eltwise for example
 namespace LayerTestsDefinitions {
 
     std::string CodegenGelu::getTestCaseName(testing::TestParamInfo<LayerTestsDefinitions::multiInputParams> obj) {

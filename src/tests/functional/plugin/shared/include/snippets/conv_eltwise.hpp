@@ -6,9 +6,9 @@
 
 #include <gtest/gtest.h>
 
-#include "shared_test_classes/base/layer_test_utils.hpp"
 #include "ngraph_functions/utils/ngraph_helpers.hpp"
 #include "ngraph_functions/builders.hpp"
+#include "shared_test_classes/base/snippets_test_utils.hpp"
 
 namespace LayerTestsDefinitions {
 
@@ -17,11 +17,13 @@ typedef std::tuple<
         InferenceEngine::SizeVector, // Input Shape #0
         InferenceEngine::SizeVector, // Input Shape #1
         std::shared_ptr<ov::Node>,   // The first binary eltwise op after the Convolution
+        size_t,                      // Expected num nodes
+        size_t,                      // Expected num subgraphs
         std::string                  // Target Device
 > multiInputParams;
 
-class CodegenConvEltwise : public testing::WithParamInterface<LayerTestsDefinitions::multiInputParams>,
-virtual public LayerTestsUtils::LayerTestsCommon {
+class ConvEltwise : public testing::WithParamInterface<LayerTestsDefinitions::multiInputParams>,
+                    virtual public ov::test::SnippetsTestsCommon {
 public:
     static std::string getTestCaseName(testing::TestParamInfo<LayerTestsDefinitions::multiInputParams> obj);
 
