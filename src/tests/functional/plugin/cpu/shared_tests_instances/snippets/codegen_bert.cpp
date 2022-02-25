@@ -7,7 +7,7 @@
 
 #include "snippets/codegen_bert.hpp"
 #include "common_test_utils/test_constants.hpp"
-
+//  todo: Rewrite this test using Snippets test infrastructure. See add_convert or conv_eltwise for example
 using namespace LayerTestsDefinitions;
 
 namespace {

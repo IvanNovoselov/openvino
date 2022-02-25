@@ -12,11 +12,10 @@ namespace builder {
 namespace subgraph {
 std::shared_ptr<ov::Model> ConvMulActivation::initOriginal() const {
     auto conv_param = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
-    const auto batch = input_shapes[0][0];
     const auto channels = input_shapes[0][1];
     ngraph::Shape strides(2, 1);
     std::vector<ptrdiff_t> pad_begin(2, 1), pad_end(2, 1);
-    const Shape const_shape {batch, channels, 3, 3};
+    const Shape const_shape {channels, channels, 3, 3};
     const std::vector<float> const_values = CommonTestUtils::generate_float_numbers(shape_size(const_shape), -10., 10.);
     auto weights = std::make_shared<op::v0::Constant>(precision, const_shape, const_values);
     auto conv = std::make_shared<op::v1::Convolution>(conv_param, weights, strides, pad_begin, pad_end, strides);

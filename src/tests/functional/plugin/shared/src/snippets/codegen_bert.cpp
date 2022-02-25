@@ -18,7 +18,7 @@
 #include "ngraph_functions/pass/convert_prc.hpp"
 
 #include "snippets/codegen_bert.hpp"
-
+//  todo: Rewrite this test using Snippets test infrastructure. See add_convert or conv_eltwise for example
 namespace LayerTestsDefinitions {
 
     std::string CodegenBert::getTestCaseName(testing::TestParamInfo<LayerTestsDefinitions::multiInputParams> obj) {
