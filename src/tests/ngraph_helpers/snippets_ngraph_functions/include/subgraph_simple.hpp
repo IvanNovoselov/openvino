@@ -76,6 +76,18 @@ protected:
     std::shared_ptr<ov::Model> initOriginal() const override;
 //    std::shared_ptr<ov::Model> initReference() const override;
 };
+/// EltwiseFunctionThreeInputs with Converts after inputs to to WA CPU-specific disabling after inputs
+/// See AddConvert for details.
+class EltwiseFunctionThreeInputsConvert : public SnippetsFunctionBase {
+public:
+    explicit EltwiseFunctionThreeInputsConvert(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+        NGRAPH_CHECK(input_shapes.size() == 3, "Got invalid number of input shapes");
+        precision = ov::element::i32;
+    }
+protected:
+    std::shared_ptr<ov::Model> initOriginal() const override;
+//    std::shared_ptr<ov::Model> initReference() const override;
+};
 /// MatMul with two eltwise branches joined with Add just before the Result.
 /// Tokenized by attaching eltwises to separate subgraphs, and then joining them together.
 //                   in1   in2
