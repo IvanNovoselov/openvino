@@ -65,8 +65,8 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
     // scalar tile
     auto m_scalar = ov::clone_model(*m.get());
     ngraph::pass::Manager mng;
-    mng.register_pass<ngraph::snippets::pass::ReplaceLoadsWithScalarLoads>();
-    mng.register_pass<ngraph::snippets::pass::ReplaceStoresWithScalarStores>();
+    mng.register_pass<ngraph::snippets::pass::SetScalarCountForLoad>();
+    mng.register_pass<ngraph::snippets::pass::SetScalarCountForStore>();
     mng.run_passes(m_scalar);
     OV_ITT_TASK_NEXT(GENERATE, "::ScalarTile_get")
     std::vector<AllocatedEmitter> scalar_lowered;
