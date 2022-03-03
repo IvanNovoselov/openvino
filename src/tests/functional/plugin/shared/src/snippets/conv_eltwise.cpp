@@ -39,7 +39,7 @@ namespace LayerTestsDefinitions {
                  ref_num_nodes, ref_num_subgraphs, targetDevice) = this->GetParam();
 
         init_input_shapes({{{}, {inputShape0, }}, {{}, {inputShape1, }}});
-        std::vector<std::shared_ptr<Node>> eltwiseOps {binaryEltwise,
+        std::vector<std::shared_ptr<ov::Node>> eltwiseOps {binaryEltwise,
                                                        std::make_shared<ov::op::v0::Abs>(),
                                                        std::make_shared<ov::op::v0::Sqrt>()};
         const auto f  = ngraph::builder::subgraph::ConvMulActivation({inputShape0, inputShape1}, eltwiseOps);

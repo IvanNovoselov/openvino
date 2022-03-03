@@ -26,6 +26,7 @@ set(DEPENDENCIES
     template_extension
     openvino_template_extension
     lptNgraphFunctions
+    inference_engine_snippets
     sharedTestClasses
     test_model_zoo
 )

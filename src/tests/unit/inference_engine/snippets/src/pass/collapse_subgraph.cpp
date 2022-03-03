@@ -5,7 +5,9 @@
 #include <gtest/gtest.h>
 #include <subgraph_simple.hpp>
 #include <snippets_helpers.hpp>
+
 using namespace ngraph::builder::subgraph;
+using ov::Shape;
 TEST_F(SnippetsCollapseSubgraphTests, EltwiseSubgraph) {
     const auto &f = EltwiseFunction(std::vector<Shape> {{2, 3}, {1, 3}});
     function = f.getOriginal();

@@ -6,6 +6,7 @@
 #include "pass/insert_load_store.hpp"
 using namespace ngraph::builder::subgraph;
 namespace {
+using ov::Shape;
 std::vector<Shape> inputShapes1{{1, 1, 2, 5, 1}, {1, 4, 1, 5, 1}};
 std::vector<Shape> inputShapes2{{1, 1, 2, 5, 1}, {1, 4, 1, 5, 1}, {1, 4, 1, 5, 16}};
 Shape exec_domain{1, 4, 2, 5, 16};

@@ -5,8 +5,8 @@
 #include <gtest/gtest.h>
 #include "pass/canonicalization.hpp"
 using namespace ngraph::builder::subgraph;
-
-element::Type_t prec = element::f32;
+using ov::Shape;
+ov::element::Type_t prec = ov::element::f32;
 std::tuple<Shape, Subgraph::BlockedShape> blockedInput0 {{1, 64, 2, 5}, {{1, 4, 2, 5, 16}, {0, 1, 2, 3, 1}, prec}};
 Subgraph::BlockedShape output {{1, 4, 2, 5, 16}, {0, 1, 2, 3, 1}, prec};
 Shape canonical_shape {1, 4, 2, 5, 16};

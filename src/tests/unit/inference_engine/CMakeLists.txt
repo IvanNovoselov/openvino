@@ -27,6 +27,8 @@ addIeTargetTest(
         DEPENDENCIES
             template_extension
             mock_engine
+            inference_engine_snippets
+            snippetsNgraphFunctions
         LABELS
             IE
 )
