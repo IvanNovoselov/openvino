@@ -6,48 +6,16 @@
 
 #include "ngraph/ngraph.hpp"
 #include "snippets_helpers.hpp"
-#include "openvino/op/util/op_types.hpp"
 
 /* This file contains definitions of rather complex functions (models) that support (and require)
  * specification of some the internal operations. This flexibility is required to extend coverage of
  * different tokenization scenarios in parametrized tests. All the functions are expected to be direct
- * descendants of SnippetsFunctionCustomizable (defined here).
+ * descendants of SnippetsFunctionCustomizable (defined in snippets_helpers.hpp).
  */
 
 namespace ngraph {
 namespace builder {
 namespace subgraph {
-/// \brief Base class for snippets subgraphs with customizable embedded op sequences. Note that the custom_ops allowed types are
-/// model-specific and expected to be checked inside a child class constructor.
-/// \param  custom_ops  vector of ops to be inserted in the graph. Required vector size and acceptable op types are subgraph-specific.
-/// The ops are expected to be default-constructed to facilitate test development, the class will take care of the ops inputs for you.
-/// \param  customOpsNumInputs  size_t vector that specifies the number of inputs for each of the custom_ops. Not that an rvalue is expected,
-/// since it should be hard-coded along with the Original and Reference functions.
-class SnippetsFunctionCustomizable : public SnippetsFunctionBase {
-public:
-    SnippetsFunctionCustomizable() = delete;
-    SnippetsFunctionCustomizable(std::vector<Shape>& inputShapes,
-                                 std::vector<std::shared_ptr<Node>>& customOps,
-                                 std::vector<size_t>&& customOpsNumInputs)
-            : SnippetsFunctionBase(inputShapes), custom_ops{customOps} {
-        custom_ops_num_inputs = std::move(customOpsNumInputs);
-        NGRAPH_CHECK(custom_ops_num_inputs.size() == custom_ops.size(), "Got inconsistent numbers of custom ops and custom ops inputs");
-        // We need to set dummy inputs to increase input arguments count,
-        // so clone_with_new_inputs() could pass without errors inside initOriginal() and initReference().
-        ResetCustomOpsInputs();
-    };
-
-protected:
-    std::vector<std::shared_ptr<Node>> custom_ops;
-    std::vector<size_t> custom_ops_num_inputs;
-    void ResetCustomOpsInputs() {
-        auto dummy_input = std::make_shared<ov::op::v0::Parameter>(precision, Shape{});
-        for (size_t i = 0; i < custom_ops.size(); i++) {
-            const NodeVector inputs(custom_ops_num_inputs[i], dummy_input);
-            custom_ops[i]->set_arguments(inputs);
-        }
-    }
-};
 /// Convolution followed by a two-input Multiply, Relu and Sqrt
 /// Tokenized by attaching eltwises, but becomes non-tokenizable if Multiply is substituted with Add (CPU-specific fusing)
 //    in1          in2

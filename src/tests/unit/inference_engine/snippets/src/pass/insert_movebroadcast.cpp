@@ -5,7 +5,7 @@
 #include <gtest/gtest.h>
 #include "pass/insert_movebroadcast.hpp"
 using namespace ngraph::builder::subgraph;
-
+using ov::Shape;
 std::vector<Shape> inputShapes0 {{1, 1, 1, 3}, {1, 1, 2, 3}, {1, 8, 1, 3}};
 std::vector<Shape> inputShapes1 {{1, 8, 2, 3}};
 Shape broadcastShape {1, 8, 2, 3};

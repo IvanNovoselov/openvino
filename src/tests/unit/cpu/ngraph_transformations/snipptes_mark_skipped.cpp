@@ -8,11 +8,13 @@
 #include <ngraph_transformations/snippets_mark_skipped.hpp>
 
 using namespace ngraph::builder::subgraph;
+using ov::Shape;
+using ngraph::Node;
 class SnippetsMarkSkippedTests : public SnippetsCollapseSubgraphTests {
 public:
-    void run(bool serialize_before = false, bool serialize_after = false, bool serialize_ref = false) override {
+    void run() override {
         manager.register_pass<ov::intel_cpu::SnippetsMarkSkipped>();
-        SnippetsCollapseSubgraphTests::run(serialize_before, serialize_after, serialize_ref);
+        SnippetsCollapseSubgraphTests::run();
     }
 };
 

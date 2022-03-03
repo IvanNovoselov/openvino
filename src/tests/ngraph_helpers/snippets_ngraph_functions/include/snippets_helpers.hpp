@@ -3,19 +3,13 @@
 //
 #pragma once
 
-#include "ngraph/function.hpp"
-#include "ngraph/pass/manager.hpp"
-#include "snippets/snippets_isa.hpp"
-#include "snippets/op/subgraph.hpp"
-#include "snippets/pass/collapse_subgraph.hpp"
+#include "openvino/core/model.hpp"
 #include "common_test_utils/ngraph_test_utils.hpp"
-#include "ngraph_functions/builders.hpp"
 
-using ngraph::snippets::op::Subgraph;
-//using ngraph::pass::InitNodeInfo;
-using ngraph::snippets::pass::EnumerateNodes;
-using ngraph::snippets::pass::TokenizeSnippets;
-using namespace ov;
+namespace ngraph {
+namespace builder {
+namespace subgraph {
+using ov::Model;
 // todo: This transformation is required to pass ngraph::pass::CheckUniqueNames executed from TransformationTestsF
 //  Note that other solutions are also possible:
 //  - Modify TransformationTestsF to make it possible to disable CheckUniqueNames on demand.
@@ -28,109 +22,81 @@ using namespace ov;
 //      Not favorable because it seems that this alternative-naming-behavior is needed only to pass these tests.
 //  - An alternative solution is to insert dummy non-tokenizable node before the Result (Such as Convert)
 //      Not favorable because we won't be able to test that the tensor names are preserved for the Result inputs.
-class SnippetsRestoreResultInputName: public ngraph::pass::MatcherPass {
+class SnippetsRestoreResultInputName : public ngraph::pass::MatcherPass {
 public:
-    SnippetsRestoreResultInputName(){
-        auto label =
-                std::make_shared<ngraph::pattern::op::Label>(ngraph::pattern::any_input(),
-                                                             [](const std::shared_ptr<const Node> &n) {
-                                                                 return is_type<op::v0::Result>(n) &&
-                                                                        is_type<Subgraph>(n->get_input_source_output(0).get_node_shared_ptr());
-                                                             });
-        ngraph::graph_rewrite_callback callback = [](ngraph::pattern::Matcher &m) -> bool {
-            const auto& node = m.get_match_root();
-            const auto& subgraph = as_type_ptr<Subgraph>(node->get_input_source_output(0).get_node_shared_ptr());
-            bool not_set = true;
-            for (unsigned int i = 0; i < subgraph->get_output_size() && not_set; i++) {
-                for (const auto &in : subgraph->get_output_target_inputs(i)) {
-                    if (ov::is_type<op::v0::Result>(in.get_node())) {
-                        const auto& body_result = subgraph->get_body()->get_output_op(i);
-                        const auto& body_result_input = body_result->get_input_source_output(0);
-                        subgraph->set_friendly_name(body_result_input.get_node_shared_ptr()->get_friendly_name());
-                        not_set = false;
-                        break;
-                    }
-                }
-            }
-            return true;
-        };
-        auto matcher = std::make_shared<ngraph::pattern::Matcher>(label);
-        register_matcher(matcher, callback);
-    }
+    SnippetsRestoreResultInputName();
 };
+
 class SnippetsCollapseSubgraphTests : public TransformationTestsF {
 public:
-    virtual void run(bool serialize_before = false, bool serialize_after = false, bool serialize_ref = false) {
-        ASSERT_TRUE(function);
-        std::string name;
-        if (serialize_before || serialize_after || serialize_ref) {
-            auto formatName = [](const std::string& original_name) {
-                std::string name(original_name);
-                std::replace(name.begin(), name.end(), '\\', '_');
-                std::replace(name.begin(), name.end(), '/', '_');
-                std::replace(name.begin(), name.end(), ' ', '_');
-                std::replace(name.begin(), name.end(), ':', '-');
-                return name;
-            };
-            name = formatName(function->get_friendly_name());
-            if (name.empty())
-                name = "subgraph";
-        }
-        if (serialize_ref && function_ref)
-            ov::pass::Serialize(name + "_ref.xml", name + "_ref.bin").run_on_model(function_ref);
-        if (serialize_before)
-            manager.register_pass<ov::pass::Serialize>(name + "_before.xml", name + "_before.bin");
-        manager.register_pass<EnumerateNodes>();
-        manager.register_pass<TokenizeSnippets>();
-        if (serialize_after)
-            manager.register_pass<ov::pass::Serialize>(name + "_after.xml", name + "_after.bin");
-        manager.register_pass<SnippetsRestoreResultInputName>();
-    }
+    virtual void run();
 };
+
 /// \brief Base class for snippets-related subgraphs. Note that inputShapes size is model-specific
 /// and expected to be checked inside a child class constructor.
 /// \param inputShapes vector of input shapes accepted by the underlying model
 class SnippetsFunctionBase {
 public:
     SnippetsFunctionBase() = delete;
-    explicit SnippetsFunctionBase(std::vector<Shape>& inputShapes) : input_shapes{inputShapes} {};
 
-    std::shared_ptr<ov::Model> getReference() const {
+    explicit SnippetsFunctionBase(std::vector<Shape> &inputShapes) : input_shapes{inputShapes} {};
+
+    std::shared_ptr<Model> getReference() const {
         std::shared_ptr<Model> function_ref = initReference();
         validate_function(function_ref);
         return function_ref;
     }
-    std::shared_ptr<ov::Model> getOriginal() const {
+
+    std::shared_ptr<Model> getOriginal() const {
         std::shared_ptr<Model> function = initOriginal();
         validate_function(function);
         return function;
     }
-    std::shared_ptr<ov::Model> getLowered() const {
+
+    std::shared_ptr<Model> getLowered() const {
         std::shared_ptr<Model> function_low = initLowered();
         validate_function(function_low);
         return function_low;
     }
-    size_t getNumInputs() const {return input_shapes.size();}
+
+    size_t getNumInputs() const { return input_shapes.size(); }
 
 protected:
-    virtual std::shared_ptr<ov::Model> initOriginal() const = 0;
-    virtual std::shared_ptr<ov::Model> initReference() const {
+    virtual std::shared_ptr<Model> initOriginal() const = 0;
+
+    virtual std::shared_ptr<Model> initReference() const {
         IE_THROW(NotImplemented) << "initReference() for this class is not implemented";
     }
-    virtual std::shared_ptr<ov::Model> initLowered() const {
+
+    virtual std::shared_ptr<Model> initLowered() const {
         IE_THROW(NotImplemented) << "initLowered() for this class is not implemented";
     }
+
     // only fp32 is currently supported by snippets
-    ov::element::Type_t precision  = element::f32;
+    ov::element::Type_t precision = element::f32;
     std::vector<Shape> input_shapes;
 
-    virtual void validate_function(const std::shared_ptr<Model>& f) const {
-        NGRAPH_CHECK(f != nullptr, "The test requires Model to be defined");
-        const auto &params = f->get_parameters();
-        NGRAPH_CHECK(params.size() == input_shapes.size(),
-                     "Passed input shapes and produced function are inconsistent.");
-        for (size_t i = 0; i < input_shapes.size(); i++)
-            NGRAPH_CHECK(std::equal(input_shapes[i].begin(), input_shapes[i].end(), params[i]->get_shape().begin()),
-                         "Passed input shapes and produced function are inconsistent.");
-    }
+    virtual void validate_function(const std::shared_ptr<Model> &f) const;
 };
+
+/// \brief Base class for snippets subgraphs with customizable embedded op sequences. Note that the custom_ops allowed types are
+/// model-specific and expected to be checked inside a child class constructor.
+/// \param  custom_ops  vector of ops to be inserted in the graph. Required vector size and acceptable op types are subgraph-specific.
+/// The ops are expected to be default-constructed to facilitate test development, the class will take care of the ops inputs for you.
+/// \param  customOpsNumInputs  size_t vector that specifies the number of inputs for each of the custom_ops. Not that an rvalue is expected,
+/// since it should be hard-coded along with the Original and Reference functions.
+class SnippetsFunctionCustomizable : public SnippetsFunctionBase {
+public:
+    SnippetsFunctionCustomizable() = delete;
+    SnippetsFunctionCustomizable(std::vector<Shape>& inputShapes,
+                                 std::vector<std::shared_ptr<Node>>& customOps,
+                                 std::vector<size_t>&& customOpsNumInputs);
+
+protected:
+    std::vector<std::shared_ptr<Node>> custom_ops;
+    std::vector<size_t> custom_ops_num_inputs;
+    void ResetCustomOpsInputs();
+};
+} // namespace subgraph
+} // namespace builder
+} // namespace ngraph

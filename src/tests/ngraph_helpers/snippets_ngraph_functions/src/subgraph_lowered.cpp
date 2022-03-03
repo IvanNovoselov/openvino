@@ -6,6 +6,7 @@
 #include "common_test_utils/data_utils.hpp"
 #include <snippets/op/subgraph.hpp>
 #include <snippets/snippets_isa.hpp>
+#include "ngraph_functions/builders.hpp"
 using namespace ov;
 using ngraph::snippets::op::Subgraph;
 namespace ngraph {
