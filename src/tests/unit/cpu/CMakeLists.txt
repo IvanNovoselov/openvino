@@ -21,19 +21,17 @@ addIeTargetTest(
         OBJECT_FILES
             ${OBJ_LIB}
         LINK_LIBRARIES
-            PUBLIC
-                gtest
-                gtest_main
-                gmock
-                mkldnn
-                inference_engine_transformations
-                inference_engine_lp_transformations
-                ov_shape_inference
-                inference_engine_s
-                unitTestUtils
-                ngraphFunctions
-            PRIVATE
-                snippetsNgraphFunctions
+            gtest
+            gtest_main
+            gmock
+            mkldnn
+            inference_engine_transformations
+            inference_engine_lp_transformations
+            ov_shape_inference
+            inference_engine_s
+            unitTestUtils
+            ngraphFunctions
+            snippetsNgraphFunctions
         ADD_CPPLINT
         LABELS
             CPU

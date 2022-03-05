@@ -65,11 +65,11 @@ protected:
     virtual std::shared_ptr<Model> initOriginal() const = 0;
 
     virtual std::shared_ptr<Model> initReference() const {
-        IE_THROW(NotImplemented) << "initReference() for this class is not implemented";
+        throw std::runtime_error("initReference() for this class is not implemented");
     }
 
     virtual std::shared_ptr<Model> initLowered() const {
-        IE_THROW(NotImplemented) << "initLowered() for this class is not implemented";
+        throw std::runtime_error("initLowered() for this class is not implemented");
     }
 
     // only fp32 is currently supported by snippets

@@ -22,15 +22,13 @@ addIeTarget(
         ADDITIONAL_SOURCE_DIRS
             ${CMAKE_CURRENT_SOURCE_DIR}/src
         LINK_LIBRARIES
-            PRIVATE
-                ngraphFunctions
+            PUBLIC
                 openvino::runtime::dev
-                inference_engine_legacy
                 commonTestUtils
+            PRIVATE
                 inference_engine_snippets
         ADD_CPPLINT
         DEPENDENCIES
-            ngraphFunctions
             commonTestUtils
         DEVELOPER_PACKAGE
             tests
