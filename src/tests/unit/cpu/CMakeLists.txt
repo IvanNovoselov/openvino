@@ -12,24 +12,28 @@ addIeTargetTest(
         NAME ${TARGET_NAME}
         ROOT ${CMAKE_CURRENT_SOURCE_DIR}
         INCLUDES
-            $<TARGET_PROPERTY:openvino_intel_cpu_plugin,SOURCE_DIR>/src
-            $<TARGET_PROPERTY:openvino::conditional_compilation,INTERFACE_INCLUDE_DIRECTORIES>
-            $<TARGET_PROPERTY:snippetsNgraphFunctions,SOURCE_DIR>/include
+            PUBLIC
+                $<TARGET_PROPERTY:openvino_intel_cpu_plugin,SOURCE_DIR>/src
+                $<TARGET_PROPERTY:openvino::conditional_compilation,INTERFACE_INCLUDE_DIRECTORIES>
+            PRIVATE
+                $<TARGET_PROPERTY:snippetsNgraphFunctions,SOURCE_DIR>/include
+                $<TARGET_PROPERTY:inference_engine_snippets,SOURCE_DIR>/include
         OBJECT_FILES
             ${OBJ_LIB}
         LINK_LIBRARIES
-            gtest
-            gtest_main
-            gmock
-            mkldnn
-            inference_engine_transformations
-            inference_engine_lp_transformations
-            ov_shape_inference
-            inference_engine_s
-            unitTestUtils
-            inference_engine_snippets
-            ngraphFunctions
-            snippetsNgraphFunctions
+            PUBLIC
+                gtest
+                gtest_main
+                gmock
+                mkldnn
+                inference_engine_transformations
+                inference_engine_lp_transformations
+                ov_shape_inference
+                inference_engine_s
+                unitTestUtils
+                ngraphFunctions
+            PRIVATE
+                snippetsNgraphFunctions
         ADD_CPPLINT
         LABELS
             CPU
