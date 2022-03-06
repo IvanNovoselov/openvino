@@ -3,11 +3,22 @@
 //
 
 #include <gtest/gtest.h>
+#include <pass/collapse_subgraph.hpp>
 #include <subgraph_simple.hpp>
-#include <snippets_helpers.hpp>
+#include "snippets/pass/collapse_subgraph.hpp"
+#include "snippets/op/subgraph.hpp"
 
 using namespace ngraph::builder::subgraph;
 using ov::Shape;
+
+void SnippetsCollapseSubgraphTests::run() {
+    ASSERT_TRUE(function);
+    std::string name;
+    manager.register_pass<ngraph::snippets::pass::EnumerateNodes>();
+    manager.register_pass<ngraph::snippets::pass::TokenizeSnippets>();
+    manager.register_pass<SnippetsRestoreResultInputName>();
+}
+
 TEST_F(SnippetsCollapseSubgraphTests, EltwiseSubgraph) {
     const auto &f = EltwiseFunction(std::vector<Shape> {{2, 3}, {1, 3}});
     function = f.getOriginal();

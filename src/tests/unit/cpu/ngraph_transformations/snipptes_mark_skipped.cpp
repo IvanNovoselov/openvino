@@ -6,15 +6,20 @@
 #include <subgraph_customizable.hpp>
 #include <snippets_helpers.hpp>
 #include <ngraph_transformations/snippets_mark_skipped.hpp>
+#include "snippets/pass/collapse_subgraph.hpp"
 
 using namespace ngraph::builder::subgraph;
 using ov::Shape;
 using ngraph::Node;
-class SnippetsMarkSkippedTests : public SnippetsCollapseSubgraphTests {
+
+class SnippetsMarkSkippedTests : public TransformationTestsF {
 public:
-    void run() override {
+    void run() {
+        ASSERT_TRUE(function);
         manager.register_pass<ov::intel_cpu::SnippetsMarkSkipped>();
-        SnippetsCollapseSubgraphTests::run();
+        manager.register_pass<ngraph::snippets::pass::EnumerateNodes>();
+        manager.register_pass<ngraph::snippets::pass::TokenizeSnippets>();
+        manager.register_pass<SnippetsRestoreResultInputName>();
     }
 };
 

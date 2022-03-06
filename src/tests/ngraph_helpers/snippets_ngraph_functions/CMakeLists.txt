@@ -14,7 +14,7 @@ addIeTarget(
         INCLUDES
             PUBLIC
                 ${PUBLIC_HEADERS_DIR}
-                ${IE_TESTS_ROOT}/ie_test_utils
+#                ${IE_TESTS_ROOT}/ie_test_utils
                 ${COMMON_TEST_UTILS_INCLUDES}
             PRIVATE
                 ${SNIPPETS_INCLUDES}
@@ -28,8 +28,8 @@ addIeTarget(
             PRIVATE
                 inference_engine_snippets
         ADD_CPPLINT
-        DEPENDENCIES
-            commonTestUtils
+#        DEPENDENCIES
+#            commonTestUtils
         DEVELOPER_PACKAGE
             tests
 )
