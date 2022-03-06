@@ -36,16 +36,11 @@ DummyTargetMachine::DummyTargetMachine() {
     jitters[ngraph::snippets::op::Tile::get_type_info_static()] = dummy_functor;
 }
 
-void  SnippetsLoweringTests::serialize(const std::string& name, const std::shared_ptr<Model>& m) {
-    ov::pass::Serialize(name + ".xml", name + ".bin").run_on_model(m);
-}
 void SnippetsLoweringTests::prepare() {
         ASSERT_TRUE(function);
-        serialize("before", function);
         // Check that the function is fully tokenizable and obtain subgraph
         tokenize(function);
         getSubgraph(function);
-        serialize("tokenized", subgraph->get_body());
 }
 Shape SnippetsLoweringTests::canonicalize(BlockedShapeVector& input_blocked_shapes, BlockedShapeVector& output_blocked_shapes) {
         return subgraph->canonicalize(output_blocked_shapes, input_blocked_shapes);
@@ -54,8 +49,6 @@ void SnippetsLoweringTests::lower() {
         subgraph->set_generator(std::make_shared<DummyGenerator>());
         subgraph->generate();
         function = subgraph->get_body();
-        serialize("lowered", function);
-        serialize("expected", function_ref);
 }
 
 void SnippetsLoweringTests::tokenize(std::shared_ptr<Model>& f) {
