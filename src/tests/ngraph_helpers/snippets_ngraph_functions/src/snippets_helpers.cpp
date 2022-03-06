@@ -44,31 +44,8 @@ SnippetsRestoreResultInputName::SnippetsRestoreResultInputName() {
 void SnippetsCollapseSubgraphTests::run() {
     ASSERT_TRUE(function);
     std::string name;
-    // Todo: remove debug graph dumping before merge
-    bool serialize_before = false;
-    bool serialize_after = false;
-    bool serialize_ref = false;
-    if (serialize_before || serialize_after || serialize_ref) {
-        auto formatName = [](const std::string &original_name) {
-            std::string name(original_name);
-            std::replace(name.begin(), name.end(), '\\', '_');
-            std::replace(name.begin(), name.end(), '/', '_');
-            std::replace(name.begin(), name.end(), ' ', '_');
-            std::replace(name.begin(), name.end(), ':', '-');
-            return name;
-        };
-        name = formatName(function->get_friendly_name());
-        if (name.empty())
-            name = "subgraph";
-    }
-    if (serialize_ref && function_ref)
-        ov::pass::Serialize(name + "_ref.xml", name + "_ref.bin").run_on_model(function_ref);
-    if (serialize_before)
-        manager.register_pass<ov::pass::Serialize>(name + "_before.xml", name + "_before.bin");
     manager.register_pass<ngraph::snippets::pass::EnumerateNodes>();
     manager.register_pass<ngraph::snippets::pass::TokenizeSnippets>();
-    if (serialize_after)
-        manager.register_pass<ov::pass::Serialize>(name + "_after.xml", name + "_after.bin");
     manager.register_pass<SnippetsRestoreResultInputName>();
 }
 

@@ -2,13 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include <thread>
-
 #include "pugixml.hpp"
-
-#include <openvino/pass/serialize.hpp>
-#include <ngraph/opsets/opset.hpp>
-
 #include "shared_test_classes/base/snippets_test_utils.hpp"
 #include "exec_graph_info.hpp"
 
@@ -16,11 +10,6 @@ namespace ov {
 namespace test {
 void SnippetsTestsCommon::validateNumSubgraphs() {
     const auto& compiled_model = compiledModel.get_runtime_model();
-    // todo: remove graph serialization when converting to regular PR
-    {
-        auto m = ov::clone_model(*compiled_model);
-        ov::pass::Serialize("compiled.xml", "compiled.bin").run_on_model(m);
-    }
     size_t num_subgraphs = 0;
     size_t num_nodes = 0;
     for (const auto &op : compiled_model->get_ops()) {

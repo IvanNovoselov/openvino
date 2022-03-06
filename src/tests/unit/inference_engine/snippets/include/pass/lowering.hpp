@@ -42,9 +42,6 @@ public:
 
 class SnippetsLoweringTests : public TransformationTestsF {
 protected:
-    static void serialize(const std::string& name, const std::shared_ptr<Model>& m);
-
-protected:
     void prepare();
     Shape canonicalize(BlockedShapeVector& input_blocked_shapes, BlockedShapeVector& output_blocked_shapes);
     void lower();
