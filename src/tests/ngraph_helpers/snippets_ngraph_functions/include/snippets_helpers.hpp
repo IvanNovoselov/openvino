@@ -27,10 +27,6 @@ public:
     SnippetsRestoreResultInputName();
 };
 
-class SnippetsCollapseSubgraphTests : public TransformationTestsF {
-public:
-    virtual void run();
-};
 
 /// \brief Base class for snippets-related subgraphs. Note that inputShapes size is model-specific
 /// and expected to be checked inside a child class constructor.

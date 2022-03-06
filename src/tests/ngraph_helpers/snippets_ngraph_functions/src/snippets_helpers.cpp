@@ -41,14 +41,6 @@ SnippetsRestoreResultInputName::SnippetsRestoreResultInputName() {
     register_matcher(matcher, callback);
 }
 
-void SnippetsCollapseSubgraphTests::run() {
-    ASSERT_TRUE(function);
-    std::string name;
-    manager.register_pass<ngraph::snippets::pass::EnumerateNodes>();
-    manager.register_pass<ngraph::snippets::pass::TokenizeSnippets>();
-    manager.register_pass<SnippetsRestoreResultInputName>();
-}
-
 void SnippetsFunctionBase::validate_function(const std::shared_ptr<Model> &f) const {
     NGRAPH_CHECK(f != nullptr, "The test requires Model to be defined");
     const auto &params = f->get_parameters();
