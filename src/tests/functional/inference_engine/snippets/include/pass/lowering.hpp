@@ -3,8 +3,6 @@
 //
 
 #pragma once
-
-#include <gtest/gtest.h>
 #include <common_test_utils/ngraph_test_utils.hpp>
 #include "snippets/op/subgraph.hpp"
 

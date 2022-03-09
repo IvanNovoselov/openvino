@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2022 Intel Corporation
+// Copyright (C) 2022 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -6,7 +6,6 @@
 #include <pass/collapse_subgraph.hpp>
 #include <subgraph_simple.hpp>
 #include "snippets/pass/collapse_subgraph.hpp"
-#include "snippets/op/subgraph.hpp"
 #include <common_test_utils/snippets_test_utils.hpp>
 
 using namespace ngraph::builder::subgraph;

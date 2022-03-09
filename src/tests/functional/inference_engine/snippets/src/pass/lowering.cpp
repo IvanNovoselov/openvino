@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#include <common_test_utils/ngraph_test_utils.hpp>
 #include "pass/lowering.hpp"
 #include "snippets/pass/collapse_subgraph.hpp"
 
