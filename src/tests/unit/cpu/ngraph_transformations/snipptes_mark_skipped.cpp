@@ -7,6 +7,7 @@
 #include <snippets_helpers.hpp>
 #include <ngraph_transformations/snippets_mark_skipped.hpp>
 #include "snippets/pass/collapse_subgraph.hpp"
+#include <common_test_utils/snippets_test_utils.hpp>
 
 using namespace ngraph::builder::subgraph;
 using ov::Shape;
