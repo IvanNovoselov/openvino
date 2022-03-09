@@ -49,7 +49,7 @@ function(add_common_utils ADD_TARGET_NAME)
             set(Boost_DEBUG on)
         endif ()
         find_package(Boost REQUIRED COMPONENTS regex)
-        target_link_libraries(${ADD_TARGET_NAME} PUBLIC ${Boost_REGEX_LIBRARY})
+        target_link_libraries(${ADD_TARGET_NAME} PUBLIC ${Boost_REGEX_LIBRARY} PRIVATE inference_engine_snippets)
         target_include_directories(${ADD_TARGET_NAME} PUBLIC ${Boost_INCLUDE_DIRS})
     endif ()
 
@@ -58,7 +58,8 @@ function(add_common_utils ADD_TARGET_NAME)
             $<TARGET_PROPERTY:openvino::runtime,INTERFACE_INCLUDE_DIRECTORIES>
         PRIVATE
             $<TARGET_PROPERTY:inference_engine_legacy,INTERFACE_INCLUDE_DIRECTORIES>
-            $<TARGET_PROPERTY:openvino::runtime::dev,INTERFACE_INCLUDE_DIRECTORIES>)
+            $<TARGET_PROPERTY:openvino::runtime::dev,INTERFACE_INCLUDE_DIRECTORIES>
+            $<TARGET_PROPERTY:inference_engine_snippets,SOURCE_DIR>/include)
     target_include_directories(${ADD_TARGET_NAME} SYSTEM PUBLIC ${IE_TESTS_ROOT}/ie_test_utils)
 
     target_compile_definitions(${ADD_TARGET_NAME} PUBLIC ${ARGN})

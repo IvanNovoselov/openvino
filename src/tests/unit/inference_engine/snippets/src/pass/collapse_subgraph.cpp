@@ -7,6 +7,7 @@
 #include <subgraph_simple.hpp>
 #include "snippets/pass/collapse_subgraph.hpp"
 #include "snippets/op/subgraph.hpp"
+#include <common_test_utils/snippets_test_utils.hpp>
 
 using namespace ngraph::builder::subgraph;
 using ov::Shape;
