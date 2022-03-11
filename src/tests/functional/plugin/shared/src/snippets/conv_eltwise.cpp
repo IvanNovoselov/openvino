@@ -1,13 +1,10 @@
-
-// Copyright (C) 2020 Intel Corporation
+// Copyright (C) 2022 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #include "common_test_utils/common_utils.hpp"
-#include "functional_test_utils/blob_utils.hpp"
 #include "snippets/conv_eltwise.hpp"
 #include "subgraph_customizable.hpp"
-
 
 namespace LayerTestsDefinitions {
 

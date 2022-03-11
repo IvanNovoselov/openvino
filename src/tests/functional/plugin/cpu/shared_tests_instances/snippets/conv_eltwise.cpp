@@ -1,9 +1,9 @@
-
-// Copyright (C) 2020 Intel Corporation
+// Copyright (C) 2022 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
 #include "snippets/conv_eltwise.hpp"
+#include "common_test_utils/test_constants.hpp"
 
 using namespace LayerTestsDefinitions;
 

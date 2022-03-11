@@ -3,8 +3,6 @@
 //
 
 #include "common_test_utils/common_utils.hpp"
-#include "functional_test_utils/blob_utils.hpp"
-
 #include "snippets/three_inputs_eltwise.hpp"
 #include "subgraph_simple.hpp"
 

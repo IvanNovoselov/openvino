@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include <vector>
-
 #include "snippets/three_inputs_eltwise.hpp"
 #include "common_test_utils/test_constants.hpp"
 
