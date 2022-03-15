@@ -6,9 +6,9 @@
 #include "openvino/core/model.hpp"
 #include "common_test_utils/ngraph_test_utils.hpp"
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
 using ov::Model;
 
 /// \brief Base class for snippets-related subgraphs. Note that inputShapes size is model-specific
@@ -76,6 +76,6 @@ protected:
     std::vector<size_t> custom_ops_num_inputs;
     void ResetCustomOpsInputs();
 };
-} // namespace subgraph
-} // namespace builder
-} // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

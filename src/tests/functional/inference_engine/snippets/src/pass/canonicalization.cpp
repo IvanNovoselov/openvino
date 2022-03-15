@@ -7,9 +7,9 @@
 #include "common_test_utils/common_utils.hpp"
 #include <subgraph_lowered.hpp>
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
 
 std::string SnippetsCanonicalizationTests::getTestCaseName(testing::TestParamInfo<SnippetsCanonicalizationParamsInputs> obj) {
     std::vector<std::tuple<Shape, Subgraph::BlockedShape>> inputs(2);
@@ -92,6 +92,6 @@ INSTANTIATE_TEST_SUITE_P(BroadcastBlockedPlanar, SnippetsCanonicalizationTests,
                                  ::testing::Values(canonical_shape)),
                          SnippetsCanonicalizationTests::getTestCaseName);
 } // namespace
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

@@ -7,9 +7,9 @@
 #include "snippets/pass/collapse_subgraph.hpp"
 
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
 
 DummyTargetMachine::DummyTargetMachine() {
     auto dummy_functor = [this](const std::shared_ptr<ngraph::Node>& n) {
@@ -61,11 +61,11 @@ void SnippetsLoweringTests::tokenize(std::shared_ptr<Model>& f) {
 
 void SnippetsLoweringTests::getSubgraph(std::shared_ptr<Model>& f) {
     for (const auto &op : f->get_ops()) {
-        bool is_subgraph = is_type<Subgraph>(op);
+        bool is_subgraph = is_type<ngraph::snippets::op::Subgraph>(op);
         if (is_subgraph) {
             NGRAPH_CHECK(subgraph.use_count() == 0,
                          "Functions provided for lowering tests contains more than one subgraph.");
-            subgraph = as_type_ptr<Subgraph>(op);
+            subgraph = as_type_ptr<ngraph::snippets::op::Subgraph>(op);
         }
         NGRAPH_CHECK(is_subgraph ||
                      is_type<ov::op::v0::Parameter>(op) ||
@@ -75,6 +75,6 @@ void SnippetsLoweringTests::getSubgraph(std::shared_ptr<Model>& f) {
     }
 }
 
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

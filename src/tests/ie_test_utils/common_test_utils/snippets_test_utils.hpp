@@ -6,9 +6,9 @@
 #include <ngraph/pass/pass.hpp>
 #include <openvino/pass/graph_rewrite.hpp>
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
 
 // todo: This transformation is required to pass ngraph::pass::CheckUniqueNames executed from TransformationTestsF
 //  Note that other solutions are also possible:
@@ -27,6 +27,6 @@ public:
     SnippetsRestoreResultInputName();
 };
 
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

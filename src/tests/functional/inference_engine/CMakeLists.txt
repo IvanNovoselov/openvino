@@ -5,7 +5,7 @@
 set(TARGET_NAME ieFuncTests)
 
 set(INCLUDES $<TARGET_PROPERTY:inference_engine_obj,SOURCE_DIR>/src
-        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/snippets/include $<TARGET_PROPERTY:snippetsNgraphFunctions,SOURCE_DIR>/include)
+        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/snippets/include $<TARGET_PROPERTY:inference_engine_snippets,SOURCE_DIR>/include)
 
 set(LINK_LIBRARIES
     gmock
@@ -16,7 +16,6 @@ set(LINK_LIBRARIES
     openvino::util
     openvino::conditional_compilation
     sharedTestClasses
-    inference_engine_snippets
     snippetsNgraphFunctions
     offline_transformations
     pugixml::static
@@ -28,8 +27,6 @@ set(DEPENDENCIES
     template_extension
     openvino_template_extension
     lptNgraphFunctions
-    inference_engine_snippets
-    snippetsNgraphFunctions
     sharedTestClasses
     test_model_zoo
 )

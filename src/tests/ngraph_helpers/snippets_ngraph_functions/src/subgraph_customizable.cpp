@@ -7,11 +7,10 @@
 #include <snippets/op/subgraph.hpp>
 #include "common_test_utils/data_utils.hpp"
 
-using namespace ov;
-using ngraph::snippets::op::Subgraph;
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
+
 std::shared_ptr<ov::Model> ConvMulActivation::initOriginal() const {
     auto conv_param = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     const auto channels = input_shapes[0][1];
@@ -54,11 +53,11 @@ std::shared_ptr<ov::Model> ConvMulActivation::initReference() const {
     auto ineltwise_unary_1 = custom_ops[1]->clone_with_new_inputs({ineltwise_binary->output(0)});
     auto ineltwise_unary_2 = custom_ops[2]->clone_with_new_inputs({ineltwise_unary_1->output(0)});
 
-    auto subgraph = std::make_shared<Subgraph>(NodeVector{conv, eltwise_convert},
+    auto subgraph = std::make_shared<ngraph::snippets::op::Subgraph>(NodeVector{conv, eltwise_convert},
                                           std::make_shared<ov::Model>(NodeVector{ineltwise_unary_2},
                                                                   ParameterVector{indata0, indata1}));
     return std::make_shared<ov::Model>(NodeVector{subgraph}, ParameterVector{conv_param, eltwise_param});
 }
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

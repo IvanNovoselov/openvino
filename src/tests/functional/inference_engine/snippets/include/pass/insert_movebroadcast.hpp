@@ -10,9 +10,9 @@
  * Conversion of Load + BroadcastMove to LoadBroadcastLoad is covered in insert_load_store.cpp
  */
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
 
 typedef std::tuple<
         Shape, // Input shape 0
@@ -31,6 +31,6 @@ protected:
     std::vector<Shape> broadcast_shapes;
 };
 
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

@@ -39,7 +39,7 @@ namespace LayerTestsDefinitions {
         std::vector<std::shared_ptr<ov::Node>> eltwiseOps {binaryEltwise,
                                                        std::make_shared<ov::op::v0::Abs>(),
                                                        std::make_shared<ov::op::v0::Sqrt>()};
-        const auto f  = ngraph::builder::subgraph::ConvMulActivation({inputShape0, inputShape1}, eltwiseOps);
+        const auto f  = ov::test::snippets::ConvMulActivation({inputShape0, inputShape1}, eltwiseOps);
         function = f.getOriginal();
     }
 

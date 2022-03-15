@@ -6,22 +6,20 @@
 #include "snippets/op/subgraph.hpp"
 #include "ngraph/pattern/op/label.hpp"
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
-
-using ngraph::snippets::op::Subgraph;
+namespace ov {
+namespace test {
+namespace snippets {
 
 SnippetsRestoreResultInputName::SnippetsRestoreResultInputName() {
     auto label =
             std::make_shared<ngraph::pattern::op::Label>(ngraph::pattern::any_input(),
-                                                         [](const std::shared_ptr<const Node> &n) {
-                                                             return is_type<op::v0::Result>(n) &&
-                                                                    is_type<Subgraph>(n->get_input_source_output(0).get_node_shared_ptr());
-                                                         });
+             [](const std::shared_ptr<const Node> &n) {
+                 return is_type<op::v0::Result>(n) &&
+                        is_type<ngraph::snippets::op::Subgraph>(n->get_input_source_output(0).get_node_shared_ptr());
+             });
     ov::graph_rewrite_callback callback = [](ngraph::pattern::Matcher &m) -> bool {
         const auto& node = m.get_match_root();
-        const auto& subgraph = as_type_ptr<Subgraph>(node->get_input_source_output(0).get_node_shared_ptr());
+        const auto& subgraph = as_type_ptr<ngraph::snippets::op::Subgraph>(node->get_input_source_output(0).get_node_shared_ptr());
         bool not_set = true;
         for (unsigned int i = 0; i < subgraph->get_output_size() && not_set; i++) {
             for (const auto &in : subgraph->get_output_target_inputs(i)) {
@@ -40,6 +38,6 @@ SnippetsRestoreResultInputName::SnippetsRestoreResultInputName() {
     register_matcher(matcher, callback);
 }
 
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

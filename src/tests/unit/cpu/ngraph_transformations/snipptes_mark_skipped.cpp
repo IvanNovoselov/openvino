@@ -9,9 +9,9 @@
 #include "snippets/pass/collapse_subgraph.hpp"
 #include <common_test_utils/snippets_test_utils.hpp>
 
-using namespace ngraph::builder::subgraph;
-using ov::Shape;
-using ngraph::Node;
+namespace ov {
+namespace test {
+namespace snippets {
 
 class SnippetsMarkSkippedTests : public TransformationTestsF {
 public:
@@ -63,3 +63,7 @@ TEST_F(SnippetsMarkSkippedTests, smoke_SkipConvFused_ConvSumActivation) {
     function_ref = f.getOriginal();
     run();
 }
+
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

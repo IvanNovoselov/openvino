@@ -15,9 +15,9 @@
  * from SnippetsFunctionBase (typically "virtual public") to avoid creation of two internal copies of SnippetsFunctionBase.
  */
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
 
 class AddFunctionLoweredBroadcast : public AddFunction {
 public:
@@ -48,7 +48,7 @@ private:
     std::vector<Shape> broadcast_shapes;;
 };
 
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov
 

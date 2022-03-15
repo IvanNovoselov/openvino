@@ -34,7 +34,7 @@ namespace LayerTestsDefinitions {
                  ref_num_nodes, ref_num_subgraphs, targetDevice) = this->GetParam();
         init_input_shapes({{{}, {inputShape0, }}, {{}, {inputShape1, }}, {{}, {inputShape2, }}});
 
-        auto f = ngraph::builder::subgraph::EltwiseFunctionThreeInputs({inputShape0, inputShape1, inputShape2});
+        auto f = ov::test::snippets::EltwiseFunctionThreeInputs({inputShape0, inputShape1, inputShape2});
         function = f.getOriginal();
     }
 
@@ -45,7 +45,7 @@ namespace LayerTestsDefinitions {
                  ref_num_nodes, ref_num_subgraphs, targetDevice) = this->GetParam();
         init_input_shapes({{{}, {inputShape0, }}, {{}, {inputShape1, }}, {{}, {inputShape2, }}});
 
-        auto f = ngraph::builder::subgraph::EltwiseFunctionThreeInputsConvert({inputShape0, inputShape1, inputShape2});
+        auto f = ov::test::snippets::EltwiseFunctionThreeInputsConvert({inputShape0, inputShape1, inputShape2});
         function = f.getOriginal();
     }
 

@@ -6,13 +6,11 @@
 #include <common_test_utils/ngraph_test_utils.hpp>
 #include "snippets/op/subgraph.hpp"
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
 
-using BlockedShapeVector = snippets::op::Subgraph::BlockedShapeVector;
-using snippets::op::Subgraph;
-using ov::Model;
+using BlockedShapeVector = ngraph::snippets::op::Subgraph::BlockedShapeVector;
 
 class DummyEmitter : public ngraph::snippets::Emitter {
 public:
@@ -45,11 +43,11 @@ protected:
     void lower();
 
 private:
-    std::shared_ptr<Subgraph> subgraph;
+    std::shared_ptr<ngraph::snippets::op::Subgraph> subgraph;
     static void tokenize(std::shared_ptr<Model>& f);
     void getSubgraph(std::shared_ptr<Model>& f);
 };
 
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

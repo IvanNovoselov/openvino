@@ -8,8 +8,9 @@
 #include "snippets/pass/collapse_subgraph.hpp"
 #include <common_test_utils/snippets_test_utils.hpp>
 
-using namespace ngraph::builder::subgraph;
-using ov::Shape;
+namespace ov {
+namespace test {
+namespace snippets {
 
 void SnippetsCollapseSubgraphTests::run() {
     ASSERT_TRUE(function);
@@ -39,3 +40,7 @@ TEST_F(SnippetsCollapseSubgraphTests, AvoidLoopEltwiseSubgraphs) {
     function_ref = f.getReference();
     run();
 }
+
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

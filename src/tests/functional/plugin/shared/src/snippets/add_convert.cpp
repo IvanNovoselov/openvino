@@ -31,7 +31,7 @@ namespace LayerTestsDefinitions {
         std::tie(netPrecision, inputShape0, inputShape1, ref_num_nodes, ref_num_subgraphs, targetDevice) = this->GetParam();
         init_input_shapes({{{}, {inputShape0, }}, {{}, {inputShape1, }}});
 
-        auto f = ngraph::builder::subgraph::AddFunction({inputShape0, inputShape1});
+        auto f = ov::test::snippets::AddFunction({inputShape0, inputShape1});
         function = f.getOriginal();
     }
 
@@ -41,7 +41,7 @@ namespace LayerTestsDefinitions {
         std::tie(netPrecision, inputShape0, inputShape1, ref_num_nodes, ref_num_subgraphs, targetDevice) = this->GetParam();
         init_input_shapes({{{}, {inputShape0, }}, {{}, {inputShape1, }}});
 
-        auto f = ngraph::builder::subgraph::AddConvertFunction({inputShape0, inputShape1});
+        auto f = ov::test::snippets::AddConvertFunction({inputShape0, inputShape1});
         function = f.getOriginal();
     }
 

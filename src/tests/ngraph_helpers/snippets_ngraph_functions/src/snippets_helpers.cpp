@@ -4,14 +4,10 @@
 
 #include "snippets_helpers.hpp"
 #include "snippets/op/subgraph.hpp"
-#include "snippets/pass/collapse_subgraph.hpp"
-#include "common_test_utils/ngraph_test_utils.hpp"
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
-
-using ngraph::snippets::op::Subgraph;
+namespace ov {
+namespace test {
+namespace snippets {
 
 void SnippetsFunctionBase::validate_function(const std::shared_ptr<Model> &f) const {
     NGRAPH_CHECK(f != nullptr, "The test requires Model to be defined");
@@ -42,6 +38,6 @@ void SnippetsFunctionCustomizable::ResetCustomOpsInputs() {
     }
 }
 
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

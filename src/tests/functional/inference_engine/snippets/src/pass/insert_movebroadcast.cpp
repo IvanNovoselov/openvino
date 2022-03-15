@@ -7,9 +7,9 @@
 #include "common_test_utils/common_utils.hpp"
 #include <subgraph_lowered.hpp>
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
 
 std::string SnippetsMoveBroadcastTests::getTestCaseName(testing::TestParamInfo<multiInputParams> obj) {
     std::vector<Shape> inputShapes(2);
@@ -79,6 +79,6 @@ INSTANTIATE_TEST_SUITE_P(NoBroadcast, SnippetsMoveBroadcastTests,
                          ::testing::ValuesIn(params),
                          SnippetsMoveBroadcastTests::getTestCaseName);
 } // namespace
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

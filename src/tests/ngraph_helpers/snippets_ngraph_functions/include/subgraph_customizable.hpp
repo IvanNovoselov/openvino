@@ -13,9 +13,9 @@
  * descendants of SnippetsFunctionCustomizable (defined in snippets_helpers.hpp).
  */
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
 /// Convolution followed by a two-input Multiply, Relu and Sqrt
 /// Tokenized by attaching eltwises, but becomes non-tokenizable if Multiply is substituted with Add (CPU-specific fusing)
 //    in1          in2
@@ -40,6 +40,6 @@ private:
     std::shared_ptr<ov::Model> initReference() const override;
 };
 
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov

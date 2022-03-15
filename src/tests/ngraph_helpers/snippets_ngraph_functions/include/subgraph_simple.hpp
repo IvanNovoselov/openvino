@@ -12,9 +12,9 @@
  * SnippetsFunctionBase, so their constructors take only one (inputShapes) argument.
  */
 
-namespace ngraph {
-namespace builder {
-namespace subgraph {
+namespace ov {
+namespace test {
+namespace snippets {
 /// The most trivial graph, just one Add.
 /// Tokenized simply by starting subgraph.
 // in1   in2
@@ -128,6 +128,6 @@ protected:
     std::shared_ptr<ov::Model> initReference() const override;
 };
 
-}  // namespace subgraph
-}  // namespace builder
-}  // namespace ngraph
+}  // namespace snippets
+}  // namespace test
+}  // namespace ov
