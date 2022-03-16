@@ -7,7 +7,6 @@
 #include <snippets_helpers.hpp>
 #include <ngraph_transformations/snippets_mark_skipped.hpp>
 #include "snippets/pass/collapse_subgraph.hpp"
-#include <common_test_utils/snippets_test_utils.hpp>
 
 namespace ov {
 namespace test {
@@ -20,7 +19,6 @@ public:
         manager.register_pass<ov::intel_cpu::SnippetsMarkSkipped>();
         manager.register_pass<ngraph::snippets::pass::EnumerateNodes>();
         manager.register_pass<ngraph::snippets::pass::TokenizeSnippets>();
-        manager.register_pass<SnippetsRestoreResultInputName>();
     }
 };
 

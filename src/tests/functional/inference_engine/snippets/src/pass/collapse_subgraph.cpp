@@ -6,7 +6,6 @@
 #include <pass/collapse_subgraph.hpp>
 #include <subgraph_simple.hpp>
 #include "snippets/pass/collapse_subgraph.hpp"
-#include <common_test_utils/snippets_test_utils.hpp>
 
 namespace ov {
 namespace test {
@@ -17,7 +16,6 @@ void CollapseSubgraphTests::run() {
     std::string name;
     manager.register_pass<ngraph::snippets::pass::EnumerateNodes>();
     manager.register_pass<ngraph::snippets::pass::TokenizeSnippets>();
-    manager.register_pass<SnippetsRestoreResultInputName>();
 }
 
 TEST_F(CollapseSubgraphTests, smoke_Snippets_Eltwise) {
