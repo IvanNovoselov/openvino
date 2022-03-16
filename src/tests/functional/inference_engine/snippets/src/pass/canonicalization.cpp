@@ -10,8 +10,9 @@
 namespace ov {
 namespace test {
 namespace snippets {
+using ngraph::snippets::op::Subgraph;
 
-std::string SnippetsCanonicalizationTests::getTestCaseName(testing::TestParamInfo<SnippetsCanonicalizationParamsInputs> obj) {
+std::string CanonicalizationTests::getTestCaseName(testing::TestParamInfo<SnippetsCanonicalizationParamsInputs> obj) {
     std::vector<std::tuple<Shape, Subgraph::BlockedShape>> inputs(2);
     Subgraph::BlockedShape output;
     Shape expectedOutput;
@@ -34,22 +35,21 @@ std::string SnippetsCanonicalizationTests::getTestCaseName(testing::TestParamInf
     return result.str();
 }
 
-void SnippetsCanonicalizationTests::SetUp() {
+void CanonicalizationTests::SetUp() {
     TransformationTestsF::SetUp();
     std::vector<std::tuple<Shape, Subgraph::BlockedShape>> inputs(2);
     output_blocked_shapes.resize(1);
     std::tie(inputs[0], inputs[1], output_blocked_shapes[0], expected_output_shape) = this->GetParam();
 
-    input_shapes = {std::get<0>(inputs[0]), std::get<0>(inputs[1])};
     input_blocked_shapes = {std::get<1>(inputs[0]), std::get<1>(inputs[1])};
+    snippets_function = std::make_shared<AddFunction>(std::vector<Shape>{std::get<0>(inputs[0]), std::get<0>(inputs[1])});
 }
 
-TEST_P(SnippetsCanonicalizationTests, Add) {
-    const auto &f = AddFunction(input_shapes);
-    function = f.getOriginal();
-    function_ref = f.getReference();
-    prepare();
-    Shape canonical_output_shape = canonicalize(input_blocked_shapes, output_blocked_shapes);
+TEST_P(CanonicalizationTests, Add) {
+    function = snippets_function->getOriginal();
+    function_ref = snippets_function->getReference();
+    auto subgraph =  getTokenizedSubgraph(function);
+    Shape canonical_output_shape = subgraph->canonicalize(output_blocked_shapes, input_blocked_shapes);
     ASSERT_DIMS_EQ(canonical_output_shape, expected_output_shape);
 }
 
@@ -58,7 +58,6 @@ using ngraph::snippets::op::Subgraph;
 std::vector<Shape> input_shapes;
 Shape expected_output_shape;
 Subgraph::BlockedShapeVector input_blocked_shapes;
-Subgraph::BlockedShapeVector output_blocked_shapes;
 
 using ov::Shape;
 ov::element::Type_t prec = ov::element::f32;
@@ -71,13 +70,13 @@ std::vector<std::tuple<Shape, Subgraph::BlockedShape>> blockedInput1{{{1, 1,  2,
                                                                      {{1, 1,  2, 1}, {{1, 1, 2, 1, 1},  {0, 1, 2, 3, 1}, prec}},
                                                                      {{1, 64, 1, 1}, {{1, 4, 1, 1, 16}, {0, 1, 2, 3, 1}, prec}}};
 
-INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastBlocked, SnippetsCanonicalizationTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastBlocked, CanonicalizationTests,
                          ::testing::Combine(
                                  ::testing::Values(blockedInput0),
                                  ::testing::ValuesIn(blockedInput1),
                                  ::testing::Values(output),
                                  ::testing::Values(canonical_shape)),
-                         SnippetsCanonicalizationTests::getTestCaseName);
+                         CanonicalizationTests::getTestCaseName);
 
 std::vector<std::tuple<Shape, Subgraph::BlockedShape>> planarInput1{{{1, 1, 2, 5}, {{1, 2, 5}, {0, 1, 2}, prec}},
                                                                     {{1, 1, 2, 5}, {{2, 5},    {0, 1},    prec}},
@@ -85,13 +84,13 @@ std::vector<std::tuple<Shape, Subgraph::BlockedShape>> planarInput1{{{1, 1, 2, 5
                                                                     {{2, 5},       {{2, 5},    {0, 1},    prec}},
                                                                     {{5},          {{5},       {0},       prec}}};
 
-INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastPlanar, SnippetsCanonicalizationTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastPlanar, CanonicalizationTests,
                          ::testing::Combine(
                                  ::testing::Values(blockedInput0),
                                  ::testing::ValuesIn(planarInput1),
                                  ::testing::Values(output),
                                  ::testing::Values(canonical_shape)),
-                         SnippetsCanonicalizationTests::getTestCaseName);
+                         CanonicalizationTests::getTestCaseName);
 } // namespace
 }  // namespace snippets
 }  // namespace test

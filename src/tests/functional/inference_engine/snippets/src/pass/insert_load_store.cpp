@@ -11,7 +11,7 @@ namespace ov {
 namespace test {
 namespace snippets {
 
-std::string SnippetsLoadStoreTests::getTestCaseName(testing::TestParamInfo<multiInputParams> obj) {
+std::string InsertLoadStoreTests::getTestCaseName(testing::TestParamInfo<multiInputParams> obj) {
     std::vector<Shape> inputShapes(3);
     std::vector<Shape> broadcastShapes(3);
     std::tie(inputShapes[0], inputShapes[1], inputShapes[2],
@@ -24,21 +24,19 @@ std::string SnippetsLoadStoreTests::getTestCaseName(testing::TestParamInfo<multi
     return result.str();
 }
 
-void SnippetsLoadStoreTests::SetUp() {
+void InsertLoadStoreTests::SetUp() {
     TransformationTestsF::SetUp();
-    input_shapes.resize(3);
-    broadcast_shapes.resize(3);
-    std::tie(input_shapes[0], input_shapes[1], input_shapes[2],
-        broadcast_shapes[0], broadcast_shapes[1], broadcast_shapes[2]) = this->GetParam();
+    std::vector<Shape> inputShapes(3);
+    std::vector<Shape> broadcastShapes(3);
+    std::tie(inputShapes[0], inputShapes[1], inputShapes[2],
+             broadcastShapes[0], broadcastShapes[1], broadcastShapes[2]) = this->GetParam();
+    snippets_function = std::make_shared<EltwiseFunctionThreeInputsLowered>(inputShapes, broadcastShapes);
 }
 
-TEST_P(SnippetsLoadStoreTests, EltwiseThreeInputs) {
-    const auto &f = EltwiseFunctionThreeInputsLowered(input_shapes, broadcast_shapes);
-    function = f.getOriginal();
-    function_ref = f.getLowered();
-
-    prepare();
-    lower();
+TEST_P(InsertLoadStoreTests, ThreeInputsEltwise) {
+    auto subgraph = getLoweredSubgraph(snippets_function->getOriginal());
+    function = subgraph->get_body();
+    function_ref = snippets_function->getLowered();
 }
 
 namespace {
@@ -48,7 +46,7 @@ std::vector<Shape> inputShapes2{{1, 1, 2, 5, 1}, {1, 4, 1, 5, 1}, {1, 4, 1, 5, 1
 Shape exec_domain{1, 4, 2, 5, 16};
 Shape emptyShape{};
 
-INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastLoad, SnippetsLoadStoreTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastLoad, InsertLoadStoreTests,
                          ::testing::Combine(
                                  ::testing::Values(exec_domain),
                                  ::testing::ValuesIn(inputShapes1),
@@ -56,10 +54,10 @@ INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastLoad, SnippetsLoadStoreTests,
                                  ::testing::Values(emptyShape),
                                  ::testing::Values(exec_domain),
                                  ::testing::Values(exec_domain)),
-                         SnippetsLoadStoreTests::getTestCaseName);
+                         InsertLoadStoreTests::getTestCaseName);
 
 
-INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastMove, SnippetsLoadStoreTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastMove, InsertLoadStoreTests,
                          ::testing::Combine(
                                  ::testing::Values(exec_domain),
                                  ::testing::Values(Shape {1, 4, 1, 5, 16}),
@@ -67,7 +65,7 @@ INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastMove, SnippetsLoadStoreTests,
                                  ::testing::Values(emptyShape),
                                  ::testing::Values(exec_domain),
                                  ::testing::Values(exec_domain)),
-                         SnippetsLoadStoreTests::getTestCaseName);
+                         InsertLoadStoreTests::getTestCaseName);
 } // namespace
 }  // namespace snippets
 }  // namespace test

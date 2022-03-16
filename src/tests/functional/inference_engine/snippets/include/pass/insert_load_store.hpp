@@ -4,7 +4,8 @@
 
 #pragma once
 
-#include "lowering.hpp"
+#include "lowering_utils.hpp"
+#include "snippets_helpers.hpp"
 
 /* The main purpose is to test that:
  * - Load/Store ops are inserted
@@ -26,13 +27,12 @@ typedef std::tuple<
         Shape // Broadcast shape 2
 > multiInputParams;
 
-class SnippetsLoadStoreTests : public SnippetsLoweringTests, public testing::WithParamInterface<multiInputParams> {
+class InsertLoadStoreTests : public LoweringTests, public testing::WithParamInterface<multiInputParams> {
 public:
     static std::string getTestCaseName(testing::TestParamInfo<multiInputParams> obj);
 protected:
     void SetUp() override;
-    std::vector<Shape> input_shapes;
-    std::vector<Shape> broadcast_shapes;
+    std::shared_ptr<SnippetsFunctionBase> snippets_function;
 };
 
 }  // namespace snippets

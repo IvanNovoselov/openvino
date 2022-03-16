@@ -5,6 +5,7 @@
 #pragma once
 #include <common_test_utils/ngraph_test_utils.hpp>
 #include "snippets/op/subgraph.hpp"
+#include "snippets_helpers.hpp"
 
 namespace ov {
 namespace test {
@@ -36,16 +37,11 @@ public:
     DummyGenerator() : ngraph::snippets::Generator(std::make_shared<DummyTargetMachine>()) {}
 };
 
-class SnippetsLoweringTests : public TransformationTestsF {
+class LoweringTests : public TransformationTestsF {
 protected:
-    void prepare();
-    Shape canonicalize(BlockedShapeVector& input_blocked_shapes, BlockedShapeVector& output_blocked_shapes);
-    void lower();
-
-private:
-    std::shared_ptr<ngraph::snippets::op::Subgraph> subgraph;
-    static void tokenize(std::shared_ptr<Model>& f);
-    void getSubgraph(std::shared_ptr<Model>& f);
+    static std::shared_ptr<ngraph::snippets::op::Subgraph> getSubgraph(const std::shared_ptr<Model>& f);
+    static std::shared_ptr<ngraph::snippets::op::Subgraph> getLoweredSubgraph(const std::shared_ptr<Model>& f);
+    static std::shared_ptr<ngraph::snippets::op::Subgraph> getTokenizedSubgraph(const std::shared_ptr<Model>& f);
 };
 
 }  // namespace snippets

@@ -4,7 +4,8 @@
 
 #pragma once
 
-#include "lowering.hpp"
+#include "lowering_utils.hpp"
+#include "snippets_helpers.hpp"
 
 namespace ov {
 namespace test {
@@ -24,13 +25,13 @@ typedef std::tuple<
 > SnippetsCanonicalizationParamsInputs;
 
 
-class SnippetsCanonicalizationTests : public SnippetsLoweringTests, public testing::WithParamInterface<SnippetsCanonicalizationParamsInputs> {
+class CanonicalizationTests : public LoweringTests, public testing::WithParamInterface<SnippetsCanonicalizationParamsInputs> {
 public:
     static std::string getTestCaseName(testing::TestParamInfo<SnippetsCanonicalizationParamsInputs> obj);
 
 protected:
     void SetUp() override;
-    std::vector<Shape> input_shapes;
+    std::shared_ptr<SnippetsFunctionBase> snippets_function;
     Shape expected_output_shape;
     BlockedShapeVector input_blocked_shapes;
     BlockedShapeVector output_blocked_shapes;

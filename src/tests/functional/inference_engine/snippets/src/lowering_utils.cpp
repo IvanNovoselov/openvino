@@ -3,7 +3,7 @@
 //
 
 #include <common_test_utils/ngraph_test_utils.hpp>
-#include "pass/lowering.hpp"
+#include "lowering_utils.hpp"
 #include "snippets/pass/collapse_subgraph.hpp"
 
 
@@ -37,29 +37,8 @@ DummyTargetMachine::DummyTargetMachine() {
     jitters[ngraph::snippets::op::Tile::get_type_info_static()] = dummy_functor;
 }
 
-void SnippetsLoweringTests::prepare() {
-        ASSERT_TRUE(function);
-        // Check that the function is fully tokenizable and obtain subgraph
-        tokenize(function);
-        getSubgraph(function);
-}
-Shape SnippetsLoweringTests::canonicalize(BlockedShapeVector& input_blocked_shapes, BlockedShapeVector& output_blocked_shapes) {
-        return subgraph->canonicalize(output_blocked_shapes, input_blocked_shapes);
-}
-void SnippetsLoweringTests::lower() {
-        subgraph->set_generator(std::make_shared<DummyGenerator>());
-        subgraph->generate();
-        function = subgraph->get_body();
-}
-
-void SnippetsLoweringTests::tokenize(std::shared_ptr<Model>& f) {
-        ngraph::pass::Manager m;
-        m.register_pass<ngraph::snippets::pass::EnumerateNodes>();
-        m.register_pass<ngraph::snippets::pass::TokenizeSnippets>();
-        m.run_passes(f);
-}
-
-void SnippetsLoweringTests::getSubgraph(std::shared_ptr<Model>& f) {
+std::shared_ptr<ngraph::snippets::op::Subgraph> LoweringTests::getSubgraph(const std::shared_ptr<Model>& f) {
+    std::shared_ptr<ngraph::snippets::op::Subgraph> subgraph;
     for (const auto &op : f->get_ops()) {
         bool is_subgraph = is_type<ngraph::snippets::op::Subgraph>(op);
         if (is_subgraph) {
@@ -73,6 +52,24 @@ void SnippetsLoweringTests::getSubgraph(std::shared_ptr<Model>& f) {
                      is_type<ov::op::v0::Result>(op),
                      "Functions provided for lowering tests is not fully tokenizable");
     }
+    return subgraph;
+}
+
+std::shared_ptr<ngraph::snippets::op::Subgraph> LoweringTests::getLoweredSubgraph(const std::shared_ptr<Model> &f) {
+    auto subgraph = getTokenizedSubgraph(f);
+    subgraph->set_generator(std::make_shared<DummyGenerator>());
+    subgraph->generate();
+    return subgraph;
+}
+
+std::shared_ptr<ngraph::snippets::op::Subgraph> LoweringTests::getTokenizedSubgraph(const std::shared_ptr<Model> &f) {
+    // Perform tokenization
+    ngraph::pass::Manager m;
+    m.register_pass<ngraph::snippets::pass::EnumerateNodes>();
+    m.register_pass<ngraph::snippets::pass::TokenizeSnippets>();
+    m.run_passes(f);
+    // Perform lowering
+    return getSubgraph(f);
 }
 
 }  // namespace snippets

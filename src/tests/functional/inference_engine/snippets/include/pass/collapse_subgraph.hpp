@@ -10,7 +10,7 @@ namespace ov {
 namespace test {
 namespace snippets {
 
-class SnippetsCollapseSubgraphTests : public TransformationTestsF {
+class CollapseSubgraphTests : public TransformationTestsF {
 public:
     virtual void run();
 };
