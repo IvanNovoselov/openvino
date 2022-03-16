@@ -30,7 +30,7 @@ void SnippetsMoveBroadcastTests::SetUp() {
     std::tie(input_shapes[0], input_shapes[1], broadcast_shapes[0], broadcast_shapes[1]) = this->GetParam();
 }
 
-TEST_P(SnippetsMoveBroadcastTests, CompareWithRefImpl) {
+TEST_P(SnippetsMoveBroadcastTests, Add) {
     const auto &f = AddFunctionLoweredBroadcast(input_shapes, broadcast_shapes);
     function = f.getOriginal();
     function_ref = f.getLowered();
@@ -44,7 +44,7 @@ std::vector<Shape> inputShapes0 {{1, 1, 1, 3}, {1, 1, 2, 3}, {1, 8, 1, 3}};
 std::vector<Shape> inputShapes1 {{1, 8, 2, 3}};
 Shape broadcastShape {1, 8, 2, 3};
 Shape emptyShape {};
-INSTANTIATE_TEST_SUITE_P(BroadcastOnInput0, SnippetsMoveBroadcastTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastOn0, SnippetsMoveBroadcastTests,
                          ::testing::Combine(
                                  ::testing::ValuesIn(inputShapes0),
                                  ::testing::ValuesIn(inputShapes1),
@@ -52,7 +52,7 @@ INSTANTIATE_TEST_SUITE_P(BroadcastOnInput0, SnippetsMoveBroadcastTests,
                                  ::testing::Values(emptyShape)),
                          SnippetsMoveBroadcastTests::getTestCaseName);
 
-INSTANTIATE_TEST_SUITE_P(BroadcastOnInput1, SnippetsMoveBroadcastTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastOn1, SnippetsMoveBroadcastTests,
                          ::testing::Combine(
                                  ::testing::ValuesIn(inputShapes1),
                                  ::testing::ValuesIn(inputShapes0),
@@ -67,7 +67,7 @@ std::vector<multiInputParams> params = {std::make_tuple(inputShapesBoth0[0], inp
                                         std::make_tuple(inputShapesBoth0[1], inputShapesBoth1[1], broadcastShapeBoth, broadcastShapeBoth),
                                         std::make_tuple(inputShapesBoth0[2], inputShapesBoth1[2], broadcastShapeBoth, broadcastShapeBoth)};
 
-INSTANTIATE_TEST_SUITE_P(BroadcastOnBothInputs, SnippetsMoveBroadcastTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastOnBoth, SnippetsMoveBroadcastTests,
                          ::testing::ValuesIn(params),
                          SnippetsMoveBroadcastTests::getTestCaseName);
 
@@ -75,8 +75,8 @@ std::vector<multiInputParams> paramsNo = {std::make_tuple(inputShapesBoth0[0], i
                                         std::make_tuple(inputShapesBoth0[1], inputShapesBoth0[1], emptyShape, emptyShape),
                                         std::make_tuple(inputShapesBoth0[2], inputShapesBoth0[2], emptyShape, emptyShape)};
 
-INSTANTIATE_TEST_SUITE_P(NoBroadcast, SnippetsMoveBroadcastTests,
-                         ::testing::ValuesIn(params),
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_NoBroadcast, SnippetsMoveBroadcastTests,
+                         ::testing::ValuesIn(paramsNo),
                          SnippetsMoveBroadcastTests::getTestCaseName);
 } // namespace
 }  // namespace snippets

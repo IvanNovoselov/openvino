@@ -44,7 +44,7 @@ void SnippetsCanonicalizationTests::SetUp() {
     input_blocked_shapes = {std::get<1>(inputs[0]), std::get<1>(inputs[1])};
 }
 
-TEST_P(SnippetsCanonicalizationTests, CompareWithRefImpl) {
+TEST_P(SnippetsCanonicalizationTests, Add) {
     const auto &f = AddFunction(input_shapes);
     function = f.getOriginal();
     function_ref = f.getReference();
@@ -54,6 +54,7 @@ TEST_P(SnippetsCanonicalizationTests, CompareWithRefImpl) {
 }
 
 namespace {
+using ngraph::snippets::op::Subgraph;
 std::vector<Shape> input_shapes;
 Shape expected_output_shape;
 Subgraph::BlockedShapeVector input_blocked_shapes;
@@ -70,7 +71,7 @@ std::vector<std::tuple<Shape, Subgraph::BlockedShape>> blockedInput1{{{1, 1,  2,
                                                                      {{1, 1,  2, 1}, {{1, 1, 2, 1, 1},  {0, 1, 2, 3, 1}, prec}},
                                                                      {{1, 64, 1, 1}, {{1, 4, 1, 1, 16}, {0, 1, 2, 3, 1}, prec}}};
 
-INSTANTIATE_TEST_SUITE_P(BroadcastBlockedBlocked, SnippetsCanonicalizationTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastBlocked, SnippetsCanonicalizationTests,
                          ::testing::Combine(
                                  ::testing::Values(blockedInput0),
                                  ::testing::ValuesIn(blockedInput1),
@@ -84,7 +85,7 @@ std::vector<std::tuple<Shape, Subgraph::BlockedShape>> planarInput1{{{1, 1, 2, 5
                                                                     {{2, 5},       {{2, 5},    {0, 1},    prec}},
                                                                     {{5},          {{5},       {0},       prec}}};
 
-INSTANTIATE_TEST_SUITE_P(BroadcastBlockedPlanar, SnippetsCanonicalizationTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastPlanar, SnippetsCanonicalizationTests,
                          ::testing::Combine(
                                  ::testing::Values(blockedInput0),
                                  ::testing::ValuesIn(planarInput1),

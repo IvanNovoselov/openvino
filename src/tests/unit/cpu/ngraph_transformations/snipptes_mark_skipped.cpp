@@ -24,7 +24,7 @@ public:
     }
 };
 
-TEST_F(SnippetsMarkSkippedTests, smoke_SkipAfterInputs_EltwiseFunction) {
+TEST_F(SnippetsMarkSkippedTests, smoke_Snippets_SkipAfterInputsEltwise) {
     const auto &f = EltwiseFunction({{2, 3}, {1, 3}});
     function = f.getOriginal();
     // None subgraphs are expected, since the whole graph is an eltwise chain after input
@@ -32,7 +32,7 @@ TEST_F(SnippetsMarkSkippedTests, smoke_SkipAfterInputs_EltwiseFunction) {
     run();
 }
 
-TEST_F(SnippetsMarkSkippedTests, smoke_SkipAfterInputs_MatMulEltwiseBranchesFunction) {
+TEST_F(SnippetsMarkSkippedTests, smoke_Snippets_SkipAfterInputsMatMulEltwise) {
     const auto &f = MatMulEltwiseBranchesFunction(std::vector<Shape> {{1, 3, 4, 4}, {1, 3, 4, 4}});
     function = f.getOriginal();
     // Fully tokenizable, since inputs are followed by MatMul
@@ -40,7 +40,7 @@ TEST_F(SnippetsMarkSkippedTests, smoke_SkipAfterInputs_MatMulEltwiseBranchesFunc
     run();
 }
 
-TEST_F(SnippetsMarkSkippedTests, smoke_SkipConvFused_ConvMulActivation) {
+TEST_F(SnippetsMarkSkippedTests, smoke_Snippets_SkipConvFused_ConvMulActivation) {
     std::vector<std::shared_ptr<Node>> eltwiseOps {std::make_shared<ov::op::v1::Multiply>(),
                                                    std::make_shared<ov::op::v0::Tanh>(),
                                                    std::make_shared<ov::op::v0::Sqrt>()};

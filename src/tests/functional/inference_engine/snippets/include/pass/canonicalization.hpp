@@ -11,6 +11,7 @@ namespace test {
 namespace snippets {
 
 using BlockedShape = ngraph::snippets::op::Subgraph::BlockedShape;
+using BlockedShapeVector = ngraph::snippets::op::Subgraph::BlockedShapeVector;
 
 // todo: implement tests with 3 inputs and two outputs (aka SnippetsCanonicalizationParams3Inputs)
 // Note that the expected output shape isn't necessary equal to one of the output blocked_shapes.
@@ -22,7 +23,7 @@ typedef std::tuple<
         Shape // expected output Shape
 > SnippetsCanonicalizationParamsInputs;
 
-using ngraph::snippets::op::Subgraph;
+
 class SnippetsCanonicalizationTests : public SnippetsLoweringTests, public testing::WithParamInterface<SnippetsCanonicalizationParamsInputs> {
 public:
     static std::string getTestCaseName(testing::TestParamInfo<SnippetsCanonicalizationParamsInputs> obj);
@@ -31,8 +32,8 @@ protected:
     void SetUp() override;
     std::vector<Shape> input_shapes;
     Shape expected_output_shape;
-    Subgraph::BlockedShapeVector input_blocked_shapes;
-    Subgraph::BlockedShapeVector output_blocked_shapes;
+    BlockedShapeVector input_blocked_shapes;
+    BlockedShapeVector output_blocked_shapes;
 };
 
 }  // namespace snippets

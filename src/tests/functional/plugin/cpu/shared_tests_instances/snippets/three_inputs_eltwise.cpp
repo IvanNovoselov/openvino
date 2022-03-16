@@ -12,7 +12,7 @@ namespace {
     const std::vector<InferenceEngine::Precision> netPrecisions = {
             InferenceEngine::Precision::FP32
     };
-    INSTANTIATE_TEST_SUITE_P(smoke_SnippetsSimple, ThreeInputsEltwise,
+    INSTANTIATE_TEST_SUITE_P(smoke_Snippets_Eltwise, ThreeInputsEltwise,
                          ::testing::Combine(
                                  ::testing::ValuesIn(netPrecisions),
                                  ::testing::Values(InferenceEngine::SizeVector({1, 64, 10, 10})),
@@ -23,7 +23,7 @@ namespace {
                                  ::testing::Values(CommonTestUtils::DEVICE_CPU)),
                              ThreeInputsEltwise::getTestCaseName);
 
-    INSTANTIATE_TEST_SUITE_P(smoke_SnippetsSimple, ThreeInputsEltwiseConvert,
+    INSTANTIATE_TEST_SUITE_P(smoke_Snippets_Eltwise, ThreeInputsEltwiseConvert,
             ::testing::Combine(
             ::testing::ValuesIn(netPrecisions),
             ::testing::Values(InferenceEngine::SizeVector({1, 64, 10, 10})),

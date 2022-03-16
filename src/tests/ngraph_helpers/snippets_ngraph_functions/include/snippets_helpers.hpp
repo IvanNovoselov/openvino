@@ -18,7 +18,8 @@ class SnippetsFunctionBase {
 public:
     SnippetsFunctionBase() = delete;
 
-    explicit SnippetsFunctionBase(std::vector<Shape> &inputShapes) : input_shapes{inputShapes} {};
+    explicit SnippetsFunctionBase(std::vector<Shape> &inputShapes, ov::element::Type_t precision = element::f32)
+                : input_shapes{inputShapes}, precision{precision} {};
 
     std::shared_ptr<Model> getReference() const {
         std::shared_ptr<Model> function_ref = initReference();
@@ -51,8 +52,7 @@ protected:
         throw std::runtime_error("initLowered() for this class is not implemented");
     }
 
-    // only fp32 is currently supported by snippets
-    ov::element::Type_t precision = element::f32;
+    ov::element::Type_t precision;
     std::vector<Shape> input_shapes;
 
     virtual void validate_function(const std::shared_ptr<Model> &f) const;

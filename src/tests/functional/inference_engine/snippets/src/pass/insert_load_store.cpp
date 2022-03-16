@@ -32,7 +32,7 @@ void SnippetsLoadStoreTests::SetUp() {
         broadcast_shapes[0], broadcast_shapes[1], broadcast_shapes[2]) = this->GetParam();
 }
 
-TEST_P(SnippetsLoadStoreTests, CompareWithRefEltwise) {
+TEST_P(SnippetsLoadStoreTests, EltwiseThreeInputs) {
     const auto &f = EltwiseFunctionThreeInputsLowered(input_shapes, broadcast_shapes);
     function = f.getOriginal();
     function_ref = f.getLowered();
@@ -48,7 +48,7 @@ std::vector<Shape> inputShapes2{{1, 1, 2, 5, 1}, {1, 4, 1, 5, 1}, {1, 4, 1, 5, 1
 Shape exec_domain{1, 4, 2, 5, 16};
 Shape emptyShape{};
 
-INSTANTIATE_TEST_SUITE_P(BroadcastLoadOnInput1, SnippetsLoadStoreTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastLoad, SnippetsLoadStoreTests,
                          ::testing::Combine(
                                  ::testing::Values(exec_domain),
                                  ::testing::ValuesIn(inputShapes1),
@@ -59,7 +59,7 @@ INSTANTIATE_TEST_SUITE_P(BroadcastLoadOnInput1, SnippetsLoadStoreTests,
                          SnippetsLoadStoreTests::getTestCaseName);
 
 
-INSTANTIATE_TEST_SUITE_P(BroadcastMoveOnInput1, SnippetsLoadStoreTests,
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastMove, SnippetsLoadStoreTests,
                          ::testing::Combine(
                                  ::testing::Values(exec_domain),
                                  ::testing::Values(Shape {1, 4, 1, 5, 16}),
