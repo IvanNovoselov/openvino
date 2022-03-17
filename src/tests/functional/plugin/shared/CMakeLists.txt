@@ -6,6 +6,8 @@ set(TARGET_NAME funcSharedTests)
 
 set(PUBLIC_HEADERS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
+set(DEPENDENCIES mock_engine)
+
 if(ENABLE_HETERO)
     list(APPEND DEPENDENCIES openvino_hetero_plugin)
 endif()
