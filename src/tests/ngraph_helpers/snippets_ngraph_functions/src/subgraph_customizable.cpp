@@ -11,7 +11,7 @@ namespace ov {
 namespace test {
 namespace snippets {
 
-std::shared_ptr<ov::Model> ConvMulActivation::initOriginal() const {
+std::shared_ptr<ov::Model> ConvMulActivationFunction::initOriginal() const {
     auto conv_param = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     const auto channels = input_shapes[0][1];
     ngraph::Shape strides(2, 1);
@@ -33,7 +33,7 @@ std::shared_ptr<ov::Model> ConvMulActivation::initOriginal() const {
 
     return std::make_shared<ov::Model>(NodeVector{eltwise_unary_2}, ParameterVector{conv_param, eltwise_param});
 }
-std::shared_ptr<ov::Model> ConvMulActivation::initReference() const {
+std::shared_ptr<ov::Model> ConvMulActivationFunction::initReference() const {
     auto conv_param = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     ngraph::Shape strides(2, 1);
     std::vector<ptrdiff_t> pad_begin(2, 1), pad_end(2, 1);

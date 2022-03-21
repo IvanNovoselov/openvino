@@ -31,7 +31,7 @@ std::shared_ptr<ov::Model> AddFunctionLoweredBroadcast::initLowered() const {
     auto store = std::make_shared<ngraph::snippets::op::Store>(add);
     return std::make_shared<ov::Model>(NodeVector{store}, ParameterVector{data0, data1});
 }
-std::shared_ptr<ov::Model> EltwiseFunctionThreeInputsLowered::initLowered() const {
+std::shared_ptr<ov::Model> EltwiseThreeInputsLoweredFunction::initLowered() const {
     // todo: implement conversion between std::vector<size_t> and std::vector<Shape>
     auto input_params = ngraph::builder::makeParams(precision, {input_shapes[0], input_shapes[1], input_shapes[2]});
     auto load_or_broadcastload = [&](size_t i) -> std::shared_ptr<Node> {

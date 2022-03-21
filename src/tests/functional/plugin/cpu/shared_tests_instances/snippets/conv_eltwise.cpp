@@ -9,14 +9,10 @@ using namespace LayerTestsDefinitions;
 
 namespace {
 
-    const std::vector<InferenceEngine::Precision> netPrecisions = {
-            InferenceEngine::Precision::FP32
-    };
     InferenceEngine::SizeVector convInputShape {1, 10, 16, 16};
     std::vector<std::shared_ptr<ov::Node>> binaryEltwise {std::make_shared<ov::op::v1::Add>(), std::make_shared<ov::op::v1::Multiply>()};
     INSTANTIATE_TEST_SUITE_P(smoke_Snippets_ConvAdd, ConvEltwise,
             ::testing::Combine(
-            ::testing::ValuesIn(netPrecisions),
             ::testing::Values(convInputShape),
             ::testing::Values(convInputShape),
             ::testing::Values(std::shared_ptr<ov::Node> (std::make_shared<ov::op::v1::Add>())), // non-tokenizable
@@ -26,13 +22,12 @@ namespace {
             ConvEltwise::getTestCaseName);
 
     INSTANTIATE_TEST_SUITE_P(smoke_Snippets_ConvMul, ConvEltwise,
-                         ::testing::Combine(
-                                 ::testing::ValuesIn(netPrecisions),
-                                 ::testing::Values(convInputShape),
-                                 ::testing::Values(convInputShape),
-                                 ::testing::Values(std::shared_ptr<ov::Node> (std::make_shared<ov::op::v1::Multiply>())), // fully-tokenizable
-                                 ::testing::Values(7), //num nodes = 7: Convert + Convolution + Subgraph + Reorders
-                                 ::testing::Values(1), // num subgraphs = 0: Mul (2 inputs) can't be fused into Conv => Subgraph is created
-                                 ::testing::Values(CommonTestUtils::DEVICE_CPU)),
-                         ConvEltwise::getTestCaseName);
+            ::testing::Combine(
+            ::testing::Values(convInputShape),
+            ::testing::Values(convInputShape),
+            ::testing::Values(std::shared_ptr<ov::Node> (std::make_shared<ov::op::v1::Multiply>())), // fully-tokenizable
+            ::testing::Values(7), //num nodes = 7: Convert + Convolution + Subgraph + Reorders
+            ::testing::Values(1), // num subgraphs = 0: Mul (2 inputs) can't be fused into Conv => Subgraph is created
+            ::testing::Values(CommonTestUtils::DEVICE_CPU)),
+            ConvEltwise::getTestCaseName);
 }  // namespace

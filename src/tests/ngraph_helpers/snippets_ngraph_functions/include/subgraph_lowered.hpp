@@ -34,10 +34,10 @@ private:
     std::vector<Shape> broadcast_shapes;
 };
 
-class EltwiseFunctionThreeInputsLowered : public EltwiseFunctionThreeInputs {
+class EltwiseThreeInputsLoweredFunction : public EltwiseThreeInputsFunction {
 public:
-    explicit EltwiseFunctionThreeInputsLowered(std::vector<Shape> inputShapes, std::vector<Shape> broadcastShapes) :
-            EltwiseFunctionThreeInputs(std::move(inputShapes)), broadcast_shapes{std::move(broadcastShapes)} {
+    explicit EltwiseThreeInputsLoweredFunction(std::vector<Shape> inputShapes, std::vector<Shape> broadcastShapes) :
+            EltwiseThreeInputsFunction(std::move(inputShapes)), broadcast_shapes{std::move(broadcastShapes)} {
         NGRAPH_CHECK(input_shapes.size() == broadcast_shapes.size(),
                      "Broadcast shapes should have the same size as input_shapes");
     }

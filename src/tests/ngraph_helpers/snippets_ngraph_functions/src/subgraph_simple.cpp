@@ -72,7 +72,7 @@ std::shared_ptr<ov::Model> EltwiseFunction::initReference() const {
     return std::make_shared<ov::Model>(NodeVector{mul}, ParameterVector{data0, data1});
 }
 
-std::shared_ptr<ov::Model> EltwiseFunctionThreeInputs::initOriginal() const {
+std::shared_ptr<ov::Model> EltwiseThreeInputsFunction::initOriginal() const {
     auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
     auto data2 = std::make_shared<op::v0::Parameter>(precision, input_shapes[2]);
@@ -84,7 +84,7 @@ std::shared_ptr<ov::Model> EltwiseFunctionThreeInputs::initOriginal() const {
     return std::make_shared<ov::Model>(NodeVector{mul}, ParameterVector{data0, data1, data2});
 }
 
-std::shared_ptr<ov::Model> EltwiseFunctionThreeInputsConvert::initOriginal() const {
+std::shared_ptr<ov::Model> EltwiseThreeInputsConvertFunction::initOriginal() const {
     auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
     auto data2 = std::make_shared<op::v0::Parameter>(precision, input_shapes[2]);
@@ -157,7 +157,7 @@ std::shared_ptr<ov::Model> MatMulEltwiseBranchesFunction::initReference() const 
     return std::make_shared<Model>(NodeVector{ result }, ParameterVector{ data_1, data_2 });
 }
 
-std::shared_ptr<ov::Model> EltwiseLogLoop::initOriginal() const {
+std::shared_ptr<ov::Model> EltwiseLogLoopFunction::initOriginal() const {
     auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
     auto add = std::make_shared<op::v1::Add>(data0, data1);
@@ -166,7 +166,7 @@ std::shared_ptr<ov::Model> EltwiseLogLoop::initOriginal() const {
     auto mul = std::make_shared<op::v1::Multiply>(hswish, log);
     return std::make_shared<Model>(NodeVector{mul}, ParameterVector{data0, data1});
 }
-std::shared_ptr<ov::Model> EltwiseLogLoop::initReference() const {
+std::shared_ptr<ov::Model> EltwiseLogLoopFunction::initReference() const {
     auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
     auto indata0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);

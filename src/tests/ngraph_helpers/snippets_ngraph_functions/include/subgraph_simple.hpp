@@ -37,9 +37,8 @@ protected:
 //      Result
 class AddConvertFunction : public SnippetsFunctionBase {
 public:
-    explicit AddConvertFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit AddConvertFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes, ov::element::i32) {
         NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
-        precision = ov::element::i32;
     }
 protected:
     std::shared_ptr<ov::Model> initOriginal() const override;
@@ -67,26 +66,23 @@ protected:
 //    Add      Multiply
 //      Subtract
 //       Result
-class EltwiseFunctionThreeInputs : public SnippetsFunctionBase {
+class EltwiseThreeInputsFunction : public SnippetsFunctionBase {
 public:
-    explicit EltwiseFunctionThreeInputs(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit EltwiseThreeInputsFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
         NGRAPH_CHECK(input_shapes.size() == 3, "Got invalid number of input shapes");
     }
 protected:
     std::shared_ptr<ov::Model> initOriginal() const override;
-//    std::shared_ptr<ov::Model> initReference() const override;
 };
 /// EltwiseFunctionThreeInputs with Converts after inputs to to WA CPU-specific disabling after inputs
 /// See AddConvert for details.
-class EltwiseFunctionThreeInputsConvert : public SnippetsFunctionBase {
+class EltwiseThreeInputsConvertFunction : public SnippetsFunctionBase {
 public:
-    explicit EltwiseFunctionThreeInputsConvert(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit EltwiseThreeInputsConvertFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes, ov::element::i32) {
         NGRAPH_CHECK(input_shapes.size() == 3, "Got invalid number of input shapes");
-        precision = ov::element::i32;
     }
 protected:
     std::shared_ptr<ov::Model> initOriginal() const override;
-//    std::shared_ptr<ov::Model> initReference() const override;
 };
 /// MatMul with two eltwise branches joined with Add just before the Result.
 /// Tokenized by attaching eltwises to separate subgraphs, and then joining them together.
@@ -118,9 +114,9 @@ protected:
 //  HSwish   Log
 //      Multiply
 //       Result
-class EltwiseLogLoop : public SnippetsFunctionBase {
+class EltwiseLogLoopFunction : public SnippetsFunctionBase {
 public:
-    explicit EltwiseLogLoop(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit EltwiseLogLoopFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
             NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
     }
 protected:

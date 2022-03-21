@@ -30,7 +30,7 @@ void InsertLoadStoreTests::SetUp() {
     std::vector<Shape> broadcastShapes(3);
     std::tie(inputShapes[0], inputShapes[1], inputShapes[2],
              broadcastShapes[0], broadcastShapes[1], broadcastShapes[2]) = this->GetParam();
-    snippets_function = std::make_shared<EltwiseFunctionThreeInputsLowered>(inputShapes, broadcastShapes);
+    snippets_function = std::make_shared<EltwiseThreeInputsLoweredFunction>(inputShapes, broadcastShapes);
 }
 
 TEST_P(InsertLoadStoreTests, ThreeInputsEltwise) {

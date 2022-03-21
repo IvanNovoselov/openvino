@@ -43,7 +43,7 @@ TEST_F(SnippetsMarkSkippedTests, smoke_Snippets_SkipConvFused_ConvMulActivation)
                                                    std::make_shared<ov::op::v0::Tanh>(),
                                                    std::make_shared<ov::op::v0::Sqrt>()};
     std::vector<Shape> inputShapes {{1, 2, 16, 16}, {1, 2, 1, 16}};
-    const auto &f = ConvMulActivation(inputShapes, eltwiseOps);
+    const auto &f = ConvMulActivationFunction(inputShapes, eltwiseOps);
     function = f.getOriginal();
     // Fully tokenizable, since Mul with 2 inputs isn't fused into Convolution
     function_ref = f.getReference();
@@ -55,7 +55,7 @@ TEST_F(SnippetsMarkSkippedTests, smoke_SkipConvFused_ConvSumActivation) {
                                                    std::make_shared<ov::op::v0::Tanh>(),
                                                    std::make_shared<ov::op::v0::Sqrt>()};
     std::vector<Shape> inputShapes {{1, 2, 16, 16}, {1, 2, 1, 16}};
-    const auto &f = ConvMulActivation(inputShapes, eltwiseOps);
+    const auto &f = ConvMulActivationFunction(inputShapes, eltwiseOps);
     function = f.getOriginal();
     // Not tokenizable, since Add + Eltwises can be fused into Convolution
     function_ref = f.getOriginal();

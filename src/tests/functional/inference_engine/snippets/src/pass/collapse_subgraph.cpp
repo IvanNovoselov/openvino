@@ -33,7 +33,7 @@ TEST_F(CollapseSubgraphTests, smoke_Snippets_MatMulWithEltwise) {
 }
 
 TEST_F(CollapseSubgraphTests, smoke_Snippets_AvoidLoopEltwise) {
-    const auto &f = EltwiseLogLoop(std::vector<Shape> {{2, 5}, {2, 1}});
+    const auto &f = EltwiseLogLoopFunction(std::vector<Shape> {{2, 5}, {2, 1}});
     function = f.getOriginal();
     function_ref = f.getReference();
     run();

@@ -52,8 +52,8 @@ protected:
         throw std::runtime_error("initLowered() for this class is not implemented");
     }
 
-    ov::element::Type_t precision;
-    std::vector<Shape> input_shapes;
+    const ov::element::Type_t precision;
+    const std::vector<Shape> input_shapes;
 
     virtual void validate_function(const std::shared_ptr<Model> &f) const;
 };
