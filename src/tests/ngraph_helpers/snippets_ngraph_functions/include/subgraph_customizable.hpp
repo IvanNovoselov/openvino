@@ -26,7 +26,7 @@ namespace snippets {
 //          Result
 class ConvMulActivationFunction : public SnippetsFunctionCustomizable {
 public:
-    explicit ConvMulActivationFunction(std::vector<Shape> inputShapes, std::vector<std::shared_ptr<Node>> customOps)
+    explicit ConvMulActivationFunction(const std::vector<Shape>& inputShapes, const std::vector<std::shared_ptr<Node>>& customOps)
             : SnippetsFunctionCustomizable(inputShapes, customOps, {2, 1, 1}) {
             NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
             NGRAPH_CHECK(input_shapes[0].size() == 4, "Only 4D input shapes are currently supported");

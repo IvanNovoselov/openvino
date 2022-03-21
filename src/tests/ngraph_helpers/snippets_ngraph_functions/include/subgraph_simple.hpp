@@ -22,7 +22,7 @@ namespace snippets {
 //   Result
 class AddFunction : public SnippetsFunctionBase {
 public:
-    explicit AddFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit AddFunction(const std::vector<Shape>& inputShapes) : SnippetsFunctionBase(inputShapes) {
         NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
     }
 protected:
@@ -37,7 +37,7 @@ protected:
 //      Result
 class AddConvertFunction : public SnippetsFunctionBase {
 public:
-    explicit AddConvertFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes, ov::element::i32) {
+    explicit AddConvertFunction(const std::vector<Shape>& inputShapes) : SnippetsFunctionBase(inputShapes, ov::element::i32) {
         NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
     }
 protected:
@@ -53,7 +53,7 @@ protected:
 //   Result
 class EltwiseFunction : public SnippetsFunctionBase {
 public:
-    explicit EltwiseFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit EltwiseFunction(const std::vector<Shape>& inputShapes) : SnippetsFunctionBase(inputShapes) {
         NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
     }
 protected:
@@ -68,7 +68,7 @@ protected:
 //       Result
 class EltwiseThreeInputsFunction : public SnippetsFunctionBase {
 public:
-    explicit EltwiseThreeInputsFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit EltwiseThreeInputsFunction(const std::vector<Shape>& inputShapes) : SnippetsFunctionBase(inputShapes) {
         NGRAPH_CHECK(input_shapes.size() == 3, "Got invalid number of input shapes");
     }
 protected:
@@ -78,7 +78,8 @@ protected:
 /// See AddConvert for details.
 class EltwiseThreeInputsConvertFunction : public SnippetsFunctionBase {
 public:
-    explicit EltwiseThreeInputsConvertFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes, ov::element::i32) {
+    explicit EltwiseThreeInputsConvertFunction(const std::vector<Shape>& inputShapes) :
+        SnippetsFunctionBase(inputShapes, ov::element::i32) {
         NGRAPH_CHECK(input_shapes.size() == 3, "Got invalid number of input shapes");
     }
 protected:
@@ -93,7 +94,7 @@ protected:
 //                     Result
 class MatMulEltwiseBranchesFunction : public SnippetsFunctionBase {
 public:
-    explicit MatMulEltwiseBranchesFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit MatMulEltwiseBranchesFunction(const std::vector<Shape>& inputShapes) : SnippetsFunctionBase(inputShapes) {
             NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
             NGRAPH_CHECK(input_shapes[0].size() == 4 && input_shapes[1].size() == 4,
                          "Only 4D input shapes are currently supported by this test");
@@ -116,7 +117,7 @@ protected:
 //       Result
 class EltwiseLogLoopFunction : public SnippetsFunctionBase {
 public:
-    explicit EltwiseLogLoopFunction(std::vector<Shape> inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit EltwiseLogLoopFunction(const std::vector<Shape>& inputShapes) : SnippetsFunctionBase(inputShapes) {
             NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
     }
 protected:

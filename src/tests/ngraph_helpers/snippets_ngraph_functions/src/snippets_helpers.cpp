@@ -19,11 +19,10 @@ void SnippetsFunctionBase::validate_function(const std::shared_ptr<Model> &f) co
                      "Passed input shapes and produced function are inconsistent.");
 }
 
-SnippetsFunctionCustomizable::SnippetsFunctionCustomizable(std::vector<Shape>& inputShapes,
-                                                           std::vector<std::shared_ptr<Node>>& customOps,
-                                                           std::vector<size_t>&& customOpsNumInputs)
-        : SnippetsFunctionBase(inputShapes), custom_ops{customOps} {
-    custom_ops_num_inputs = std::move(customOpsNumInputs);
+SnippetsFunctionCustomizable::SnippetsFunctionCustomizable(const std::vector<Shape>& inputShapes,
+                                                           const std::vector<std::shared_ptr<Node>>& customOps,
+                                                           const std::vector<size_t>&& customOpsNumInputs)
+        : SnippetsFunctionBase(inputShapes), custom_ops{customOps}, custom_ops_num_inputs{customOpsNumInputs} {
     NGRAPH_CHECK(custom_ops_num_inputs.size() == custom_ops.size(), "Got inconsistent numbers of custom ops and custom ops inputs");
     // We need to set dummy inputs to increase input arguments count,
     // so clone_with_new_inputs() could pass without errors inside initOriginal() and initReference().

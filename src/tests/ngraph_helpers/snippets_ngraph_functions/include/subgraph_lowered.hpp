@@ -21,8 +21,8 @@ namespace snippets {
 
 class AddFunctionLoweredBroadcast : public AddFunction {
 public:
-    explicit AddFunctionLoweredBroadcast(std::vector<Shape> inputShapes, std::vector<Shape> broadcastShapes) :
-        AddFunction(std::move(inputShapes)), broadcast_shapes{std::move(broadcastShapes)} {
+    explicit AddFunctionLoweredBroadcast(const std::vector<Shape>& inputShapes, const std::vector<Shape>& broadcastShapes) :
+        AddFunction(inputShapes), broadcast_shapes{broadcastShapes} {
         NGRAPH_CHECK(input_shapes.size() == broadcast_shapes.size(),
                      "Broadcast shapes should have the same size as input_shapes");
     }
@@ -36,8 +36,8 @@ private:
 
 class EltwiseThreeInputsLoweredFunction : public EltwiseThreeInputsFunction {
 public:
-    explicit EltwiseThreeInputsLoweredFunction(std::vector<Shape> inputShapes, std::vector<Shape> broadcastShapes) :
-            EltwiseThreeInputsFunction(std::move(inputShapes)), broadcast_shapes{std::move(broadcastShapes)} {
+    explicit EltwiseThreeInputsLoweredFunction(const std::vector<Shape>& inputShapes, const std::vector<Shape>& broadcastShapes) :
+            EltwiseThreeInputsFunction(inputShapes), broadcast_shapes{broadcastShapes} {
         NGRAPH_CHECK(input_shapes.size() == broadcast_shapes.size(),
                      "Broadcast shapes should have the same size as input_shapes");
     }

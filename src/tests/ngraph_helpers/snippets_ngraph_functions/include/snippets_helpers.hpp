@@ -18,7 +18,7 @@ class SnippetsFunctionBase {
 public:
     SnippetsFunctionBase() = delete;
 
-    explicit SnippetsFunctionBase(std::vector<Shape> &inputShapes, ov::element::Type_t precision = element::f32)
+    explicit SnippetsFunctionBase(const std::vector<Shape>& inputShapes, ov::element::Type_t precision = element::f32)
                 : input_shapes{inputShapes}, precision{precision} {};
 
     std::shared_ptr<Model> getReference() const {
@@ -67,9 +67,9 @@ protected:
 class SnippetsFunctionCustomizable : public SnippetsFunctionBase {
 public:
     SnippetsFunctionCustomizable() = delete;
-    SnippetsFunctionCustomizable(std::vector<Shape>& inputShapes,
-                                 std::vector<std::shared_ptr<Node>>& customOps,
-                                 std::vector<size_t>&& customOpsNumInputs);
+    SnippetsFunctionCustomizable(const std::vector<Shape>& inputShapes,
+                                 const std::vector<std::shared_ptr<Node>>& customOps,
+                                 const std::vector<size_t>&& customOpsNumInputs);
 
 protected:
     std::vector<std::shared_ptr<Node>> custom_ops;
