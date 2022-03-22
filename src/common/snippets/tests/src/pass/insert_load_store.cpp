@@ -11,7 +11,7 @@ namespace ov {
 namespace test {
 namespace snippets {
 
-std::string InsertLoadStoreTests::getTestCaseName(testing::TestParamInfo<multiInputParams> obj) {
+std::string InsertLoadStoreTests::getTestCaseName(testing::TestParamInfo<insertLoadStoreParams> obj) {
     std::vector<Shape> inputShapes(3);
     std::vector<Shape> broadcastShapes(3);
     std::tie(inputShapes[0], inputShapes[1], inputShapes[2],

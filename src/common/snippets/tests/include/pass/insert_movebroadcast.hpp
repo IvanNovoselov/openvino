@@ -20,12 +20,12 @@ typedef std::tuple<
         Shape, // Input shape 1
         Shape, // Broadcast shape 0
         Shape // Broadcast shape 1
-> multiInputParams;
+> insertMoveBroadcastParams;
 
 using ngraph::snippets::op::Subgraph;
-class InsertMoveBroadcastTests : public LoweringTests, public testing::WithParamInterface<multiInputParams> {
+class InsertMoveBroadcastTests : public LoweringTests, public testing::WithParamInterface<insertMoveBroadcastParams> {
 public:
-    static std::string getTestCaseName(testing::TestParamInfo<multiInputParams> obj);
+    static std::string getTestCaseName(testing::TestParamInfo<insertMoveBroadcastParams> obj);
 protected:
     void SetUp() override;
     std::shared_ptr<SnippetsFunctionBase> snippets_function;

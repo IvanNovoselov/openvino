@@ -10,7 +10,6 @@ using namespace LayerTestsDefinitions;
 namespace {
 
     InferenceEngine::SizeVector convInputShape {1, 10, 16, 16};
-    std::vector<std::shared_ptr<ov::Node>> binaryEltwise {std::make_shared<ov::op::v1::Add>(), std::make_shared<ov::op::v1::Multiply>()};
     INSTANTIATE_TEST_SUITE_P(smoke_Snippets_ConvAdd, ConvEltwise,
             ::testing::Combine(
             ::testing::Values(convInputShape),

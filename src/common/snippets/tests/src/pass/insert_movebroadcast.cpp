@@ -11,7 +11,7 @@ namespace ov {
 namespace test {
 namespace snippets {
 
-std::string InsertMoveBroadcastTests::getTestCaseName(testing::TestParamInfo<multiInputParams> obj) {
+std::string InsertMoveBroadcastTests::getTestCaseName(testing::TestParamInfo<insertMoveBroadcastParams> obj) {
     std::vector<Shape> inputShapes(2);
     std::vector<Shape> broadcastShapes(2);
     std::tie(inputShapes[0], inputShapes[1], broadcastShapes[0], broadcastShapes[1]) = obj.param;
@@ -62,7 +62,7 @@ INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastOn1, InsertMoveBroadcastTests,
 std::vector<Shape> inputShapesBoth0 {{4, 1, 2, 3}, {1, 8, 1, 3}, {1, 1, 2, 3}};
 std::vector<Shape> inputShapesBoth1 {{1, 8, 1, 3}, {4, 1, 2, 3}, {4, 8, 1, 3}};
 Shape broadcastShapeBoth{4, 8, 2, 3};
-std::vector<multiInputParams> params = {std::make_tuple(inputShapesBoth0[0], inputShapesBoth1[0], broadcastShapeBoth, broadcastShapeBoth),
+std::vector<insertMoveBroadcastParams> params = {std::make_tuple(inputShapesBoth0[0], inputShapesBoth1[0], broadcastShapeBoth, broadcastShapeBoth),
                                         std::make_tuple(inputShapesBoth0[1], inputShapesBoth1[1], broadcastShapeBoth, broadcastShapeBoth),
                                         std::make_tuple(inputShapesBoth0[2], inputShapesBoth1[2], broadcastShapeBoth, broadcastShapeBoth)};
 
@@ -70,7 +70,7 @@ INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastOnBoth, InsertMoveBroadcastTest
                          ::testing::ValuesIn(params),
                          InsertMoveBroadcastTests::getTestCaseName);
 
-std::vector<multiInputParams> paramsNo = {std::make_tuple(inputShapesBoth0[0], inputShapesBoth0[0], emptyShape, emptyShape),
+std::vector<insertMoveBroadcastParams> paramsNo = {std::make_tuple(inputShapesBoth0[0], inputShapesBoth0[0], emptyShape, emptyShape),
                                         std::make_tuple(inputShapesBoth0[1], inputShapesBoth0[1], emptyShape, emptyShape),
                                         std::make_tuple(inputShapesBoth0[2], inputShapesBoth0[2], emptyShape, emptyShape)};
 

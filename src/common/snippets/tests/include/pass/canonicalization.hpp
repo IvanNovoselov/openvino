@@ -22,12 +22,12 @@ typedef std::tuple<
         std::tuple<Shape, BlockedShape>, // Shape & BlockedShape for input 0
         BlockedShape, // BlockedShape output shape passed to canonicalize()
         Shape // expected output Shape
-> SnippetsCanonicalizationParamsInputs;
+> canonicalizationParams;
 
 
-class CanonicalizationTests : public LoweringTests, public testing::WithParamInterface<SnippetsCanonicalizationParamsInputs> {
+class CanonicalizationTests : public LoweringTests, public testing::WithParamInterface<canonicalizationParams> {
 public:
-    static std::string getTestCaseName(testing::TestParamInfo<SnippetsCanonicalizationParamsInputs> obj);
+    static std::string getTestCaseName(testing::TestParamInfo<canonicalizationParams> obj);
 
 protected:
     void SetUp() override;

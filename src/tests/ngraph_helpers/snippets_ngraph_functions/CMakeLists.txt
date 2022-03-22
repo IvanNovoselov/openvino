@@ -24,7 +24,6 @@ addIeTarget(
             PUBLIC
                 openvino::runtime::dev
                 commonTestUtils
-            PRIVATE
                 inference_engine_snippets
         ADD_CPPLINT
         DEVELOPER_PACKAGE

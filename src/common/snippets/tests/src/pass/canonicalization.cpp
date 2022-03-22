@@ -12,7 +12,7 @@ namespace test {
 namespace snippets {
 using ngraph::snippets::op::Subgraph;
 
-std::string CanonicalizationTests::getTestCaseName(testing::TestParamInfo<SnippetsCanonicalizationParamsInputs> obj) {
+std::string CanonicalizationTests::getTestCaseName(testing::TestParamInfo<canonicalizationParams> obj) {
     std::vector<std::tuple<Shape, Subgraph::BlockedShape>> inputs(2);
     Subgraph::BlockedShape output;
     Shape expectedOutput;

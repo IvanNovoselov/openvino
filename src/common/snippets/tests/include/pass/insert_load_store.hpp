@@ -25,11 +25,11 @@ typedef std::tuple<
         Shape, // Broadcast shape 0
         Shape, // Broadcast shape 1
         Shape // Broadcast shape 2
-> multiInputParams;
+> insertLoadStoreParams;
 
-class InsertLoadStoreTests : public LoweringTests, public testing::WithParamInterface<multiInputParams> {
+class InsertLoadStoreTests : public LoweringTests, public testing::WithParamInterface<insertLoadStoreParams> {
 public:
-    static std::string getTestCaseName(testing::TestParamInfo<multiInputParams> obj);
+    static std::string getTestCaseName(testing::TestParamInfo<insertLoadStoreParams> obj);
 protected:
     void SetUp() override;
     std::shared_ptr<SnippetsFunctionBase> snippets_function;
