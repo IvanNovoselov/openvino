@@ -53,7 +53,7 @@ TEST_P(CanonicalizationTests, Add) {
     ASSERT_DIMS_EQ(canonical_output_shape, expected_output_shape);
 }
 
-namespace {
+namespace CanonicalizationTestsInstantiation {
 using ngraph::snippets::op::Subgraph;
 std::vector<Shape> input_shapes;
 Shape expected_output_shape;
@@ -91,7 +91,7 @@ INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastPlanar, CanonicalizationTests,
                                  ::testing::Values(output),
                                  ::testing::Values(canonical_shape)),
                          CanonicalizationTests::getTestCaseName);
-} // namespace
+} // namespace CanonicalizationTestsInstantiation
 }  // namespace snippets
 }  // namespace test
 }  // namespace ov

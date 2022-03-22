@@ -39,7 +39,7 @@ TEST_P(InsertLoadStoreTests, ThreeInputsEltwise) {
     function_ref = snippets_function->getLowered();
 }
 
-namespace {
+namespace InsertLoadStoreTestsInstantiation {
 using ov::Shape;
 std::vector<Shape> inputShapes1{{1, 1, 2, 5, 1}, {1, 4, 1, 5, 1}};
 std::vector<Shape> inputShapes2{{1, 1, 2, 5, 1}, {1, 4, 1, 5, 1}, {1, 4, 1, 5, 16}};
@@ -66,7 +66,7 @@ INSTANTIATE_TEST_SUITE_P(smoke_Snippets_BroadcastMove, InsertLoadStoreTests,
                                  ::testing::Values(exec_domain),
                                  ::testing::Values(exec_domain)),
                          InsertLoadStoreTests::getTestCaseName);
-} // namespace
+} // namespace InsertLoadStoreTestsInstantiation
 }  // namespace snippets
 }  // namespace test
 }  // namespace ov

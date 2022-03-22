@@ -37,7 +37,7 @@ TEST_P(InsertMoveBroadcastTests, AddBroadcast) {
     function_ref = snippets_function->getLowered();
 }
 
-namespace {
+namespace InsertMoveBroadcastTestsInstantiation {
 using ov::Shape;
 std::vector<Shape> inputShapes0 {{1, 1, 1, 3}, {1, 1, 2, 3}, {1, 8, 1, 3}};
 std::vector<Shape> inputShapes1 {{1, 8, 2, 3}};
@@ -77,7 +77,7 @@ std::vector<insertMoveBroadcastParams> paramsNo = {std::make_tuple(inputShapesBo
 INSTANTIATE_TEST_SUITE_P(smoke_Snippets_NoBroadcast, InsertMoveBroadcastTests,
                          ::testing::ValuesIn(paramsNo),
                          InsertMoveBroadcastTests::getTestCaseName);
-} // namespace
+} // namespace InsertMoveBroadcastTestsInstantiation
 }  // namespace snippets
 }  // namespace test
 }  // namespace ov
