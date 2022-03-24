@@ -29,6 +29,10 @@ struct jit_snippets_compile_args {
     int64_t data_offsets[SNIPPETS_MAX_SNIPPETS_DIMS * SNIPPETS_MAX_HARNESS_DIMS] = {};
     std::vector<size_t> output_dims = {};
 };
+
+std::vector<int> avalable_registers;
+std::vector<int> reserved_registers;
+        
 ///
 /// \brief    Kernel is the only entry point to Codogen Jit compilation. Kernel calculates appropriate data offsets,
 /// and invokes enclosed outer Tiles. Only 2d Tiles are currently supported, so the emitters should
@@ -101,16 +105,23 @@ private:
         const size_t num_inputs = in[0];
         const size_t num_outputs = in[1];
         const size_t num_params = num_inputs + num_outputs;
-        int reg64_tmp_start { 8 }; // R8, R9, R10, R11, R12, R13, R14, R15 inputs+outputs+1
         const int64_t harness_num_dims = jcp.output_dims.size() - 1;
 
         Reg64 reg_indexes   { dnnl::impl::cpu::x64::abi_param1 };
         Reg64 reg_const_params { dnnl::impl::cpu::x64::abi_param2 };
         Xbyak::Reg64 reg_tmp_64 { dnnl::impl::cpu::x64::abi_not_param1};
 
+        reserved_registers.push_back(reg_indexes.getIdx());
+        reserved_registers.push_back(reg_const_params.getIdx());
+        reserved_registers.push_back(reg_tmp_64.getIdx());
+
+        for (int reg_num = 0; reg_num < 16; reg_num++) {
+            if (std::all_of(reserved_registers.begin(), reserved_registers.end(), [reg_num](int x){return x!= reg_num;}))
+                avalable_registers.push_back(reg_num);
+        }
+
         h->preamble();
 
-        std::vector<Reg64> regs(num_params);
         auto init_ptrs_with_offsets = [&](Reg64 pointer, const int64_t *offsets) {
             for (int j = 0; j < harness_num_dims; j++) {
                 if (jcp.output_dims[j] != 1 && offsets[j] != 0) {
@@ -120,8 +131,9 @@ private:
                 }
             }
         };
+        std::vector<Reg64> regs(num_params);
         for (auto i = 0; i < num_params; i++) {
-            regs[i] = Reg64(reg64_tmp_start + i);
+            regs[i] = Reg64(avalable_registers[i]);
             if (i < num_inputs)
                 h->mov(regs[i], h->ptr[reg_const_params + GET_OFF(src_ptrs) + i * sizeof(void*)]);
             else
@@ -203,16 +215,15 @@ private:
         const size_t previous_inc = in[1]; // increment of a previous tile in the same dim (0 if the first tile in the dim)
         const size_t num_params = in[2];
         const size_t dim = in[3]; // tile dimension: 0 - outer, 1 - inner
-        const int reg64_tmp_start { 8 }; // R8, R9, R10, R11, R12, R13, R14, R15 inputs+outputs+1
-        Reg64 amount = Reg64(reg64_tmp_start + num_params); // amount
+        Reg64 amount = Reg64(reserved_registers[0]); // reuse reg_indexes
         std::array<Label, 2> for_body;
 
         // If R15 is not used, reserve it for use in scalar to avoid redundant push-pop's.
         // todo: Do we need explicitly check that code contains ScalarEmitter?
-        std::vector<size_t> local_gpr = reg64_tmp_start + num_params < 15 ? std::vector<size_t>{15} : std::vector<size_t>{};
+        std::vector<size_t> local_gpr { (size_t) reserved_registers[1] };
         std::vector<Reg64> regs(num_params);
         for (auto i = 0; dim == 0 && i < num_params; i++)
-            regs[i] = Reg64(reg64_tmp_start + i);
+            regs[i] = Reg64(avalable_registers[i]);
         // Loop processing could be simplified in some cases
         if (inc > jcp.scheduler_dims[dim]) {
             return;

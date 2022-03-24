@@ -151,8 +151,7 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
 
         // store only effective address
         if (auto result = std::dynamic_pointer_cast<snippets::op::Store>(n)) {
-            auto ea = reg64_tmp_start+static_cast<int64_t>(f->get_result_index(result) + f->get_parameters().size());
-            rt["effectiveAddress"] = ea;
+            rt["effectiveAddress"] = static_cast<int64_t>(f->get_result_index(result) + f->get_parameters().size());
             continue;
         }
         // store effective address and procced with vector registers
@@ -160,11 +159,9 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
             auto source = n->get_input_source_output(0).get_node_shared_ptr();
 
             if (auto param = ov::as_type_ptr<opset1::Parameter>(source)) {
-                auto ea = reg64_tmp_start+static_cast<int64_t>(f->get_parameter_index(param));
-                rt["effectiveAddress"] = ea;
+                rt["effectiveAddress"] = static_cast<int64_t>(f->get_parameter_index(param));
             } else if (auto constant = ov::as_type_ptr<opset1::Constant>(source)) {
-                auto ea = reg64_tmp_start+static_cast<int64_t>(f->get_parameters().size() + f->get_results().size() + 1 + constantID);
-                rt["effectiveAddress"] = ea;
+                rt["effectiveAddress"] = static_cast<int64_t>(f->get_parameters().size() + f->get_results().size() + 1 + constantID);
                 constantID++;
             } else {
                 throw ngraph_error("load/broadcast should follow only Parameter or non-Scalar constant");
