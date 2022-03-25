@@ -32,7 +32,7 @@ struct jit_snippets_compile_args {
 
 std::vector<int> avalable_registers;
 std::vector<int> reserved_registers;
-        
+
 ///
 /// \brief    Kernel is the only entry point to Codogen Jit compilation. Kernel calculates appropriate data offsets,
 /// and invokes enclosed outer Tiles. Only 2d Tiles are currently supported, so the emitters should
