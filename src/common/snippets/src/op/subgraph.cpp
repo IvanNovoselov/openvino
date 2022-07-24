@@ -20,6 +20,8 @@
 #include "transformations/common_optimizations/nop_elimination.hpp"
 #include "transformations/utils/utils.hpp"
 
+#include "transformations/utils/utils.hpp"
+
 #include <ngraph/pass/manager.hpp>
 #include "ngraph/pass/constant_folding.hpp"
 #include <openvino/pass/serialize.hpp>
@@ -99,16 +101,9 @@ auto snippets::op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ov::Nod
 
     auto body_node = node->clone_with_new_inputs(body_inputs);
     body_node->set_friendly_name(node->get_friendly_name());
-    NGRAPH_SUPPRESS_DEPRECATED_START
     for (size_t i = 0; i < node->get_output_size(); i++) {
-        const std::string new_name = ngraph::op::util::get_ie_output_name(node);
-        auto& out_tensor = body_node->get_output_tensor(i);
-        out_tensor.set_name(new_name);
-        if (!node->get_output_tensor(i).get_names().empty()) {
-            out_tensor.set_names(node->get_output_tensor(i).get_names());
-        }
+        copy_output_names(body_node->output(i), node->output(i));
     }
-    NGRAPH_SUPPRESS_DEPRECATED_END
 
     if (node->get_output_size() != body_node->get_output_size()) {
         throw ngraph::ngraph_error("original node outputs size and extracted subgraph node outputs size doesn't much");
@@ -135,6 +130,20 @@ auto snippets::op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ov::Nod
 
     return subgraph;
 }
+
+void snippets::op::Subgraph::copy_output_names(const Output<Node>& target_output_node, const Output<Node>& replacement_output_node) {
+    NGRAPH_SUPPRESS_DEPRECATED_START
+    auto out_tensor = target_output_node.get_tensor_ptr();
+    const std::string new_name = ngraph::op::util::get_ie_output_name(replacement_output_node);
+    if (out_tensor->get_name().empty()) {
+        out_tensor->set_name(new_name);
+    }
+    if (!replacement_output_node.get_names().empty()) {
+        out_tensor->set_names(replacement_output_node.get_names());
+    }
+    NGRAPH_SUPPRESS_DEPRECATED_END
+}
+
 ///
 /// \brief  Canonization transforms original subgraph and to canonical form suitable for code generation. In particular,
 ///         it handles supported layout conversions, broadcasts inputs and outputs to a single rank and layout. Canonicalization
