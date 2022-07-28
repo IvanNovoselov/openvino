@@ -178,6 +178,23 @@ protected:
     std::shared_ptr<ov::Model> initOriginal() const override;
     std::shared_ptr<ov::Model> initReference() const override;
 };
+/// Two different Input and Outputs.
+/// This function is to check correct Broadcasting
+//        in1       in2
+//        Sin       Sin
+//       HSwish      /
+//  Result      Add
+//              Relu
+//              Sin
+//             Result
+class ManyInputsAndOutputsFunction : public SnippetsFunctionBase {
+public:
+    explicit ManyInputsAndOutputsFunction(const std::vector<Shape>& inputShapes) : SnippetsFunctionBase(inputShapes) {
+        NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
+    }
+protected:
+    std::shared_ptr<ov::Model> initOriginal() const override;
+};
 }  // namespace snippets
 }  // namespace test
 }  // namespace ov

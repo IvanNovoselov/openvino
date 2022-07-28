@@ -12,6 +12,12 @@ using namespace Xbyak;
 
 namespace ov {
 namespace intel_cpu {
+
+inline static void transform_idxs_to_regs(const std::vector<size_t>& idxs, std::vector<Reg64>& regs) {
+    regs.resize(idxs.size());
+    std::transform(idxs.begin(), idxs.end(), regs.begin(), [](size_t idx){return Reg64(static_cast<int>(idx));});
+}
+
 jit_container_emitter::jit_container_emitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl::cpu::x64::cpu_isa_t isa,
                       const std::shared_ptr<ov::Node>& n) : jit_emitter(h, isa, n) {
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
@@ -157,8 +163,8 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
 
     Reg64 reg_indexes = Reg64(abi_param1.getIdx());
     Reg64 reg_const_params = Reg64(abi_param2.getIdx());
-    std::vector<Reg64> data_ptr_regs(gp_regs_used.size());
-    std::transform(gp_regs_used.begin(), gp_regs_used.end(), data_ptr_regs.begin(), [](size_t idx){return Reg64(static_cast<int>(idx));});
+    std::vector<Reg64> data_ptr_regs;
+    transform_idxs_to_regs(gp_regs_used, data_ptr_regs);
 
     init_data_pointers(num_inputs, num_inputs + num_outputs, reg_indexes, reg_const_params, data_ptr_regs);
     // todo: emit_impl is a const method, so we can't just push_back unused regs to the gp_regs_pool.
@@ -247,10 +253,14 @@ void TileSchedulerEmitter::emit_tiles(const Reg64& reg_inner_amount, const std::
                 h->mov(reg_inner_amount, inner_work_amount);
                 // vector_tile is executed, but work_amount is neither set nor decremented appropriately.
             } else if (vector_evaluate_once) {
-                vector_tile.first -> emit_ptr_increments(data_ptr_regs);
+                vector_tile.first->emit_ptr_increments(data_ptr_regs);
                 h->mov(reg_inner_amount, inner_work_amount - vector_size);
             }
             // else: vector_tile is executed multiple times, so work_amount is already set
+        } else {
+            if (vector_evaluate_once) {
+                vector_tile.first->emit_ptr_increments(data_ptr_regs);
+            }
         }
         process_tile(scalar_evaluate_once, scalar_tile);
     }
@@ -266,9 +276,8 @@ void TileSchedulerEmitter::emit_impl(const std::vector<size_t>& in,
     const size_t vector_size = in[2];
     const size_t num_params = num_inputs + num_outputs;
     const auto& data_ptr_reg_idxs(out);
-    std::vector<Reg64> data_ptr_regs(data_ptr_reg_idxs.size());
-    std::transform(data_ptr_reg_idxs.begin(), data_ptr_reg_idxs.end(), data_ptr_regs.begin(), [](size_t idx){return Reg64(static_cast<int>(idx));});
-
+    std::vector<Reg64> data_ptr_regs;
+    transform_idxs_to_regs(data_ptr_reg_idxs, data_ptr_regs);
     // todo: emit_impl has const input args, so we can't just pop_back necessary regs from gpr_pool.
     //  we need a more elegant approach to avoid a full copy here. Similar problem is demonstrated in KernelEmitter
     auto local_gpr_pool = gpr_pool;
@@ -319,6 +328,7 @@ TileEmitter::TileEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl::cpu
     num_inputs = tile->num_inputs;
     num_outputs = tile->num_outputs;
     io_dims = tile->io_dims;
+    io_data_size = tile->io_data_size;
     increment = tile->increment;
     if (io_dims.size() != num_inputs + num_outputs)
         IE_THROW() << "TileEmitter constructor got inconsistent arguments. Check num_inputs + num_outputs == io_dims.size()";
@@ -348,13 +358,11 @@ void TileEmitter::emit_body(const std::vector<size_t>& vec_pool, const std::vect
 }
 
 void TileEmitter::emit_ptr_increments(const std::vector<Reg64>& data_ptr_regs) const {
-    for (size_t i = 0; i < num_inputs; i++) {
+    for (size_t i = 0; i < num_inputs + num_outputs; i++) {
         // those with dims == 1 will be broadcasted, hence don't require increment
         if (io_dims[i] != 1)
-            h->add(data_ptr_regs[i], increment * sizeof(float));
+            h->add(data_ptr_regs[i], increment * io_data_size[i]);
     }
-    for (size_t i = num_inputs; i < num_inputs + num_outputs; i++)
-        h->add(data_ptr_regs[i], increment * sizeof(float));
 }
 
 void TileEmitter::emit_impl(const std::vector<size_t>& in,
@@ -363,8 +371,8 @@ void TileEmitter::emit_impl(const std::vector<size_t>& in,
                             const std::vector<size_t>& gpr_pool,
                             const ov::intel_cpu::emitter_context *emit_context) const {
     Reg64 work_amount = Reg64(static_cast<int>(in[0]));
-    std::vector<Reg64> data_ptr_regs(out.size());
-    std::transform(out.begin(), out.end(), data_ptr_regs.begin(), [](size_t idx){return Reg64(static_cast<int>(idx));});
+    std::vector<Reg64> data_ptr_regs;
+    transform_idxs_to_regs(out, data_ptr_regs);
     Label for_body;
     // Note that:
     // * Work amount must be set by TileScheduler that executes Tiles

@@ -49,10 +49,15 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
     auto in = params.size();
     auto out = results.size();
     std::vector<size_t> io_last_dims(in + out);
+    std::vector<size_t> io_data_sizes(in + out);
     std::transform(params.begin(), params.end(), io_last_dims.begin(),
                    [](const std::shared_ptr<Node>& n){return n->get_output_shape(0).back();});
     std::transform(results.begin(), results.end(), io_last_dims.begin() + in,
                    [](const std::shared_ptr<Node>& n){return n->get_input_shape(0).back();});
+    std::transform(params.begin(), params.end(), io_data_sizes.begin(),
+                   [](const std::shared_ptr<Node>& n){return n->get_element_type().size();});
+    std::transform(results.begin(), results.end(), io_data_sizes.begin() + in,
+                   [](const std::shared_ptr<Node>& n){return n->get_element_type().size();});
 
     OV_ITT_TASK_CHAIN(GENERATE, ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator", "::VectorTile")
     // vector tile
@@ -76,10 +81,10 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
     OV_ITT_TASK_NEXT(GENERATE, "::Tiles1D");
     // wrapping into tiles1D
     //todo: in, out, and io_last_dims should derive naturally from the graph representation
-    const auto& vector_tile = std::make_shared<ngraph::snippets::op::Tile>(lowered, target->get_lanes(), in, out, io_last_dims);
+    const auto& vector_tile = std::make_shared<ngraph::snippets::op::Tile>(lowered, target->get_lanes(), in, out, io_last_dims, io_data_sizes);
     const auto& vector_region = std::make_pair(target->get(ngraph::snippets::op::Tile::get_type_info_static())(vector_tile),
                                    std::make_pair(std::vector<size_t>{}, std::vector<size_t>{}));
-    const auto& scalar_tile = std::make_shared<ngraph::snippets::op::Tile>(scalar_lowered, 1, in, out, io_last_dims);
+    const auto& scalar_tile = std::make_shared<ngraph::snippets::op::Tile>(scalar_lowered, 1, in, out, io_last_dims, io_data_sizes);
     const auto& scalar_region = std::make_pair(target->get(ngraph::snippets::op::Tile::get_type_info_static())(scalar_tile),
                     std::make_pair(std::vector<size_t>{}, std::vector<size_t>{}));
 

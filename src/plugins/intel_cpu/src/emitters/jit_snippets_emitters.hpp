@@ -167,6 +167,7 @@ private:
     size_t num_inputs = 0;
     size_t num_outputs = 0;
     std::vector<size_t> io_dims {};
+    std::vector<size_t> io_data_size {};
     size_t increment = 0;
 };
 

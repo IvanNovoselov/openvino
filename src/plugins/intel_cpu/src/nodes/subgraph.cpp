@@ -403,19 +403,36 @@ void Snippet::define_schedule() {
             schedulerWorkAmount /= exec_domain[tensorRank - 2];
             exec_domain[tensorRank - 2] = 1;
 
-            // update offsets for tile 2D because loaders have ptr shifts in some cases and stores have always ptrs shifts
+            // update offsets for tile 2D because loaders and stores have ptr shifts in some cases
+            const int64_t vector_size = one_of(host_isa, cpu::x64::avx512_core) ? 16 : 8;
             for (size_t i = 0; i < offsets_in.size(); i++) {
-                int64_t offset = offsets_in[i][tensorRank - 2];
-                if ((offset > config.inConfs[i].getMemDesc()->getPrecision().size()) || (offset == 0 && dims_in[i].back() != 1)) {
-                    sch_offsets_in[i] = offset - exec_domain.back() * config.inConfs[i].getMemDesc()->getPrecision().size();
-                } else if (offset == config.inConfs[i].getMemDesc()->getPrecision().size()) {
+                const int64_t offset = offsets_in[i][tensorRank - 2];
+                const int64_t data_size = config.inConfs[i].getMemDesc()->getPrecision().size();
+                if (offset == data_size || offset == vector_size * data_size) {
                     sch_offsets_in[i] = offset;
+                } else if ((offset > data_size) || (offset == 0 && dims_in[i].back() != 1 && dims_in[i].back() != vector_size)) {
+                    sch_offsets_in[i] = offset - exec_domain.back() * data_size;
+                    // If scalar tile executes one time, ptr doesn't move on 1 value
+                    // so we should absolutelly decrease offset
+                    if (exec_domain.back() % vector_size == 1) {
+                        sch_offsets_in[i] += data_size;
+                    }
                 }
             }
 
             for (size_t i = 0; i < offsets_out.size(); i++) {
-                int64_t offset = offsets_out[i][tensorRank - 2];
-                sch_offsets_out[i] = offset - exec_domain.back() * config.outConfs[i].getMemDesc()->getPrecision().size();
+                const int64_t offset = offsets_out[i][tensorRank - 2];
+                const size_t data_size = config.outConfs[i].getMemDesc()->getPrecision().size();
+                if (offset == data_size || offset == vector_size * data_size) {
+                    sch_offsets_out[i] = offset;
+                } else if ((offset > data_size) || (offset == 0 && dims_out[i].back() != 1 && dims_out[i].back() != vector_size)) {
+                    sch_offsets_out[i] = offset - exec_domain.back() * data_size;
+                    // If scalar tile executes one time, ptr doesn't move on 1 value
+                    // so we should absolutelly decrease offset
+                    if (exec_domain.back() % vector_size == 1) {
+                        sch_offsets_out[i] += data_size;
+                    }
+                }
             }
         }
     };
