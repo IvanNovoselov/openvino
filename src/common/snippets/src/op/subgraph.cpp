@@ -261,7 +261,7 @@ void insertConvertSaturationAfterNode(const std::shared_ptr<Node>& node, const o
 
             auto existing_convert_s = ngraph::as_type_ptr<ngraph::snippets::op::ConvertSaturation>(consumer.get_node()->shared_from_this());
             if ((!existing_convert_s && !ov::is_type<ngraph::op::v0::Result>(consumer.get_node()->shared_from_this()) &&
-                    consumer.get_node()->shared_from_this()->get_element_type() != element_type) ||
+                    consumer.get_element_type() != element_type) ||
                 (existing_convert_s && existing_convert_s->get_destination_type() != element_type)) {
                 const auto convert = std::make_shared<ngraph::snippets::op::ConvertSaturation>(node, element_type);
                 consumer.replace_source_output(convert);
