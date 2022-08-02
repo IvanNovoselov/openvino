@@ -216,6 +216,18 @@ bool Snippet::created() const {
     return getType() == Type::Subgraph;
 }
 
+InferenceEngine::Precision Snippet::getRuntimePrecision() const {
+    std::vector<InferenceEngine::Precision> inputPrecisions;
+    for (size_t i = 0; i < getParentEdges().size(); i++) {
+        auto parentEdge = getParentEdgeAt(i);
+        if (parentEdge && parentEdge->getStatus() == Edge::Status::Validated && !parentEdge->getParent()->isConstant()) {
+            inputPrecisions.emplace_back(DnnlExtensionUtils::DataTypeToIEPrecision((parentEdge->getMemoryPtr()->GetDataType())));
+        }
+    }
+
+    return getMaxPrecision(inputPrecisions);
+}
+
 bool Snippet::canBeInPlace() const {
     if (getParentEdgesAtPort(0)[0]->getParent()->getType() == Type::Input) {
         return false;
