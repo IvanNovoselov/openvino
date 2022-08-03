@@ -13,13 +13,12 @@
 #include "snippets/pass/assign_registers.hpp"
 #include "snippets/pass/convert_constants_to_scalars.hpp"
 #include "snippets/pass/convert_power_to_powerstatic.hpp"
-#include "snippets/pass/vector_to_scalar.hpp"
+#include "snippets/pass/set_scalar_count_for_load_and_store.hpp"
 #include "snippets/pass/transform_convert_to_truncation.hpp"
-#include <snippets/pass/precision_propagation.hpp>
+#include "snippets/pass/insert_convert_saturation_after_inputs.hpp"
+#include "snippets/pass/reset_type_relaxed_node_precision.hpp"
 
 #include "transformations/common_optimizations/nop_elimination.hpp"
-#include "transformations/utils/utils.hpp"
-
 #include "transformations/utils/utils.hpp"
 
 #include <ngraph/pass/manager.hpp>
@@ -102,7 +101,7 @@ auto snippets::op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ov::Nod
     auto body_node = node->clone_with_new_inputs(body_inputs);
     body_node->set_friendly_name(node->get_friendly_name());
     for (size_t i = 0; i < node->get_output_size(); i++) {
-        copy_output_names(body_node->output(i), node->output(i));
+        fill_empty_output_names(body_node->output(i), node->output(i));
     }
 
     if (node->get_output_size() != body_node->get_output_size()) {
@@ -131,7 +130,7 @@ auto snippets::op::Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ov::Nod
     return subgraph;
 }
 
-void snippets::op::Subgraph::copy_output_names(const Output<Node>& target_output_node, const Output<Node>& replacement_output_node) {
+void snippets::op::Subgraph::fill_empty_output_names(const Output<Node>& target_output_node, const Output<Node>& replacement_output_node) {
     NGRAPH_SUPPRESS_DEPRECATED_START
     auto out_tensor = target_output_node.get_tensor_ptr();
     const std::string new_name = ngraph::op::util::get_ie_output_name(replacement_output_node);
@@ -151,7 +150,8 @@ void snippets::op::Subgraph::copy_output_names(const Output<Node>& target_output
 ///         Canonicalization currently supports only the following layout conversions:
 ///             * None: all inputs have the same layout
 ///             * Planar + blocked: some inputs have blocked, and some have planar layouts, e.g. <N, C, H, W, c> + <N, C, H, W>
-Shape snippets::op::Subgraph::canonicalize(const BlockedShapeVector& outputShapes, const BlockedShapeVector& inputShapes) {
+///         Also there is precision aligning inside body of subgraph during canonicalization
+Shape snippets::op::Subgraph::canonicalize(const BlockedShapeVector& outputShapes, const BlockedShapeVector& inputShapes, const ov::element::Type exec_type) {
     INTERNAL_OP_SCOPE(Subgraph);
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::canonicalize")
     NODE_VALIDATION_CHECK(this, inputShapes.size() == m_body->get_parameters().size(),
@@ -242,53 +242,17 @@ Shape snippets::op::Subgraph::canonicalize(const BlockedShapeVector& outputShape
 
     // We should insert Converts after Parameters and Constant and before Results
     // to align precision inside Subgraph body that is supported by Plugin
-    align_precision(outputShapes, inputShapes);
+    align_precision(outputShapes, inputShapes, exec_type);
 
     exec_domain = outPShape.get_shape();
     return exec_domain;
 }
 
-void insertConvertSaturationAfterNode(const std::shared_ptr<Node>& node, const ov::element::Type element_type) {
-    for (const auto& output : node->outputs()) {
-        for (auto consumer : output.get_target_inputs()) {
-            // If after node there is ConvertTruncation we should insert ConvertSaturation after that
-            if (auto existing_convert_t = ngraph::as_type_ptr<ngraph::snippets::op::ConvertTruncation>(consumer.get_node()->shared_from_this())) {
-                if (existing_convert_t->get_destination_type() != element_type) {
-                    insertConvertSaturationAfterNode(existing_convert_t, element_type);
-                }
-                continue;
-            }
-
-            auto existing_convert_s = ngraph::as_type_ptr<ngraph::snippets::op::ConvertSaturation>(consumer.get_node()->shared_from_this());
-            if ((!existing_convert_s && !ov::is_type<ngraph::op::v0::Result>(consumer.get_node()->shared_from_this()) &&
-                    consumer.get_element_type() != element_type) ||
-                (existing_convert_s && existing_convert_s->get_destination_type() != element_type)) {
-                const auto convert = std::make_shared<ngraph::snippets::op::ConvertSaturation>(node, element_type);
-                consumer.replace_source_output(convert);
-            }
-        }
-    }
-}
-
-void snippets::op::Subgraph::align_precision(const BlockedShapeVector& outputShapes, const BlockedShapeVector& inputShapes) {
+void snippets::op::Subgraph::align_precision(const BlockedShapeVector& outputShapes, const BlockedShapeVector& inputShapes, const ov::element::Type exec_type) {
     ngraph::pass::Manager p_manager;
     p_manager.register_pass<snippets::pass::TransformConvertToConvertTruncation>();
+    p_manager.register_pass<snippets::pass::InsertConvertSaturationAfterInputs>(exec_type);
     p_manager.run_passes(m_body);
-
-    // We should insert Converts to f32 after scalar constants of unsupported element type
-    // because at the moment scalar is constant node, not parameter as other constant node. Thus we check all ops to find scalars
-    // Also we should use ConstantFolding pass after that in "convert_to_snippet_dialect"
-    // TODO: Need to unit behavior with common constants or to come up with another solution
-    const auto supported_exec_type = m_generator->get_supported_exec_precision();
-    for (auto& node : m_body->get_ops()) {
-        if (op::is_scalar_constant(node)) {
-            insertConvertSaturationAfterNode(node, supported_exec_type);
-        }
-    }
-
-    for (size_t i = 0; i < inputShapes.size(); i++) {
-        insertConvertSaturationAfterNode(m_body->get_parameters()[i], supported_exec_type);
-    }
 
     const auto& body_results = m_body->get_results();
     for (size_t i = 0; i < outputShapes.size(); i++) {
@@ -298,7 +262,7 @@ void snippets::op::Subgraph::align_precision(const BlockedShapeVector& outputSha
         // we should check destination type and insert ConvertSaturation before that if needed
         if (auto existing_convert_t = ngraph::as_type_ptr<ngraph::snippets::op::ConvertTruncation>(body_results[i]->get_input_node_shared_ptr(0))) {
             const auto original_input_element_type = existing_convert_t->get_input_element_type(0);
-            if (original_input_element_type != supported_exec_type) {
+            if (original_input_element_type != exec_type) {
                 const auto convert = std::make_shared<ngraph::snippets::op::ConvertSaturation>(
                         existing_convert_t->get_input_node_shared_ptr(0), original_input_element_type);
                 existing_convert_t->set_argument(0, convert);
@@ -311,7 +275,7 @@ void snippets::op::Subgraph::align_precision(const BlockedShapeVector& outputSha
     }
 
     ngraph::pass::Manager manager;
-    manager.register_pass<snippets::pass::PrecisionPropagation>(supported_exec_type);
+    manager.register_pass<snippets::pass::ResetTypeRelaxedNodePrecision>(exec_type);
     manager.register_pass<ngraph::pass::ConstantFolding>();
     manager.register_pass<ngraph::pass::EliminateConvert>();
     manager.run_passes(m_body);
@@ -363,16 +327,18 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
 
 snippets::Schedule snippets::op::Subgraph::generate(const BlockedShapeVector& output_shapes,
                                                     const BlockedShapeVector& input_shapes,
+                                                    const ov::element::Type exec_type,
                                                     const void* compile_params) {
-    canonicalize(output_shapes, input_shapes);
+    canonicalize(output_shapes, input_shapes, exec_type);
     return generate(compile_params);
 }
 
 snippets::Schedule snippets::op::Subgraph::generate(const BlockedShapeVector& output_shapes,
                                                     const BlockedShapeVector& input_shapes,
                                                     ngraph::pass::Manager& opt,
+                                                    const ov::element::Type exec_type,
                                                     const void* compile_params) {
-    canonicalize(output_shapes, input_shapes);
+    canonicalize(output_shapes, input_shapes, exec_type);
     return generate(opt, compile_params);
 }
 

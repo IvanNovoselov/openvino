@@ -61,7 +61,7 @@ void Snippet::initSupportedPrimitiveDescriptors() {
     if (!supportedPrimitiveDescriptors.empty())
         return;
 
-    const std::vector<Precision> supportedPrecisions = { Precision::FP32, Precision::I32, Precision::BF16, Precision::I8, Precision::U8 };
+    const std::set<Precision> supportedPrecisions = { Precision::FP32, Precision::I32, Precision::BF16, Precision::I8, Precision::U8 };
 
     bool dimRanksAreEqual = true;
     for (size_t i = 0; dimRanksAreEqual && i < inputShapes.size(); i++) {
@@ -127,9 +127,9 @@ void Snippet::initSupportedPrimitiveDescriptors() {
         config.inConfs.resize(inputShapes.size());
         for (size_t i = 0; i < inputShapes.size(); i++) {
             auto precision = getOriginalInputPrecisionAtPort(i);
-            if (std::all_of(supportedPrecisions.begin(), supportedPrecisions.end(),
-                            [precision](const Precision& sp) { return precision != sp; }))
+            if (supportedPrecisions.count(precision) == 0)
                 precision = Precision::FP32;
+
             const auto equalPrecisions = getOriginalOutputPrecisions().size() == 1 &&
                     precision == getOriginalOutputPrecisionAtPort(0);
 
@@ -146,8 +146,7 @@ void Snippet::initSupportedPrimitiveDescriptors() {
         config.outConfs.resize(outputShapes.size());
         for (size_t i = 0; i < outputShapes.size(); i++) {
             auto precision = getOriginalOutputPrecisionAtPort(i);
-            if (std::all_of(supportedPrecisions.begin(), supportedPrecisions.end(),
-                            [precision](const Precision& sp) { return precision != sp; }))
+            if (supportedPrecisions.count(precision) == 0)
                 precision = Precision::FP32;
 
             BlockedMemoryDesc::CmpMask outputMask = BLOCKED_DESC_SKIP_OFFSET_MASK;
@@ -300,7 +299,10 @@ void Snippet::define_schedule() {
     ngraph::snippets::op::Subgraph::BlockedShapeVector output_blocked_shapes;
     for (size_t i = 0; i < outputShapes.size(); i++)
         output_blocked_shapes.push_back(edgeToBlockedShape(getChildEdgesAtPort(i)[0]));
-    exec_domain = snippet->canonicalize(output_blocked_shapes, input_blocked_shapes);
+
+    const auto supported_exec_type = snippet->get_generator()->get_supported_exec_precision();
+    exec_domain = snippet->canonicalize(output_blocked_shapes, input_blocked_shapes, supported_exec_type);
+
     // initialize by maximum output dimension. Dimensions of outputs should be broadcastable
     tensorRank = std::max(static_cast<size_t>(rank6D), exec_domain.size());
     // Canonicalization broadcasts inputs and outputs to max input rank, which can be smaller than tensorRank

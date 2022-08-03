@@ -50,7 +50,8 @@ TEST_P(CanonicalizationTests, Add) {
     function_ref = snippets_function->getReference();
     auto subgraph =  getTokenizedSubgraph(function);
     subgraph->set_generator(std::make_shared<DummyGenerator>());
-    Shape canonical_output_shape = subgraph->canonicalize(output_blocked_shapes, input_blocked_shapes);
+    const auto exec_type = subgraph->get_generator()->get_supported_exec_precision();
+    Shape canonical_output_shape = subgraph->canonicalize(output_blocked_shapes, input_blocked_shapes, exec_type);
     ASSERT_DIMS_EQ(canonical_output_shape, expected_output_shape);
 }
 

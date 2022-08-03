@@ -40,7 +40,7 @@ protected:
 
 // This emitter is covered by specification of "Convert" operation. The implementation uses a "warp-around" conversion.
 // Example:
-//  int_32 -> int8_t
+//  int32_t -> int8_t
 //   129   -> -127
 class jit_convert_truncation_emitter : public jit_convert_emitter {
 public:
@@ -57,13 +57,13 @@ private:
     template <dnnl::impl::cpu::x64::cpu_isa_t isa>
     void dword2int8(const std::vector<size_t> &in_vec_idxs, const std::vector<size_t> &out_vec_idxs) const;
 
-    bool is_corner_case() const;
+    bool is_i8_and_u8_case() const;
     void register_table_entries() override;
 };
 
 // This emitter is covered by the common dnnl behavior. The implementation uses a "saturation" conversion.
 // Example:
-//  int_32 -> int8_t
+//  int32_t -> int8_t
 //   129   -> 127
 class jit_convert_saturation_emitter : public jit_convert_emitter {
 public:

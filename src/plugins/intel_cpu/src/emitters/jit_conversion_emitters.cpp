@@ -36,6 +36,8 @@ void jit_convert_emitter::validate_types() const {
         IE_THROW() << "Unsupported input type: " << input_type.get_type_name();
     if (!is_supported_type(output_type))
         IE_THROW() << "Unsupported output type: " << output_type.get_type_name();
+    if (input_type == output_type)
+        IE_THROW() << "Input and output data types are equal in convert emitter: " << input_type.get_type_name();
 }
 
 size_t jit_convert_emitter::get_inputs_num() const { return 1; }
@@ -66,7 +68,7 @@ jit_convert_truncation_emitter::jit_convert_truncation_emitter(jit_generator *ho
     prepare_table();
 }
 
-bool jit_convert_truncation_emitter::is_corner_case() const {
+bool jit_convert_truncation_emitter::is_i8_and_u8_case() const {
     return one_of(input_type, ov::element::i8, ov::element::u8) &&
            one_of(output_type, ov::element::i8, ov::element::u8);
 }
@@ -93,7 +95,7 @@ void jit_convert_truncation_emitter::emit_isa(const std::vector<size_t> &in_vec_
     Vmm vmm_dst  = Vmm(out_vec_idxs[0]);
 
     // For Truncation behavior we can just move data from src to dst if we want convert i8 -> u8 or u8 -> i8
-    if ((input_type == output_type) || is_corner_case()) {
+    if ((input_type == output_type) || is_i8_and_u8_case()) {
         h->uni_vmovups(vmm_dst, vmm_src);
         return;
     }
@@ -157,7 +159,7 @@ void jit_convert_truncation_emitter::emit_isa(const std::vector<size_t> &in_vec_
 void jit_convert_truncation_emitter::register_table_entries() {
     if (host_isa_ == dnnl::impl::cpu::x64::avx2 &&
         one_of(output_type, ov::element::i8, ov::element::u8) &&
-        !is_corner_case())
+        !is_i8_and_u8_case())
         push_arg_entry_of("mask_byte", 0x000000ff, true);
 }
 

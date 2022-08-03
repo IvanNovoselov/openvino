@@ -109,9 +109,7 @@ auto has_supported_in_out(const std::shared_ptr<const Node> &n) -> bool {
     auto supported = [](descriptor::Tensor& t) -> bool {
         static const std::set<ngraph::element::Type> supported_data_types =
                 { ngraph::element::f32, ngraph::element::i32, ngraph::element::bf16, ngraph::element::i8, ngraph::element::u8 };
-        return t.get_partial_shape().is_static() &&
-                std::any_of(supported_data_types.begin(), supported_data_types.end(),
-                            [&t](const ngraph::element::Type& type) { return t.get_element_type() == type; });
+        return t.get_partial_shape().is_static() && supported_data_types.count(t.get_element_type()) != 0;
     };
     const auto & inputs = n->inputs();
     const auto & outputs = n->outputs();
@@ -154,7 +152,7 @@ auto update_out_tensor_name(std::shared_ptr<ngraph::snippets::op::Subgraph> &sub
             if (ov::is_type<opset1::Result>(in.get_node())) {
                 const auto& body_result = subgraph->get_body()->get_output_op(i);
                 const auto& body_result_input = body_result->get_input_source_output(0);
-                op::Subgraph::copy_output_names(subgraph->output(i), body_result_input);
+                op::Subgraph::fill_empty_output_names(subgraph->output(i), body_result_input);
                 not_set = false;
                 break;
             }
@@ -406,9 +404,13 @@ TokenizeSnippets::TokenizeSnippets() {
                 //              Parameter                                                          Parameter
                 //                  |                                                                Relu
                 //               Convert                                                            Convert
-                const auto input_in_subgraph = source_result->get_input_node_shared_ptr(0);
-                if (ov::is_type<ngraph::op::v0::Convert>(input_in_subgraph)) {
-                    if (!ov::is_type<ngraph::op::v0::Parameter>(input_in_subgraph->get_input_node_shared_ptr(0))) {
+                // Thus, We can grow subgraph only if Convert is the first node of subgraph and have to abort it's the last one
+                // We have this limitation because at the moment we support only one execution precision inside body, so
+                // if there is Convert with input and output data types that aren't equal to supported exec type,
+                // we can get conversion math errors
+                const auto output_of_subgraph = source_result->get_input_node_shared_ptr(0);
+                if (ov::is_type<ngraph::op::v0::Convert>(output_of_subgraph)) {
+                    if (!ov::is_type<ngraph::op::v0::Parameter>(output_of_subgraph->get_input_node_shared_ptr(0))) {
                         return abort_with_strategy("Convert supports only as Input and as Result of subgraph. Aborting");
                     }
                 }

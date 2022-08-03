@@ -121,9 +121,9 @@ public:
 
     /**
      * @brief gets target machine
-     * @return pointer to target machine
+     * @return pointer to constant target machine
      */
-    std::shared_ptr<TargetMachine> get_target_machine() const { return target; }
+    std::shared_ptr<const TargetMachine> get_target_machine() const { return target; }
 
     /**
      * @brief gets supported element type for execution
