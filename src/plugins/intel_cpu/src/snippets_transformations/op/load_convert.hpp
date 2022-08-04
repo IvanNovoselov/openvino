@@ -17,9 +17,9 @@ namespace intel_cpu {
  */
 class LoadConvertSaturation : public ngraph::snippets::op::Load {
 public:
-    OPENVINO_OP("LoadConvertSaturation", "cpu_plugin_opset", ngraph::snippets::op::Load);
+    OPENVINO_OP("LoadConvertSaturation", "SnippetsOpset", ngraph::snippets::op::Load);
 
-    LoadConvertSaturation(const Output<Node>& x, const ov::element::Type& destination_type, const size_t count = 0lu);
+    LoadConvertSaturation(const Output<Node>& x, const ov::element::Type& destination_type, const size_t count = 1lu);
     LoadConvertSaturation() = default;
 
     ov::element::Type get_destination_type() const { return m_destination_type; }
@@ -43,9 +43,9 @@ protected:
  */
 class LoadConvertTruncation : public ngraph::snippets::op::Load {
 public:
-    OPENVINO_OP("LoadConvertTruncation", "cpu_plugin_opset", ngraph::snippets::op::Load);
+    OPENVINO_OP("LoadConvertTruncation", "SnippetsOpset", ngraph::snippets::op::Load);
 
-    LoadConvertTruncation(const Output<Node>& x, const ov::element::Type& destination_type, const size_t count = 0lu);
+    LoadConvertTruncation(const Output<Node>& x, const ov::element::Type& destination_type, const size_t count = 1lu);
     LoadConvertTruncation() = default;
 
     ov::element::Type get_destination_type() const { return m_destination_type; }

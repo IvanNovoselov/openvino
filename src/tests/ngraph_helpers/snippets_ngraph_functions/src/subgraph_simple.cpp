@@ -267,7 +267,7 @@ std::shared_ptr<ov::Model> EltwiseTwoResultsFunction::initReference() const {
     return std::make_shared<Model>(OutputVector{subgraph0->output(0), subgraph1->output(0)}, ParameterVector{data0, data1});
 }
 
-std::shared_ptr<ov::Model> ManyInputsAndOutputsFunction::initOriginal() const {
+std::shared_ptr<ov::Model> TwoInputsAndOutputsFunction::initOriginal() const {
     auto data0 = std::make_shared<op::v0::Parameter>(precision, input_shapes[0]);
     auto data1 = std::make_shared<op::v0::Parameter>(precision, input_shapes[1]);
     auto sin0 = std::make_shared<op::v0::Sin>(data0);

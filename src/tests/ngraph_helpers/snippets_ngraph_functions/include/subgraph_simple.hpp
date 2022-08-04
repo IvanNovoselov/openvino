@@ -187,9 +187,9 @@ protected:
 //              Relu
 //              Sin
 //             Result
-class ManyInputsAndOutputsFunction : public SnippetsFunctionBase {
+class TwoInputsAndOutputsFunction : public SnippetsFunctionBase {
 public:
-    explicit ManyInputsAndOutputsFunction(const std::vector<Shape>& inputShapes) : SnippetsFunctionBase(inputShapes) {
+    explicit TwoInputsAndOutputsFunction(const std::vector<Shape>& inputShapes) : SnippetsFunctionBase(inputShapes) {
         NGRAPH_CHECK(input_shapes.size() == 2, "Got invalid number of input shapes");
     }
 protected:

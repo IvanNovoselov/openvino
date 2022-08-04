@@ -22,7 +22,7 @@
 
 #include <snippets/op/subgraph.hpp>
 #include "emitters/cpu_generator.hpp"
-#include "ngraph_transformations/fuse_load_store_and_convert.hpp"
+#include "snippets_transformations/fuse_load_store_and_convert.hpp"
 
 using namespace InferenceEngine;
 using namespace dnnl::impl::utils;
@@ -128,7 +128,7 @@ void Snippet::initSupportedPrimitiveDescriptors() {
         for (size_t i = 0; i < inputShapes.size(); i++) {
             auto precision = getOriginalInputPrecisionAtPort(i);
             if (supportedPrecisions.count(precision) == 0)
-                precision = Precision::FP32;
+                IE_THROW() << "Subgraph node with name `" << getName() << "` doesn't support " << precision << " precision.";
 
             const auto equalPrecisions = getOriginalOutputPrecisions().size() == 1 &&
                     precision == getOriginalOutputPrecisionAtPort(0);
@@ -147,7 +147,7 @@ void Snippet::initSupportedPrimitiveDescriptors() {
         for (size_t i = 0; i < outputShapes.size(); i++) {
             auto precision = getOriginalOutputPrecisionAtPort(i);
             if (supportedPrecisions.count(precision) == 0)
-                precision = Precision::FP32;
+                IE_THROW() << "Subgraph node with name `" << getName() << "` doesn't support " << precision << " precision.";
 
             BlockedMemoryDesc::CmpMask outputMask = BLOCKED_DESC_SKIP_OFFSET_MASK;
             PortConfig portConfig;
@@ -426,11 +426,6 @@ void Snippet::define_schedule() {
                     sch_offsets_in[i] = offset;
                 } else if ((offset > data_size) || (offset == 0 && dims_in[i].back() != 1 && dims_in[i].back() != vector_size)) {
                     sch_offsets_in[i] = offset - exec_domain.back() * data_size;
-                    // If scalar tile executes one time, ptr doesn't move on 1 value
-                    // so we should absolutelly decrease offset
-                    if (exec_domain.back() % vector_size == 1) {
-                        sch_offsets_in[i] += data_size;
-                    }
                 }
             }
 
@@ -441,11 +436,6 @@ void Snippet::define_schedule() {
                     sch_offsets_out[i] = offset;
                 } else if ((offset > data_size) || (offset == 0 && dims_out[i].back() != 1 && dims_out[i].back() != vector_size)) {
                     sch_offsets_out[i] = offset - exec_domain.back() * data_size;
-                    // If scalar tile executes one time, ptr doesn't move on 1 value
-                    // so we should absolutelly decrease offset
-                    if (exec_domain.back() % vector_size == 1) {
-                        sch_offsets_out[i] += data_size;
-                    }
                 }
             }
         }

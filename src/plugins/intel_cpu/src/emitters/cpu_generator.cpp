@@ -15,8 +15,8 @@
 #include "jit_dnnl_ext_emitters.hpp"
 #include "jit_conversion_emitters.hpp"
 
-#include "ngraph_transformations/op/load_convert.hpp"
-#include "ngraph_transformations/op/store_convert.hpp"
+#include "snippets_transformations/op/load_convert.hpp"
+#include "snippets_transformations/op/store_convert.hpp"
 
 #include <ngraph/opsets/opset5.hpp>
 

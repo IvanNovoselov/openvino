@@ -7,8 +7,8 @@
 #include "fuse_load_store_and_convert.hpp"
 #include "snippets/snippets_isa.hpp"
 
-#include <ngraph_transformations/op/load_convert.hpp>
-#include <ngraph_transformations/op/store_convert.hpp>
+#include "snippets_transformations/op/load_convert.hpp"
+#include "snippets_transformations/op/store_convert.hpp"
 
 #include "ngraph/opsets/opset1.hpp"
 #include "ngraph/rt_info.hpp"
@@ -49,7 +49,8 @@ ov::intel_cpu::pass::FuseLoadConvert::FuseLoadConvert() {
                                                                                   convert_truncation->get_destination_type(),
                                                                                   load->get_count());
         } else {
-            return false;
+            throw ngraph::ngraph_error(
+                "Type of Convert op is undefined. Supports only fusing Load and ConvertTruncation or ConvertSaturation ops");
         }
 
         if (!load_convert)
@@ -97,7 +98,8 @@ ov::intel_cpu::pass::FuseStoreConvert::FuseStoreConvert() {
                                                                                     convert_truncation->get_destination_type(),
                                                                                     store->get_count());
         } else {
-            return false;
+            throw ngraph::ngraph_error(
+                "Type of Convert op is undefined. Supports only fusing Store and ConvertTruncation or ConvertSaturation ops");
         }
 
 

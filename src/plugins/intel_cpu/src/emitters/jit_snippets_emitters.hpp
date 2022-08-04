@@ -11,7 +11,7 @@
 #include "jit_emitter.hpp"
 #include "jit_load_store_emitters.hpp"
 
-#include "ngraph_transformations/op/store_convert.hpp"
+#include "snippets_transformations/op/store_convert.hpp"
 
 using namespace Xbyak;
 using ngraph::snippets::AllocatedEmitter;
@@ -360,7 +360,7 @@ private:
     void emit_isa(const std::vector<size_t> &in, const std::vector<size_t> &out) const;
     void emit_data() const override;
 
-    size_t aux_vecs_count() const override { return 1lu; }
+    size_t aux_vecs_count() const override { return 2lu; }
     size_t aux_gprs_count() const override { return 1lu; }
 
 private:

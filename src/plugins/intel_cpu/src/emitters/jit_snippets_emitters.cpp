@@ -263,6 +263,12 @@ void TileSchedulerEmitter::emit_tiles(const Reg64& reg_inner_amount, const std::
             }
         }
         process_tile(scalar_evaluate_once, scalar_tile);
+
+        // If scalar tile executes one time, ptr doesn't move on 1 value
+        // so we should absolutelly decrease offset
+        if (scalar_evaluate_once) {
+            scalar_tile.first->emit_ptr_increments(data_ptr_regs);
+        }
     }
 }
 

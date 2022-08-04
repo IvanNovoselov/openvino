@@ -17,9 +17,9 @@ namespace intel_cpu {
  */
 class StoreConvertSaturation : public ngraph::snippets::op::Store {
 public:
-    OPENVINO_OP("StoreConvertSaturation", "cpu_plugin_opset", ngraph::snippets::op::Store);
+    OPENVINO_OP("StoreConvertSaturation", "SnippetsOpset", ngraph::snippets::op::Store);
 
-    StoreConvertSaturation(const Output<Node>& x, const ov::element::Type& destination_type, const size_t count = 0lu);
+    StoreConvertSaturation(const Output<Node>& x, const ov::element::Type& destination_type, const size_t count = 1lu);
     StoreConvertSaturation() = default;
 
     ov::element::Type get_destination_type() const { return m_destination_type; }
@@ -43,9 +43,9 @@ protected:
  */
 class StoreConvertTruncation : public ngraph::snippets::op::Store {
 public:
-    OPENVINO_OP("StoreConvertTruncation", "cpu_plugin_opset", ngraph::snippets::op::Store);
+    OPENVINO_OP("StoreConvertTruncation", "SnippetsOpset", ngraph::snippets::op::Store);
 
-    StoreConvertTruncation(const Output<Node>& x, const ov::element::Type& destination_type, const size_t count = 0lu);
+    StoreConvertTruncation(const Output<Node>& x, const ov::element::Type& destination_type, const size_t count = 1lu);
     StoreConvertTruncation() = default;
 
     ov::element::Type get_destination_type() const { return m_destination_type; }

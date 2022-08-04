@@ -15,12 +15,12 @@ typedef std::tuple<
         size_t,                      // Expected num nodes
         size_t,                      // Expected num subgraphs
         std::string                  // Target Device
-> ManyInputsAndOutputsParams;
+> TwoInputsAndOutputsParams;
 
-class ManyInputsAndOutputs : public testing::WithParamInterface<ov::test::snippets::ManyInputsAndOutputsParams>,
+class TwoInputsAndOutputs : public testing::WithParamInterface<ov::test::snippets::TwoInputsAndOutputsParams>,
                              virtual public ov::test::SnippetsTestsCommon {
 public:
-    static std::string getTestCaseName(testing::TestParamInfo<ov::test::snippets::ManyInputsAndOutputsParams> obj);
+    static std::string getTestCaseName(testing::TestParamInfo<ov::test::snippets::TwoInputsAndOutputsParams> obj);
 
 protected:
     void SetUp() override;

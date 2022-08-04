@@ -7,8 +7,8 @@
 #include "ngraph_transformations/op/leaky_relu.hpp"
 #include "ngraph_transformations/op/power_static.hpp"
 #include "ngraph_transformations/op/swish_cpu.hpp"
-#include "ngraph_transformations/op/load_convert.hpp"
-#include "ngraph_transformations/op/store_convert.hpp"
+#include "snippets_transformations/op/load_convert.hpp"
+#include "snippets_transformations/op/store_convert.hpp"
 
 #include <ngraph/ngraph.hpp>
 #include <ngraph_ops/type_relaxed.hpp>

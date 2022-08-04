@@ -3,14 +3,14 @@
 //
 
 #include "common_test_utils/common_utils.hpp"
-#include "snippets/many_inputs_and_outputs.hpp"
+#include "snippets/two_inputs_and_outputs.hpp"
 #include "subgraph_simple.hpp"
 
 namespace ov {
 namespace test {
 namespace snippets {
 
-std::string ManyInputsAndOutputs::getTestCaseName(testing::TestParamInfo<ov::test::snippets::ManyInputsAndOutputsParams> obj) {
+std::string TwoInputsAndOutputs::getTestCaseName(testing::TestParamInfo<ov::test::snippets::TwoInputsAndOutputsParams> obj) {
     std::vector<ov::Shape> inputShapes;
     std::string targetDevice;
     size_t num_nodes, num_subgraphs;
@@ -25,15 +25,15 @@ std::string ManyInputsAndOutputs::getTestCaseName(testing::TestParamInfo<ov::tes
     return result.str();
 }
 
-void ManyInputsAndOutputs::SetUp() {
+void TwoInputsAndOutputs::SetUp() {
     std::vector<ov::Shape> inputShape;
     std::tie(inputShape, ref_num_nodes, ref_num_subgraphs, targetDevice) = this->GetParam();
     init_input_shapes(static_shapes_to_test_representation(inputShape));
-    auto f = ov::test::snippets::ManyInputsAndOutputsFunction(inputShape);
+    auto f = ov::test::snippets::TwoInputsAndOutputsFunction(inputShape);
     function = f.getOriginal();
 }
 
-TEST_P(ManyInputsAndOutputs, CompareWithRefImpl) {
+TEST_P(TwoInputsAndOutputs, CompareWithRefImpl) {
     run();
     validateNumSubgraphs();
 }

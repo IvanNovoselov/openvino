@@ -19,7 +19,7 @@ namespace pass {
  */
 class FuseLoadConvert: public ngraph::pass::MatcherPass {
 public:
-    OPENVINO_RTTI("FuseLoadConvert");
+    OPENVINO_RTTI("FuseLoadConvert", "0");
     FuseLoadConvert();
 };
 
@@ -31,7 +31,7 @@ public:
  */
 class FuseStoreConvert: public ngraph::pass::MatcherPass {
 public:
-    OPENVINO_RTTI("FuseStoreConvert");
+    OPENVINO_RTTI("FuseStoreConvert",  "0");
     FuseStoreConvert();
 };
 
