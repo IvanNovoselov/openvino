@@ -426,12 +426,12 @@ void Snippet::define_schedule() {
                     sch_offsets_in[i] = offset;
                 } else if ((offset > data_size) || (offset == 0 && dims_in[i].back() != 1 && dims_in[i].back() != vector_size)) {
                     sch_offsets_in[i] = offset - exec_domain.back() * data_size;
-                }
 
-                // If scalar tile executes one time, ptr doesn't move on 1 value
-                // so we should absolutelly decrease offset
-                if (exec_domain.back() % vector_size == 1) {
-                    sch_offsets_in[i] += data_size;
+                    // If scalar tile executes one time, ptr doesn't move on 1 value
+                    // so we should absolutelly decrease offset
+                    if (exec_domain.back() % vector_size == 1) {
+                        sch_offsets_in[i] += data_size;
+                    }
                 }
             }
 
@@ -442,12 +442,12 @@ void Snippet::define_schedule() {
                     sch_offsets_out[i] = offset;
                 } else if ((offset > data_size) || (offset == 0 && dims_out[i].back() != 1 && dims_out[i].back() != vector_size)) {
                     sch_offsets_out[i] = offset - exec_domain.back() * data_size;
-                }
 
-                // If scalar tile executes one time, ptr doesn't move on 1 value
-                // so we should absolutelly decrease offset
-                if (exec_domain.back() % vector_size == 1) {
-                    sch_offsets_out[i] += data_size;
+                    // If scalar tile executes one time, ptr doesn't move on 1 value
+                    // so we should absolutelly decrease offset
+                    if (exec_domain.back() % vector_size == 1) {
+                        sch_offsets_out[i] += data_size;
+                    }
                 }
             }
         }
