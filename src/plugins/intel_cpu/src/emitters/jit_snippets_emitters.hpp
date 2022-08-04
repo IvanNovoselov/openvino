@@ -360,7 +360,7 @@ private:
     void emit_isa(const std::vector<size_t> &in, const std::vector<size_t> &out) const;
     void emit_data() const override;
 
-    size_t aux_vecs_count() const override { return 2lu; }
+    size_t aux_vecs_count() const override { return 1lu; }
     size_t aux_gprs_count() const override { return 1lu; }
 
 private:
