@@ -36,8 +36,6 @@ void jit_convert_emitter::validate_types() const {
         IE_THROW() << "Unsupported input type: " << input_type.get_type_name();
     if (!is_supported_type(output_type))
         IE_THROW() << "Unsupported output type: " << output_type.get_type_name();
-    if (input_type == output_type)
-        IE_THROW() << "Input and output data types are equal in convert emitter: " << input_type.get_type_name();
 }
 
 size_t jit_convert_emitter::get_inputs_num() const { return 1; }
