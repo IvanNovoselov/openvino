@@ -106,8 +106,9 @@ auto is_layout_oblivious(const std::shared_ptr<const Node> &n) -> bool {
 
 auto has_supported_in_out(const std::shared_ptr<const Node> &n) -> bool {
     auto supported = [](descriptor::Tensor& t) -> bool {
-        return t.get_element_type() == ngraph::element::f32 &&
-               t.get_partial_shape().is_static();
+        return t.get_element_type() == ngraph::element::f32;
+//        return t.get_element_type() == ngraph::element::f32 &&
+//               t.get_partial_shape().is_static();
     };
     const auto & inputs = n->inputs();
     const auto & outputs = n->outputs();
