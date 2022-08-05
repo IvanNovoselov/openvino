@@ -176,17 +176,15 @@ void Snippet::selectOptimalPrimitiveDescriptor() {
     selectPreferPrimitiveDescriptor(getPrimitivesPriority(), true);
 }
 void Snippet::calcJITParams(std::vector<int64_t>& offsets, std::vector<int64_t>& sch_offsets, std::bitset<16>& bmask) const {
-//    todo: isn't it better to introduce local variable here?
     const auto &inputShapes = normInputShapes;
     const auto &outputShapes = normOutputShapes;
     const auto& static_master_shape = masterShape.get_shape();
     const size_t numInputs = normInputShapes.size();
     const size_t numParams = numInputs + normOutputShapes.size();
-    if (isDynamic) {
-        for (size_t i = 0; i < inputShapes.size(); i++)
-            bmask[i] = static_master_shape.back() != 1 && inputShapes[i].rbegin()->get_length() == 1;
-        std::cerr << "Brodacasting mask: " << bmask << "\n";
-    }
+
+    for (size_t i = 0; i < inputShapes.size(); i++)
+        bmask[i] = static_master_shape.back() != 1 && inputShapes[i].rbegin()->get_length() == 1;
+
     // Note that wen don't need offset for the last dim, since it's handled directly by Load/Store emitters
     const size_t offset_rank = static_master_shape.size() - 1;
     offsets.resize(numParams * (offset_rank), 1);
@@ -210,14 +208,6 @@ void Snippet::calcJITParams(std::vector<int64_t>& offsets, std::vector<int64_t>&
                 offsets[j] = 0;
         }
     }
-//    for (size_t j = 0; j < offset_rank; j++) {
-//        if (static_master_shape[j] == 1) {
-//            for (size_t i = j; i < numParams * offset_rank; i+=offset_rank) {
-//                offsets[i * offset_rank + j] = 0;
-//            }
-//        }
-//    }
-//    }
     for (auto &d : offsets)
         d *= dataSize;
 
@@ -232,13 +222,11 @@ void Snippet::calcJITParams(std::vector<int64_t>& offsets, std::vector<int64_t>&
             const auto& input_shape = inputShapes[i].get_shape();
             if (off > dataSize) {
                 sch_offsets[i] = 0;
-                // offset == data_size only if input_shape.back() == 1, but ScalarLoadEmitter doesn't perform increment
-                // in such cases, because it thinks it's broadcasting.
+                // increment data ptrs in outer tile if inner tile is broadcasted
             } else if (off == dataSize) {
-                sch_offsets[i] = off;
+                sch_offsets[i] = bmask[i] ? dataSize : 0;
                 // if outer tile is broadcasted then we need to step back to read the same data once again
             } else if (input_shape[input_shape.size() - 2] != static_master_shape[static_master_shape.size() - 2] && input_shape.back() != 1) {
-//                sch_offsets[i] = -1 * master_shape.back() * dataSize;
                 sch_offsets[i] = -1 * static_master_shape[static_master_shape.size() - 1] * dataSize;
             }
         }
@@ -309,18 +297,7 @@ void Snippet::optimizeExecDomain(std::vector<PartialShape>& inputShapes, std::ve
         }
         return domain.get_shape();
     };
-    // todo: remove this debugging prinout, leave only findDimsToCollapse() (compare with master 2b sure)
-    auto static_shape = domain.get_shape();
-    std::cerr << "Shape before optimization: ";
-    for (auto d : static_shape)
-        std::cerr << d << " ";
-    std::cerr << "\n";
-    static_shape = findDimsToCollapse();
-    std::cerr << "Shape after optimization: ";
-    for (auto d : static_shape)
-        std::cerr << d << " ";
-    std::cerr << "\n";
-    std::cerr << "Tile rank after optimization: " << TileRank << "\n";
+    findDimsToCollapse();
 }
 void Snippet::normalizeShapes() {
     auto edgeToBlockedShape = [](const EdgePtr& edge) {
@@ -406,15 +383,9 @@ void Snippet::prepareParams() {
                     s[i] = masterShape[i];
             }
         }
-        // todo: this is an excessive check for debug purposes, remove it before merge
-        if (std::any_of(normInputShapes.begin(), normInputShapes.end(), [](PartialShape x) {return x.is_dynamic();}))
-            IE_THROW() << "All input shapes must be static by now";
     } else {
         normOutputShapes = originalNormOutputShapes;
     }
-    // todo: this is an excessive check for debug purposes, remove it before merge
-    if (masterShape.is_dynamic())
-        IE_THROW() << "Snippets: masterShape must be static by now";
 
     const auto& tmpShape = masterShape.get_shape();
     tileRank = 1;
@@ -422,19 +393,7 @@ void Snippet::prepareParams() {
     // optimizeExecDomain will collapse shape dimensions and adjust tile Rank
     optimizeExecDomain(normInputShapes, normOutputShapes, masterShape, tileRank);
     exec_domain = masterShape.get_shape();
-    /*
-    // todo: we perform reshape here simply to obtain consistent output shapes (to calculate offsets later)
-    //  there must be a faster way to do it (without the whole body reshape)
-    std::map<size_t , ov::PartialShape> updated_shapes;
-    for (size_t i = 0; i < normInputShapes.size(); i++)
-        updated_shapes[i] = normInputShapes[i];
-    snippet->get_body()->reshape(updated_shapes);
-    masterShape = snippet->get_master_shape();
-    const auto& body_results = snippet->get_body()->get_results();
-    normOutputShapes.resize(body_results.size());
-    for (size_t i = 0; i < body_results.size(); i++)
-        normOutputShapes[i] = body_results[i]->get_input_shape(0);
-    */
+
     calcJITParams(data_offsets, scheduler_offsets, broadcasting_mask);
     auto initStartMemoryOffsets = [this]() {
         const auto config = getSelectedPrimitiveDescriptor()->getConfig();
@@ -486,18 +445,10 @@ void Snippet::execute(dnnl::stream strm) {
         call_args.dst_ptrs[i] = reinterpret_cast<uint8_t*>(dstMemPtrs[i]->GetData()) + start_offset_out[i];
 
     if (isDynamic) {
-        std::cerr << "Dynamic implementation is going to be executed\n";
-//        call_args.scheduler_offsets = scheduler_offsets.data();
         std::copy(scheduler_offsets.begin(), scheduler_offsets.end(), call_args.scheduler_offsets);
-//        call_args.data_offsets = data_offsets.data();
         std::copy(data_offsets.begin(), data_offsets.end(), call_args.data_offsets);
-//        call_args.scheduler_work_amounts = scheduler_work_amounts.data();
         std::copy(scheduler_work_amounts.begin(), scheduler_work_amounts.end(), call_args.scheduler_work_amounts);
         call_args.broadcasting_mask = broadcasting_mask; // set mask to true is this io is broadcasted
-//        static_master_shape_placeholder = masterShape.get_shape();
-//        They are needed for offset optimization calculation, but we don't do it for dynamic shapes yet
-//        call_args.master_shape = static_master_shape_placeholder.data();
-//        call_args.masterRank = static_master_shape_placeholder.size();
     }
 
     if (tensorRank == rank6D) {
@@ -516,7 +467,7 @@ bool Snippet::created() const {
 }
 
 bool Snippet::canBeInPlace() const {
-    if (getParentEdgesAtPort(0)[0]->getParent()->getType() == Type::Input) {
+    if (isDynamic || getParentEdgesAtPort(0)[0]->getParent()->getType() == Type::Input) {
         return false;
     }
 
@@ -553,7 +504,6 @@ void Snippet::schedule_6d(const jit_snippets_call_args& call_args) const {
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
         [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
             int64_t indexes[] = {d0, d1, d2, d3, d4};
-            std::cerr << dom[0] << " " << dom[1] << " " << dom[2] << " " << dom[3] << " " << dom[4] << "\n";
             schedule.get_callable<kernel>()(indexes, &call_args);
         });
 }
