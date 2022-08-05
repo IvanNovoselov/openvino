@@ -117,6 +117,7 @@ public:
      * @return pointer to generated code
      */
     code generate(std::shared_ptr<ov::Model>& m, const void* compile_params = nullptr) const;
+    std::shared_ptr<const TargetMachine> get_target_machine() const;
 
 protected:
     std::shared_ptr<TargetMachine> target;
