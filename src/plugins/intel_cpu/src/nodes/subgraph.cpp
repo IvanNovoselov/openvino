@@ -418,7 +418,7 @@ void Snippet::define_schedule() {
             exec_domain[tensorRank - 2] = 1;
 
             // update offsets for tile 2D because loaders and stores have ptr shifts in some cases
-            const int64_t vector_size = one_of(host_isa, cpu::x64::avx512_core) ? 16 : 8;
+            const int64_t vector_size = snippet->get_generator()->get_target_machine()->get_lanes();
             for (size_t i = 0; i < offsets_in.size(); i++) {
                 const int64_t offset = offsets_in[i][tensorRank - 2];
                 const int64_t data_size = config.inConfs[i].getMemDesc()->getPrecision().size();
