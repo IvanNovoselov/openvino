@@ -547,8 +547,8 @@ void jit_load_emitter::register_table_entries() {
 
 /// STORE ///
 jit_store_emitter::jit_store_emitter(dnnl::impl::cpu::x64::jit_generator *host, dnnl::impl::cpu::x64::cpu_isa_t host_isa,
-                                     Precision src_prc, Precision dst_prc, int store_num, enum arithmetic_mode mode, Precision exec_prc, emitter_in_out_map in_out_type)
-: jit_emitter(host, host_isa, exec_prc, in_out_type), store_num_(store_num), src_prc_(src_prc), dst_prc_(dst_prc), name_("unknown") {
+    Precision src_prc, Precision dst_prc, int store_num, arithmetic_mode mode, Precision exec_prc, emitter_in_out_map in_out_type)
+: jit_emitter(host, host_isa, exec_prc, in_out_type), store_num_(store_num), src_prc_(src_prc), dst_prc_(dst_prc), mode_(mode), name_("unknown") {
     prepare_table();
     v_len_elt_ = get_vec_length() / exec_prc.size();
     store_size_ = store_num * dst_prc.size();
@@ -557,8 +557,14 @@ jit_store_emitter::jit_store_emitter(dnnl::impl::cpu::x64::jit_generator *host, 
     }
 }
 
-bool jit_store_emitter::is_saturation() const {
-    return mode == arithmetic_mode::saturation;
+inline bool jit_store_emitter::is_saturation() const {
+    return mode_ == arithmetic_mode::saturation;
+}
+
+// case for SSE and AVX2 when we should use AND to truncate values
+inline bool jit_store_emitter::is_truncation_emulation() const {
+    return !mayiuse(cpu::x64::avx512_core) && !is_saturation() &&
+        src_prc_ != dst_prc_ && one_of(dst_prc_, Precision::U16, Precision::I16, Precision::U8, Precision::I8);
 }
 
 size_t jit_store_emitter::aux_gprs_count() const {
@@ -566,7 +572,7 @@ size_t jit_store_emitter::aux_gprs_count() const {
     int count = get_aux_regs_for_avx512_mask(store_num_ * src_prc_.size());
 
     // for table value in truncation arithmetic mode
-    if (!mayiuse(cpu::x64::avx512_core) && !is_saturation())
+    if (is_truncation_emulation())
         count++;
 
     return count;
@@ -576,7 +582,9 @@ size_t jit_store_emitter::aux_vecs_count() const {
     int count = 0;
 
     // to avoid src vmm pollution after data type conversion
-    if ((src_prc_.is_float() && !dst_prc_.is_float()) || (!src_prc_.is_float() && dst_prc_.is_float()))
+    if ((src_prc_.is_float() && !dst_prc_.is_float()) ||
+        (!src_prc_.is_float() && dst_prc_.is_float()) ||
+        (src_prc_ == Precision::FP32 && dst_prc_ == Precision::BF16))
         count++;
 
     // zero value, zeroed and passed from caller from performance standpoint(zeroed one time and not need preserve and restore status)
@@ -905,7 +913,7 @@ void jit_store_emitter::store_dword_to_byte_extension(const Vmm &vmm, const Xbya
                     }
                 } else {
                     h->vpmovdb(addr(0), ymm);
-                }    
+                }
             } else {
                 store_dword_to_byte_base();
             }
@@ -1005,6 +1013,10 @@ void jit_store_emitter::store_dword_to_word_extension(const Vmm &vmm, const Xbya
     };
 
     if (is_bf16) {
+        // to avoid src vmm pollution
+        if (src_prc_ == Precision::FP32) {
+            ymm = Ymm(aux_vec_idxs[0]);
+        }
         if (mayiuse(cpu::x64::avx512_core_bf16)) {
             h->vcvtneps2bf16(ymm, zmm);
         } else {
@@ -1094,7 +1106,7 @@ void jit_store_emitter::store_dword_to_word_extension(const Vmm &vmm, const Xbya
 }
 
 void jit_store_emitter::register_table_entries() {
-    if (!mayiuse(cpu::x64::avx512_core) && !is_saturation()) {
+    if (is_truncation_emulation()) {
         push_arg_entry_of("mask_truncation_byte", 0x000000ff, true);
         push_arg_entry_of("mask_truncation_word", 0x0000ffff, true);
     }

@@ -482,9 +482,9 @@ StoreEmitter::StoreEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl::c
     if (src_prc != dst_prc)
         IE_THROW() << "StoreEmitter supports only equal input and output types but gets: " << src_prc.name() << " and " << dst_prc.name();
 
-    store_emitter.reset(new jit_store_emitter(h, isa));
     count = ov::as_type_ptr<ngraph::snippets::op::Store>(n)->get_count();
     in_out_type_ = emitter_in_out_map::vec_to_gpr;
+    store_emitter.reset(new jit_store_emitter(h, isa, src_prc, dst_prc, count));
 }
 
 void StoreEmitter::emit_impl(const std::vector<size_t>& in,
@@ -510,8 +510,7 @@ void StoreEmitter::emit_isa(const std::vector<size_t> &in, const std::vector<siz
             Xmm, isa == dnnl::impl::cpu::x64::avx2, Ymm, Zmm>::type;
     if (!store_emitter)
         IE_THROW() << "Store CPU emitter isn't initialized for StoreEmitter!";
-    store_emitter->emit_code({in[0]}, {out[0]}, std::make_shared<store_emitter_context>(src_prc, dst_prc, count),
-                             aux_vec_idxs, aux_gpr_idxs);
+    store_emitter->emit_code({in[0]}, {out[0]}, aux_vec_idxs, aux_gpr_idxs);
 }
 
 void StoreEmitter::emit_data() const {
@@ -523,9 +522,9 @@ LoadEmitter::LoadEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl::cpu
     if (src_prc != dst_prc)
         IE_THROW() << "LoadEmitter supports only equal input and output types but gets: " << src_prc.name() << " and " << dst_prc.name();
 
-    load_emitter.reset(new jit_load_emitter(h, isa));
     count = ov::as_type_ptr<ngraph::snippets::op::Load>(n)->get_count();
     in_out_type_ = emitter_in_out_map::gpr_to_vec;
+    load_emitter.reset(new jit_load_emitter(h, isa, src_prc, dst_prc, count));
 }
 
 void LoadEmitter::emit_impl(const std::vector<size_t>& in,
@@ -551,8 +550,7 @@ void LoadEmitter::emit_isa(const std::vector<size_t> &in, const std::vector<size
             Xmm, isa == dnnl::impl::cpu::x64::avx2, Ymm, Zmm>::type;
     if (!load_emitter)
         IE_THROW() << "Load CPU emitter isn't initialized for LoadEmitter!";
-    load_emitter->emit_code({in[0]}, {out[0]}, std::make_shared<load_emitter_context>(src_prc, dst_prc, count),
-                            aux_vec_idxs, aux_gpr_idxs);
+    load_emitter->emit_code({in[0]}, {out[0]}, aux_vec_idxs, aux_gpr_idxs);
 }
 
 void LoadEmitter::emit_data() const {
@@ -606,9 +604,9 @@ LoadConvertEmitter::LoadConvertEmitter(dnnl::impl::cpu::x64::jit_generator* h, d
     if (n->get_output_element_type(0) != ov::element::f32)
         IE_THROW() << "LoadConvertEmitter supports only f32 output type but gets: " << n->get_output_element_type(0);
 
-    load_emitter.reset(new jit_load_emitter(h, isa));
     count = ov::as_type_ptr<ngraph::snippets::op::Load>(n)->get_count();
     in_out_type_ = emitter_in_out_map::gpr_to_vec;
+    load_emitter.reset(new jit_load_emitter(h, isa, src_prc, dst_prc, count));
 }
 
 void LoadConvertEmitter::emit_impl(const std::vector<size_t>& in,
@@ -632,8 +630,7 @@ template <dnnl::impl::cpu::x64::cpu_isa_t isa>
 void LoadConvertEmitter::emit_isa(const std::vector<size_t> &in, const std::vector<size_t> &out) const {
     if (!load_emitter)
         IE_THROW() << "Load CPU emitter isn't initialized for LoadEmitter!";
-    load_emitter->emit_code({in[0]}, {out[0]}, std::make_shared<load_emitter_context>(src_prc, dst_prc, count),
-                             aux_vec_idxs, aux_gpr_idxs);
+    load_emitter->emit_code({in[0]}, {out[0]}, aux_vec_idxs, aux_gpr_idxs);
 }
 
 void LoadConvertEmitter::emit_data() const {
@@ -645,27 +642,14 @@ StoreConvertEmitter::StoreConvertEmitter(dnnl::impl::cpu::x64::jit_generator* h,
     if (n->get_input_element_type(0) != ov::element::f32)
         IE_THROW() << "StoreConvertEmitter supports only f32 input type but gets: " << n->get_input_element_type(0);
 
-    if (ov::is_type<ov::intel_cpu::StoreConvertTruncation>(n)) {
-        store_emitter.reset(new jit_store_emitter(h, isa, arithmetic_mode::truncation));
-    } else if (ov::is_type<ov::intel_cpu::StoreConvertSaturation>(n)) {
-        store_emitter.reset(new jit_store_emitter(h, isa, arithmetic_mode::saturation));
-    }
     count = ov::as_type_ptr<ngraph::snippets::op::Store>(n)->get_count();
     in_out_type_ = emitter_in_out_map::vec_to_gpr;
-}
 
-void StoreConvertEmitter::emit_code(const std::vector<size_t> &in_idxs, const std::vector<size_t> &out_idxs,
-                                    const std::vector<size_t> &pool_vec_idxs,
-                                    const std::vector<size_t> &pool_gpr_idxs) const {
-    // jit_store_emitter makes some changes of data in src_vmm when there is some conversion of data types
-    // so to avoid data pollution for the next emitters we should save Vmm(in_idx[0])
-    h->sub(h->rsp, get_vec_length());
-    push_vec(h->ptr[h->rsp], in_idxs[0]);
-
-    MemoryEmitter::emit_code(in_idxs, out_idxs, pool_vec_idxs, pool_gpr_idxs);
-
-    pop_vec(in_idxs[0], h->ptr[h->rsp]);
-    h->add(h->rsp, get_vec_length());
+    if (ov::is_type<ov::intel_cpu::StoreConvertTruncation>(n)) {
+        store_emitter.reset(new jit_store_emitter(h, isa, src_prc, dst_prc, count, arithmetic_mode::truncation));
+    } else if (ov::is_type<ov::intel_cpu::StoreConvertSaturation>(n)) {
+        store_emitter.reset(new jit_store_emitter(h, isa, src_prc, dst_prc, count, arithmetic_mode::saturation));
+    }
 }
 
 void StoreConvertEmitter::emit_impl(const std::vector<size_t>& in,
@@ -689,8 +673,7 @@ template <dnnl::impl::cpu::x64::cpu_isa_t isa>
 void StoreConvertEmitter::emit_isa(const std::vector<size_t> &in, const std::vector<size_t> &out) const {
     if (!store_emitter)
         IE_THROW() << "Store CPU emitter isn't initialized for StoreEmitter!";
-    store_emitter->emit_code({in[0]}, {out[0]}, std::make_shared<store_emitter_context>(src_prc, dst_prc, count),
-                             aux_vec_idxs, aux_gpr_idxs);
+    store_emitter->emit_code({in[0]}, {out[0]}, aux_vec_idxs, aux_gpr_idxs);
 }
 
 void StoreConvertEmitter::emit_data() const {

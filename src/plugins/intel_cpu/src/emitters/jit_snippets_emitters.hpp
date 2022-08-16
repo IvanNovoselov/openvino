@@ -267,9 +267,6 @@ private:
     void emit_isa(const std::vector<size_t> &in, const std::vector<size_t> &out) const;
     void emit_data() const override;
 
-    size_t aux_vecs_count() const override { return 1lu; }
-    size_t aux_gprs_count() const override { return 1lu; }
-
 private:
     size_t count;
     std::unique_ptr<jit_store_emitter> store_emitter = nullptr;
@@ -291,8 +288,6 @@ private:
     template <dnnl::impl::cpu::x64::cpu_isa_t isa>
     void emit_isa(const std::vector<size_t> &in, const std::vector<size_t> &out) const;
     void emit_data() const override;
-
-    size_t aux_gprs_count() const override { return 2lu; }
 
 private:
     size_t count;
@@ -333,8 +328,6 @@ private:
     void emit_isa(const std::vector<size_t> &in, const std::vector<size_t> &out) const;
     void emit_data() const override;
 
-    size_t aux_gprs_count() const override { return 2lu; }
-
 private:
     size_t count;
     std::unique_ptr<jit_load_emitter> load_emitter = nullptr;
@@ -347,9 +340,6 @@ public:
     size_t get_inputs_num() const override {return 1;}
 
 private:
-    void emit_code(const std::vector<size_t> &in_idxs, const std::vector<size_t> &out_idxs,
-                   const std::vector<size_t> &pool_vec_idxs = {}, const std::vector<size_t> &pool_gpr_idxs = {}) const override;
-
     void emit_impl(const std::vector<size_t>& in,
                    const std::vector<size_t>& out,
                    const std::vector<size_t>& pool,
@@ -359,9 +349,6 @@ private:
     template <dnnl::impl::cpu::x64::cpu_isa_t isa>
     void emit_isa(const std::vector<size_t> &in, const std::vector<size_t> &out) const;
     void emit_data() const override;
-
-    size_t aux_vecs_count() const override { return 1lu; }
-    size_t aux_gprs_count() const override { return 1lu; }
 
 private:
     size_t count;
