@@ -621,6 +621,16 @@ int main(int argc, char* argv[]) {
             next_step();
             startTime = Time::now();
             compiledModel = core.compile_model(model, device_name);
+
+            //
+            std::stringstream stream;
+            std::cerr << "\n====Exporting model====\n";
+            compiledModel.export_model(stream);
+            std::cerr << "Importing model\n";
+            compiledModel = core.import_model(stream, "CPU");
+            std::cerr << "====Done====\n\n";
+            //
+
             duration_ms = get_duration_ms_till_now(startTime);
             slog::info << "Load network took " << double_to_string(duration_ms) << " ms" << slog::endl;
             if (statistics)

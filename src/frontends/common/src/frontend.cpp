@@ -50,8 +50,9 @@ InputModel::Ptr FrontEnd::load_impl(const std::vector<ov::Any>& variants) const 
 
 std::shared_ptr<ov::Model> FrontEnd::convert(const InputModel::Ptr& model) const {
     FRONT_END_CHECK_IMPLEMENTED(m_actual, convert);
-    FRONTEND_RETURN_STATEMENT("Converting input model",
-                              FrontEnd::create_copy(m_actual->convert(model->m_actual), m_shared_object))
+    // DEBUG: move ret_code out of FRONTEND_RETURN_STATEMENT(...) to see the actual exception message
+    const auto& ret_code = FrontEnd::create_copy(m_actual->convert(model->m_actual), m_shared_object);
+    FRONTEND_RETURN_STATEMENT("Converting input model", ret_code)
 }
 
 void FrontEnd::convert(const std::shared_ptr<Model>& model) const {
