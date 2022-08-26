@@ -662,7 +662,6 @@ static void TransformationUpToCPUSpecificOpSet(std::shared_ptr<ngraph::Function>
         });
     postSnippetsManager.register_pass<ngraph::pass::ConstantFolding>();
     postSnippetsManager.run_passes(nGraphFunc);
-    ov::pass::Serialize("after_tokenization.xml", "after_tokenization.bin").run_on_model(nGraphFunc);
 }
 
 static void Transformation(CNNNetwork& clonedNetwork, const bool _enableLPT, const bool _enableBF16, const bool _enableSnippets, const bool isLegacyApi) {
