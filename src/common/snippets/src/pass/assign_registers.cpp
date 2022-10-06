@@ -23,6 +23,7 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
         return !(std::dynamic_pointer_cast<opset1::Parameter>(op) || std::dynamic_pointer_cast<opset1::Result>(op));
         });
 
+    // enumerate all used tensors
     size_t rdx = 0;
     std::map<std::shared_ptr<descriptor::Tensor>, Reg> regs;
     for (const auto& op : stmts) {
@@ -37,6 +38,7 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
     for (const auto& op : stmts) {
         std::set<Reg> u;
         for (const auto& input : op->inputs()) {
+            // todo: why do we check count? can simply insert, it checks the count internally
             if (regs.count(input.get_tensor_ptr())) {
                 u.insert(regs[input.get_tensor_ptr()]);
             }
@@ -44,6 +46,7 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
         used.push_back(u);
 
         std::set<Reg> d;
+        // todo: store has gpr output, so we ignore it here
         if (!std::dynamic_pointer_cast<snippets::op::Store>(op)) {
             for (const auto& output : op->outputs()) {
                 d.insert(regs[output.get_tensor_ptr()]);
@@ -53,11 +56,14 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
     }
 
     // define life intervals
+    // liveOut[i] - regs that are live on exit from i-th (topologically ordered) operation
+    // liveIn[i] - regs that are live on entering the i-th (topologically ordered) operation
     std::vector<std::set<Reg>> lifeIn(stmts.size(), std::set<Reg>());
     std::vector<std::set<Reg>> lifeOut(stmts.size(), std::set<Reg>());
-
+    // todo: this part if O(N*N), so it's slow for large subgraphs. Can we simplify it?
     for (size_t i = 0; i < stmts.size(); i++) {
         for (size_t n = 0; n < stmts.size(); n++) {
+            // Regs that are live on entering the operation = regs used by the op + (all other regs alive - regs defined by the op)
             // copy regs from lifeOut to lifeIn while ignoring regs in def
             std::set_difference(lifeOut[n].begin(), lifeOut[n].end(), def[n].begin(), def[n].end(), std::inserter(lifeIn[n], lifeIn[n].begin()));
             lifeIn[n].insert(used[n].begin(), used[n].end());
@@ -107,6 +113,14 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
     for (size_t i = 0; i < stmts.size(); i++) {
         live_intervals.insert(std::make_pair(static_cast<int>(i), find_last_use(static_cast<int>(i))));
     }
+    {
+        std::cerr << "Live intervals: " << "\n";
+        int i = 0;
+        for (const auto& p : live_intervals) {
+            std::cerr << i << " | " << stmts[i]->get_friendly_name() << " | " << p.first << " : " << p.second << "\n";
+            i++;
+        }
+    }
 
     // http://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf
     std::multiset<std::pair<int, int>, by_ending> active;
@@ -126,7 +140,7 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
         }
         // allocate
         if (active.size() == 16) {
-            throw ngraph_error("caanot allocate registers for a snippet ");
+            throw ngraph_error("can't allocate registers for a snippet ");
         } else {
             register_map[interval.first] = bank.top();
             bank.pop();
@@ -139,6 +153,20 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
     for (const auto& reg : regs) {
         physical_regs[reg.first] = register_map[reg.second];
     }
+
+    {
+        int i = 0;
+        std::cerr << "Physical regs:\n";
+        for (const auto& s : stmts) {
+            std::cerr << i << " | " << stmts[i]->get_friendly_name() << " | ";
+            for (const auto& output : s->outputs()) {
+                std::cerr << physical_regs[ output.get_tensor_ptr()];
+            }
+            i++;
+            std::cerr << "\n";
+        }
+    }
+
     const auto num_parameters = f->get_parameters().size();
     for (const auto& n : f->get_ordered_ops()) {
         /* The main idea here is that each operation stores its output regs in rt["reginfo"]. Input and output regs are

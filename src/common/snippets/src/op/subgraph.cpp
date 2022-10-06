@@ -524,8 +524,8 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 //        std::cerr << "\n";
 //    }
 
-//    std::cerr << "Tile after is dumped";
-//    ov::pass::Serialize("tile_after.xml", "tile_after.bin").run_on_model(m_body);
+    std::cerr << "Tile after is dumped";
+    ov::pass::Serialize("tile_after.xml", "tile_after.bin").run_on_model(m_body);
 
     // schedule generation should go here and be target agnostic
     // actual code emission
