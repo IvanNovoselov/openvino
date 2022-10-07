@@ -584,6 +584,8 @@ void Snippet::generate(const jit_snippets_compile_args* jcp) {
 }
 
 void Snippet::schedule_6d(const jit_snippets_call_args& call_args) const {
+    if (getName() == "Power_1533")
+        std::cerr << "err\n";
     const auto& dom = exec_domain;
     // < N, C, H, W > < 1, 1, N, C*H*W>
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
@@ -591,6 +593,11 @@ void Snippet::schedule_6d(const jit_snippets_call_args& call_args) const {
             int64_t indexes[] = {d0, d1, d2, d3, d4};
             schedule.get_callable<kernel>()(indexes, &call_args);
         });
+    if (getName() == "Power_1533") {
+        std::cerr << "0 : " << *reinterpret_cast<float*>(call_args.dst_ptrs[0]) << "\n";
+        std::cerr << "1 : " << *reinterpret_cast<float*>(call_args.dst_ptrs[1]) << "\n";
+        std::cerr << "2 : " << *reinterpret_cast<float*>(call_args.dst_ptrs[2]) << "\n";
+    }
 }
 
 void Snippet::schedule_nt(const jit_snippets_call_args& call_args) const {

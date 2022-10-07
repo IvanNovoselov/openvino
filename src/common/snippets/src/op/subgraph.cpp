@@ -439,7 +439,13 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
     // generation flow
     snippets::pass::AssignRegisters().run_on_model(m_body);
-
+    std::cerr << "Tile before is dumped";
+    {
+        std::string name = get_friendly_name() + "_before";
+        ov::pass::Serialize(name + ".xml", name + ".bin").run_on_model(m_body);
+    }
+    if (get_friendly_name() == "Power_1533")
+        std::cerr << "err\n";
     if (master_shape.is_static()) {
         const auto inner_dim = master_shape.size() - 1;
         // Note: outer_dim could overflow if master_shape.size() < 2
@@ -513,8 +519,11 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 //    }
     m_body->validate_nodes_and_infer_types();
 
-//    std::cerr << "Tile after is dumped";
-//    ov::pass::Serialize("tile_after.xml", "tile_after.bin").run_on_model(m_body);
+    std::cerr << "Tile after is dumped";
+    {
+        std::string name = get_friendly_name() + "_after";
+        ov::pass::Serialize(name + ".xml", name + ".bin").run_on_model(m_body);
+    }
 
     // schedule generation should go here and be target agnostic
     // actual code emission

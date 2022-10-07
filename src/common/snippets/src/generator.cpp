@@ -155,6 +155,7 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
                                });
                 const auto& scalar_tile_end = ov::as_type_ptr<op::TileEnd>(*scalar_tile.rbegin());
                 scalar_tile_end->set_finalization_offsets(scalar_finalization_offsets);
+                scalar_tile_end->has_outer_tile = tile_end->has_outer_tile;
                 const auto scalar_work_amount = work_amount % increment;
                 scalar_tile_end->set_increment(1);
                 scalar_tile_end->set_work_amount(scalar_work_amount);

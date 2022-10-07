@@ -618,7 +618,9 @@ static void TransformationUpToCPUSpecificOpSet(std::shared_ptr<ngraph::Function>
         return false;
     });
     postLPTPassManager.run_passes(nGraphFunc);
-
+    std::cerr << "Initial graph is dumped";
+    ov::pass::Serialize("initial.xml", "initial.bin").run_on_model(nGraphFunc);
+//    if (false && _enableSnippets && dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx2)) {
     if (_enableSnippets && dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx2)) {
         ngraph::pass::Manager snippetsManager;
         snippetsManager.register_pass<SnippetsMarkSkipped>();
