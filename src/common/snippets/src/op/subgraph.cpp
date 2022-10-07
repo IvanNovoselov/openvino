@@ -444,9 +444,26 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
         std::string name = get_friendly_name() + "_before";
         ov::pass::Serialize(name + ".xml", name + ".bin").run_on_model(m_body);
     }
-    if (get_friendly_name() == "Power_1533")
+    bool bypass = false;
+    if (get_friendly_name() == "Power_1533") {
         std::cerr << "err\n";
-    if (master_shape.is_static()) {
+//        bypass = true;
+        int i = 0;
+        for (const auto& op : m_body->get_ordered_ops()) {
+            std::cerr << i++ << " : " << op->get_friendly_name() << " : ";
+            for (const auto& out :  op->outputs()) {
+                const auto& rt = out.get_tensor_ptr()->get_rt_info();
+                auto it_rt = rt.find("reginfo");
+                if (it_rt != rt.end()) {
+                    for (auto reg : it_rt->second.as<std::vector<size_t>>()) {
+                        std::cerr << reg << " ";
+                    }
+                }
+            }
+            std::cerr << "\n";
+        }
+    }
+    if (master_shape.is_static() && !bypass) {
         const auto inner_dim = master_shape.size() - 1;
         // Note: outer_dim could overflow if master_shape.size() < 2
         const auto outer_dim = master_shape.size() - 2;
@@ -501,8 +518,30 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
             const auto& outerTileBegin = insertTileBegin(commonParams);
             insertTileEnd(commonResults, outerTileBegin, outer_dim, outer_WA, 1, apply_increments);
         }
+    } else if (bypass) {
+        ngraph::pass::Manager mng;
+        mng.register_pass<ngraph::snippets::pass::SetScalarCountForLoad>();
+        mng.register_pass<ngraph::snippets::pass::SetScalarCountForStore>();
+        mng.run_passes(m_body);
     } else {
         throw ngraph_error("Dynamic case is not supported yet");
+    }
+
+    if (get_friendly_name() == "Power_1533") {
+        int i = 0;
+        for (const auto& op : m_body->get_ordered_ops()) {
+            std::cerr << i++ << " : " << op->get_friendly_name() << " : ";
+            for (const auto& out :  op->outputs()) {
+                const auto& rt = out.get_tensor_ptr()->get_rt_info();
+                auto it_rt = rt.find("reginfo");
+                if (it_rt != rt.end()) {
+                    for (auto reg : it_rt->second.as<std::vector<size_t>>()) {
+                        std::cerr << reg << " ";
+                    }
+                }
+            }
+            std::cerr << "\n";
+        }
     }
 //    for (int i = 0; i < tileEnd->get_output_size(); i++) {
 //        std::cerr << i << " : ";
