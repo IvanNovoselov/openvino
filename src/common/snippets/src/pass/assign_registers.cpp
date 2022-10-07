@@ -18,27 +18,33 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::op::AssignRegisters")
     using Reg = size_t;
     auto ops = f->get_ordered_ops();
+    // Note that currently there are 3 types of ops:
+    //  * gpr->gpr: (Parameter, Result, TileBegin, TileEnd) will also be Buffer?
+    //  * gpr->vec: or vec->gpr Load/LoadConvert, Store/StoreConvert, BroadcastLoad etc.
+    //  * vec->vec: all other "normal" operations that perform calculations on vector registers: Add, BroadcastMove, Power, etc.
     decltype(ops) stmts;
     std::copy_if(ops.begin(), ops.end(), std::back_inserter(stmts), [](decltype(ops[0]) op) {
         return !(std::dynamic_pointer_cast<opset1::Parameter>(op) || std::dynamic_pointer_cast<opset1::Result>(op));
         });
-
+    // todo: lets create a statements map by register type stmts['vec2vec'],stmts['gpr2gpr'], stmts['mixed']
     // enumerate all used tensors
     size_t rdx = 0;
+    // todo: create 2 regs: vec and gpr
     std::map<std::shared_ptr<descriptor::Tensor>, Reg> regs;
     for (const auto& op : stmts) {
+        // todo: fill appropriate regs based on op signature
         for (const auto& output : op->outputs()) {
             regs[output.get_tensor_ptr()] = rdx++;
         }
     }
-
+    // todo: make one for gpr and one for vector
     std::vector<std::set<Reg>> used; // used = used as an input
     std::vector<std::set<Reg>> def; // defined = used as output
 
     for (const auto& op : stmts) {
         std::set<Reg> u;
         for (const auto& input : op->inputs()) {
-            // todo: why do we check count? can simply insert, it checks the count internally
+            // Note that here we process only the inputs that are some other op's outputs
             if (regs.count(input.get_tensor_ptr())) {
                 u.insert(regs[input.get_tensor_ptr()]);
             }
