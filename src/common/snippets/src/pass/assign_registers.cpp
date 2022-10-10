@@ -22,26 +22,61 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
     //  * gpr->gpr: (Parameter, Result, TileBegin, TileEnd) will also be Buffer?
     //  * gpr->vec: or vec->gpr Load/LoadConvert, Store/StoreConvert, BroadcastLoad etc.
     //  * vec->vec: all other "normal" operations that perform calculations on vector registers: Add, BroadcastMove, Power, etc.
-    decltype(ops) stmts;
-    std::copy_if(ops.begin(), ops.end(), std::back_inserter(stmts), [](decltype(ops[0]) op) {
-        return !(std::dynamic_pointer_cast<opset1::Parameter>(op) || std::dynamic_pointer_cast<opset1::Result>(op));
-        });
+    enum op_reg_type {gpr2gpr, gpr2vec, vec2gpr, vec2vec};
+
+    auto get_op_reg_type = [](const std::shared_ptr<Node>& op) {
+        if (std::dynamic_pointer_cast<opset1::Parameter>(op) ||
+                std::dynamic_pointer_cast<opset1::Result>(op) ||
+                std::dynamic_pointer_cast<op::TileBegin>(op) ||
+                std::dynamic_pointer_cast<op::TileEnd>(op))
+            return gpr2gpr;
+        else if (std::dynamic_pointer_cast<snippets::op::Load>(op))
+            return gpr2vec;
+        else if (std::dynamic_pointer_cast<snippets::op::Store>(op))
+            return vec2gpr;
+        else
+            return vec2vec;
+
+    };
+    decltype(ops) ops_vec, ops_gpr, ops_mixed;
+    for (const auto& op : ops) {
+        switch (get_op_reg_type(op)) {
+            case vec2vec: ops_vec.push_back(op); break;
+            case gpr2gpr: ops_gpr.push_back(op); break;
+            case gpr2vec:
+            case vec2gpr: ops_mixed.push_back(op); break;
+        }
+    }
     // todo: lets create a statements map by register type stmts['vec2vec'],stmts['gpr2gpr'], stmts['mixed']
     // enumerate all used tensors
-    size_t rdx = 0;
-    // todo: create 2 regs: vec and gpr
-    std::map<std::shared_ptr<descriptor::Tensor>, Reg> regs;
-    for (const auto& op : stmts) {
-        // todo: fill appropriate regs based on op signature
+    size_t counter_vec = 0;
+    size_t counter_gpr = 0;
+    std::map<std::shared_ptr<descriptor::Tensor>, Reg> regs_vec, regs_gpr;
+    auto enumerate_out_tensors = [] (const std::shared_ptr<ov::Node>& op,
+                                     decltype(regs_vec)& reg_map,
+                           size_t& counter) {
         for (const auto& output : op->outputs()) {
-            regs[output.get_tensor_ptr()] = rdx++;
+            reg_map[output.get_tensor_ptr()] = counter++;
+        }
+    };
+    for (const auto& op : ops) {
+        switch (get_op_reg_type(op)) {
+            case vec2vec:
+            case gpr2vec:
+                enumerate_out_tensors(op, regs_vec, counter_vec);
+                break;
+            case gpr2gpr:
+            case vec2gpr:
+                enumerate_out_tensors(op, regs_gpr, counter_gpr);
+                break;
         }
     }
     // todo: make one for gpr and one for vector
-    std::vector<std::set<Reg>> used; // used = used as an input
-    std::vector<std::set<Reg>> def; // defined = used as output
-
-    for (const auto& op : stmts) {
+    std::vector<std::set<Reg>> used_gpr; // used = used as an input
+    std::vector<std::set<Reg>> def_gpr; // defined = used as output
+    std::vector<std::set<Reg>> used_vec; // used = used as an input
+    std::vector<std::set<Reg>> def_vec; // defined = used as output
+    for (const auto& op : ops) {
         std::set<Reg> u;
         for (const auto& input : op->inputs()) {
             // Note that here we process only the inputs that are some other op's outputs
@@ -60,6 +95,26 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
         }
         def.push_back(d);
     }
+    /*
+    for (const auto& op : stmts) {
+        std::set<Reg> u;
+        for (const auto& input : op->inputs()) {
+            // Note that here we process only the inputs that are some other op's outputs
+            if (regs.count(input.get_tensor_ptr())) {
+                u.insert(regs[input.get_tensor_ptr()]);
+            }
+        }
+        used.push_back(u);
+
+        std::set<Reg> d;
+        // todo: store has gpr output, so we ignore it here
+        if (!std::dynamic_pointer_cast<snippets::op::Store>(op)) {
+            for (const auto& output : op->outputs()) {
+                d.insert(regs[output.get_tensor_ptr()]);
+            }
+        }
+        def.push_back(d);
+    } */
 
     // define life intervals
     // liveOut[i] - regs that are live on exit from i-th (topologically ordered) operation
