@@ -11,6 +11,7 @@
 #include "snippets/pass/insert_movebroadcast.hpp"
 #include "snippets/pass/load_movebroadcast_to_broadcastload.hpp"
 #include "snippets/pass/assign_registers.hpp"
+#include "snippets/pass/assign_registers_new.hpp"
 #include "snippets/pass/convert_constants.hpp"
 #include "snippets/pass/convert_power_to_powerstatic.hpp"
 #include "snippets/pass/vector_to_scalar.hpp"
@@ -290,7 +291,8 @@ ov::PartialShape snippets::op::Subgraph::canonicalize(const BlockedShapeVector& 
 
     // We should insert Converts after Parameters and Constant and before Results
     // to align precision inside Subgraph body that is supported by Plugin
-    align_element_types(outputShapes, inputShapes);
+    // todo: commented for debug purposes! uncomment before merge
+//    align_element_types(outputShapes, inputShapes);
 
     master_shape = outPShape;
     return master_shape;
@@ -439,7 +441,33 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
     // generation flow
     snippets::pass::AssignRegisters().run_on_model(m_body);
-
+    snippets::pass::AssignRegistersNew().run_on_model(m_body);
+    for (const auto& op : m_body->get_ordered_ops()) {
+        std::cerr << op->get_friendly_name() << " | ";
+        for (const auto& output : op->outputs()) {
+            const auto& rt = output.get_tensor_ptr()->get_rt_info();
+            auto it_rt = rt.find("reginfo");
+            if (it_rt != rt.end()) {
+                for (auto reg : it_rt->second.as<std::vector<size_t>>()) {
+                    std::cerr << reg << " ";
+                }
+            }
+        }
+        std::cerr << ": ";
+        for (const auto& output : op->outputs()) {
+            const auto& rt = output.get_tensor_ptr()->get_rt_info();
+            auto it_rt = rt.find("reginfo_new");
+            if (it_rt != rt.end()) {
+                for (auto reg : it_rt->second.as<std::vector<size_t>>()) {
+                    std::cerr << reg << ", ";
+                }
+            }
+        }
+        std::cerr << "\n";
+    }
+    std::cerr << "Tile after is dumped";
+    ov::pass::Serialize("tile_after.xml", "tile_after.bin").run_on_model(m_body);
+    throw ngraph_error("Enough");
     if (master_shape.is_static()) {
         const auto inner_dim = master_shape.size() - 1;
         // Note: outer_dim could overflow if master_shape.size() < 2
@@ -523,9 +551,6 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 //        }
 //        std::cerr << "\n";
 //    }
-
-    std::cerr << "Tile after is dumped";
-    ov::pass::Serialize("tile_after.xml", "tile_after.bin").run_on_model(m_body);
 
     // schedule generation should go here and be target agnostic
     // actual code emission

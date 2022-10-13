@@ -33,7 +33,7 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
 
     std::vector<std::set<Reg>> used; // used = used as an input
     std::vector<std::set<Reg>> def; // defined = used as output
-
+//    std::cerr << "OLD:\n";
     for (const auto& op : stmts) {
         std::set<Reg> u;
         for (const auto& input : op->inputs()) {
@@ -50,6 +50,16 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
             }
         }
         def.push_back(d);
+//        if (true) {
+//            std::cerr << op->get_friendly_name() << " (Used) : ";
+//            for (auto a : used.back())
+//                std::cerr << a << " ";
+//            std::cerr << "\n";
+//            std::cerr << op->get_friendly_name() << " (Defined) : ";
+//            for (auto a : def.back())
+//                std::cerr << a << " ";
+//            std::cerr << "\n";
+//        }
     }
 
     // define life intervals
@@ -77,6 +87,13 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
             }
         }
     }
+    std::cerr << "OLD life_in:\n";
+    for (int j = 0; j < stmts.size(); j++) {
+        std::cerr << j << " : " << stmts[j] ->get_friendly_name() << " : ";
+        for (const auto&  l : lifeIn[j])
+            std::cerr << l << ",";
+        std::cerr  << "\n";
+    }
 
     struct by_starting {
         auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
@@ -93,6 +110,13 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
     std::set<std::pair<int, int>, by_starting> live_intervals;
 
     std::reverse(lifeIn.begin(), lifeIn.end());
+    std::cerr << "OLD life_in(rev):\n";
+    for (int j = 0; j < stmts.size(); j++) {
+        std::cerr << j << " : " << stmts[j] ->get_friendly_name() << " : ";
+        for (const auto&  l : lifeIn[j])
+            std::cerr << l << ",";
+        std::cerr  << "\n";
+    }
     auto find_last_use = [lifeIn](int i) -> int {
         int ln = static_cast<int>(lifeIn.size()) - 1;
         for (auto& x : lifeIn) {
@@ -103,10 +127,16 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
         }
         return i;
     };
-
+    std::cerr << "OLD live_intervals (0):\n";
     for (size_t i = 0; i < stmts.size(); i++) {
-        live_intervals.insert(std::make_pair(static_cast<int>(i), find_last_use(static_cast<int>(i))));
+//        live_intervals.insert(std::make_pair(static_cast<int>(i), find_last_use(static_cast<int>(i))));
+        const auto& l = std::make_pair(static_cast<int>(i), find_last_use(static_cast<int>(i)));
+        live_intervals.insert(l);
+        std::cerr << l.first << " : " << l.second << "\n";
     }
+    std::cerr << "OLD live_intervals (1):\n";
+    for (const auto&  l : live_intervals)
+        std::cerr << l.first << " : " << l.second << "\n";
 
     // http://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf
     std::multiset<std::pair<int, int>, by_ending> active;

@@ -17,7 +17,7 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
     RUN_ON_MODEL_SCOPE(AssignRegistersNew);
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::op::AssignRegistersNew")
     using Reg = size_t;
-    using tensor =std::shared_ptr<descriptor::Tensor>;
+    using tensor = std::shared_ptr<descriptor::Tensor>;
     auto ops = f->get_ordered_ops();
     // Note that currently there are 3 types of ops:
     //  * gpr->gpr: (Parameter, Result, TileBegin, TileEnd) will also be Buffer?
@@ -37,17 +37,16 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
             return vec2gpr;
         else
             return vec2vec;
-
     };
-    decltype(ops) ops_vec, ops_gpr, ops_mixed;
-    for (const auto& op : ops) {
-        switch (get_op_reg_type(op)) {
-            case vec2vec: ops_vec.push_back(op); break;
-            case gpr2gpr: ops_gpr.push_back(op); break;
-            case gpr2vec:
-            case vec2gpr: ops_mixed.push_back(op); break;
-        }
-    }
+//    decltype(ops) ops_vec, ops_gpr, ops_mixed;
+//    for (const auto& op : ops) {
+//        switch (get_op_reg_type(op)) {
+//            case vec2vec: ops_vec.push_back(op); break;
+//            case gpr2gpr: ops_gpr.push_back(op); break;
+//            case gpr2vec:
+//            case vec2gpr: ops_mixed.push_back(op); break;
+//        }
+//    }
     std::vector<std::pair<op_reg_type, std::shared_ptr<Node>>> typed_ops;
     for (const auto& op : ops)
         typed_ops.emplace_back(std::make_pair(get_op_reg_type(op), op));
@@ -58,7 +57,7 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
     std::map<tensor, Reg> regs_vec, regs_gpr;
     auto enumerate_out_tensors = [] (const std::shared_ptr<ov::Node>& op,
                                      decltype(regs_vec)& reg_map,
-                           size_t& counter) {
+                                     size_t& counter) {
         for (const auto& output : op->outputs()) {
             reg_map[output.get_tensor_ptr()] = counter++;
         }
@@ -87,6 +86,7 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
             result.insert(reg_map.at(t));
         return result;
     };
+//    std::cerr << "NEW:\n";
     for (int i = 0; i < typed_ops.size(); i++) {
         const auto& t_op = typed_ops[i];
         std::vector<tensor> used_tensors, defined_tensors;
@@ -112,6 +112,15 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
                 defined_gpr[i] = tensor2reg(defined_tensors, regs_gpr);
                 break;
         }
+//        if (true) {
+//            std::cerr << "#" << i << " : " << t_op.second->get_friendly_name() << " : ";
+//            for (auto a : used_vec[i])
+//                std::cerr << a << " ";
+//            std::cerr << " : ";
+//            for (auto a : defined_vec[i])
+//                std::cerr << a << " ";
+//            std::cerr << "\n";
+//        }
     }
 
     // define life intervals
@@ -135,6 +144,13 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
                                 std::inserter(life_in_vec[n], life_in_vec[n].begin()));
             //lifeIn[n].insert(used[n].begin(), used[n].end());
         }
+//        std::cerr << "# " << i << " #############################\n";
+//        for (int j = 0; j < ops.size(); j++) {
+//            std::cerr << j << " : " << ops[j] ->get_friendly_name() << " : ";
+//            for (const auto&  l : life_in_vec[j])
+//                std::cerr << l << " ";
+//            std::cerr  << "\n";
+//        }
         for (size_t n = 0; n < typed_ops.size(); n++) {
             auto op = typed_ops[n].second;
             for (const auto& out : op->outputs()) {
@@ -156,6 +172,13 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
             }
         }
     }
+    std::cerr << "NEW life_in:\n";
+    for (int i = 0; i < ops.size(); i++) {
+        std::cerr << i << " : " << ops[i] ->get_friendly_name() << " : ";
+        for (const auto&  l : life_in_vec[i])
+            std::cerr << l << ",";
+        std::cerr  << "\n";
+    }
 
     struct by_starting {
         auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
@@ -168,7 +191,8 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
             return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
         }
     };
-
+    // A variable live interval - is a range (start, stop) of op indexes, such that
+    // the variable is live within this range (defined but not used by the last user)
     std::set<std::pair<int, int>, by_starting> live_intervals_vec, live_intervals_gpr;
 
     std::reverse(life_in_vec.begin(), life_in_vec.end());
@@ -183,18 +207,18 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
         }
         return i;
     };
-
-    for (size_t i = 0; i < ops.size(); i++) {
-        live_intervals_vec.insert(std::make_pair(static_cast<int>(i), find_last_use(life_in_vec, static_cast<int>(i))));
-        live_intervals_gpr.insert(std::make_pair(static_cast<int>(i), find_last_use(life_in_gpr, static_cast<int>(i))));
-    }
-    {
-//        std::cerr << "Live intervals: " << "\n";
-//        for (int i = 0; i < ops.size(); i++) {
-//            auto v = live_intervals_vec[i];
-//            auto g = live_intervals_gpr[i];
-//            std::cerr << i << " | " << ops[i]->get_friendly_name() << " V: " << p.first << " : " << p.second << "\n";
-//        }
+    std::cerr << "NEW live_intervals (0):\n";
+    for (size_t i = 0; i < typed_ops.size(); i++) {
+        for (const auto& def : defined_vec[i]) {
+            const auto& l = std::make_pair(i, find_last_use(life_in_vec, static_cast<int>(def)));
+            live_intervals_vec.insert(l);
+            std::cerr << i << ": VEC: " << l.first << " : " << l.second << "\n";
+        }
+        for (const auto& def : defined_gpr[i]) {
+            const auto& l = std::make_pair(i, find_last_use(life_in_gpr, static_cast<int>(def)));
+            live_intervals_vec.insert(l);
+            std::cerr << i << ": GPR: " << l.first << " : " << l.second << "\n";
+        }
     }
     auto linescan_assign_registers = [](const decltype(live_intervals_vec)& live_intervals) {
         // http://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf
