@@ -442,25 +442,32 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
     // generation flow
     snippets::pass::AssignRegisters().run_on_model(m_body);
     snippets::pass::AssignRegistersNew().run_on_model(m_body);
+    std::cerr << "\n\nReg_info printout: \n";
     for (const auto& op : m_body->get_ordered_ops()) {
         std::cerr << op->get_friendly_name() << " | ";
         for (const auto& output : op->outputs()) {
             const auto& rt = output.get_tensor_ptr()->get_rt_info();
             auto it_rt = rt.find("reginfo");
             if (it_rt != rt.end()) {
+                std::cerr << " ";
                 for (auto reg : it_rt->second.as<std::vector<size_t>>()) {
-                    std::cerr << reg << " ";
+                    std::cerr << reg << ",";
                 }
+            } else {
+               std::cerr << "-";
             }
         }
-        std::cerr << ": ";
+        std::cerr << " |N| ";
         for (const auto& output : op->outputs()) {
             const auto& rt = output.get_tensor_ptr()->get_rt_info();
             auto it_rt = rt.find("reginfo_new");
             if (it_rt != rt.end()) {
+                std::cerr << " ";
                 for (auto reg : it_rt->second.as<std::vector<size_t>>()) {
-                    std::cerr << reg << ", ";
+                    std::cerr << reg << ",";
                 }
+            } else {
+                std::cerr << "-";
             }
         }
         std::cerr << "\n";

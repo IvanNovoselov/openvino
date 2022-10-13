@@ -59,7 +59,11 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
                                      decltype(regs_vec)& reg_map,
                                      size_t& counter) {
         for (const auto& output : op->outputs()) {
-            reg_map[output.get_tensor_ptr()] = counter++;
+            const auto& t = output.get_tensor_ptr();
+            // Note that some ops might have identical input&output tensors (Result and Tile* for ex.)
+            // so we have to check that the tensor has not been enumerated already
+            if (reg_map.count(t) == 0)
+                reg_map[t] = counter++;
         }
     };
     for (const auto& t_op : typed_ops) {
@@ -192,7 +196,7 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
         }
     };
     // A variable live interval - is a range (start, stop) of op indexes, such that
-    // the variable is live within this range (defined but not used by the last user)
+    // the variable is alive within this range (defined but not used by the last user)
     std::set<std::pair<int, int>, by_starting> live_intervals_vec, live_intervals_gpr;
 
     std::reverse(life_in_vec.begin(), life_in_vec.end());
@@ -216,7 +220,7 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
         }
         for (const auto& def : defined_gpr[i]) {
             const auto& l = std::make_pair(i, find_last_use(life_in_gpr, static_cast<int>(def)));
-            live_intervals_vec.insert(l);
+            live_intervals_gpr.insert(l);
             std::cerr << i << ": GPR: " << l.first << " : " << l.second << "\n";
         }
     }
@@ -251,25 +255,18 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
     auto register_map_vec = linescan_assign_registers(live_intervals_vec);
     auto register_map_gpr = linescan_assign_registers(live_intervals_gpr);
 
-    std::map<std::shared_ptr<descriptor::Tensor>, Reg> physical_regs_gpr, physical_regs_vec;
+    std::cerr << "Register map dump:\n";
+    for (auto p : register_map_vec)
+        std::cerr << p.first << " => " << p.second << "\n";
 
+    std::map<std::shared_ptr<descriptor::Tensor>, Reg> physical_regs_gpr, physical_regs_vec;
+//    std::map<tensor, Reg> regs_vec, regs_gpr;
+// std::map<Reg, Reg> register_map;
+// todo: this seems useless, remove in the future
     for (const auto& reg : regs_vec)
         physical_regs_vec[reg.first] = register_map_vec[reg.second];
     for (const auto& reg : regs_gpr)
         physical_regs_gpr[reg.first] = register_map_gpr[reg.second];
-
-    {
-//        int i = 0;
-//        std::cerr << "Physical regs:\n";
-//        for (const auto& s : stmts) {
-//            std::cerr << i << " | " << stmts[i]->get_friendly_name() << " | ";
-//            for (const auto& output : s->outputs()) {
-//                std::cerr << physical_regs[ output.get_tensor_ptr()];
-//            }
-//            i++;
-//            std::cerr << "\n";
-//        }
-    }
 
     for (const auto& t_op : typed_ops) {
         std::vector<tensor> out_tensors;
@@ -288,7 +285,7 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
             case vec2gpr:
                 for (auto& t : out_tensors) {
                     auto& rt = t->get_rt_info();
-                    rt["reginfo_new"] = std::vector<size_t>{physical_regs_gpr[t]};
+                    rt["reginfo_new_gpr"] = std::vector<size_t>{physical_regs_gpr[t]};
                 }
                 break;
         }
