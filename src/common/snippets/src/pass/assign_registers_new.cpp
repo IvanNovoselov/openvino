@@ -197,8 +197,7 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
     };
     // A variable live interval - is a range (start, stop) of op indexes, such that
     // the variable is alive within this range (defined but not used by the last user)
-//    std::set<std::pair<int, int>, by_starting> live_intervals_vec, live_intervals_gpr;
-    std::map<std::pair<int, int>, Reg, by_starting> live_intervals_vec, live_intervals_gpr;
+    std::set<std::pair<int, int>, by_starting> live_intervals_vec, live_intervals_gpr;
 
     std::reverse(life_in_vec.begin(), life_in_vec.end());
     std::reverse(life_in_gpr.begin(), life_in_gpr.end());
@@ -216,45 +215,39 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
     for (size_t i = 0; i < typed_ops.size(); i++) {
         for (const auto& def : defined_vec[i]) {
             const auto& l = std::make_pair(i, find_last_use(life_in_vec, static_cast<int>(def)));
-            live_intervals_vec[l] = def;
+            live_intervals_vec.insert(l);
             std::cerr << i << ": VEC: " << l.first << " : " << l.second << "\n";
         }
         for (const auto& def : defined_gpr[i]) {
             const auto& l = std::make_pair(i, find_last_use(life_in_gpr, static_cast<int>(def)));
-            live_intervals_gpr[l] = def;
+            live_intervals_gpr.insert(l);
             std::cerr << i << ": GPR: " << l.first << " : " << l.second << "\n";
         }
     }
     auto linescan_assign_registers = [](const decltype(live_intervals_vec)& live_intervals) {
         // http://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf
-//        std::multiset<std::pair<int, int>, by_ending> active;
-        std::map<std::pair<int, int>, Reg, by_ending> active;
-        // uniquely defined register => reused reg (reduced subset enabled by reg by reusage)
+        std::multiset<std::pair<int, int>, by_ending> active;
         std::map<Reg, Reg> register_map;
         std::stack<Reg> bank;
         for (int i = 0; i < 16; i++) bank.push(16 - 1 - i);
 
-        std::pair<int, int> interval, active_interval;
-        Reg unique_reg, active_unique_reg;
-        for (const auto& interval_reg : live_intervals) {
-            std::tie(interval, unique_reg) = interval_reg;
+        for (auto interval : live_intervals) {
             // check expired
             while (!active.empty()) {
-                std::tie(active_interval, active_unique_reg) = *active.begin();
-                // if end of active interval has not passed yet => stop removing actives since they are sorted by end
-                if (active_interval.second >= interval.first) {
+                auto x = *active.begin();
+                if (x.second >= interval.first) {
                     break;
                 }
-                active.erase(active_interval);
-                bank.push(register_map[unique_reg]);
+                active.erase(x);
+                bank.push(register_map[x.first]);
             }
             // allocate
             if (active.size() == 16) {
                 throw ngraph::ngraph_error("can't allocate registers for a snippet ");
             } else {
-                register_map[unique_reg] = bank.top();
+                register_map[interval.first] = bank.top();
                 bank.pop();
-                active.insert(interval_reg);
+                active.insert(interval);
             }
         }
         return register_map;

@@ -129,8 +129,7 @@ bool ngraph::snippets::pass::AssignRegisters::run_on_model(const std::shared_ptr
     };
     std::cerr << "OLD live_intervals (0):\n";
     for (size_t i = 0; i < stmts.size(); i++) {
-        // Here we employ the fact that output tensor id and op id is essentially
-        // the same due to the way we enumerate them. This won't work if we have an op with multiple outputs
+//        live_intervals.insert(std::make_pair(static_cast<int>(i), find_last_use(static_cast<int>(i))));
         const auto& l = std::make_pair(static_cast<int>(i), find_last_use(static_cast<int>(i)));
         live_intervals.insert(l);
         std::cerr << l.first << " : " << l.second << "\n";
