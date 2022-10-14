@@ -57,20 +57,21 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
     size_t counter_gpr = 0;
     std::map<tensor, Reg> regs_vec, regs_gpr;
     // Define a set of immune tensors that will be ignored by auto reg allocation => their reg allocation will be done manually
-    std::map<tensor, Reg> manually_allocated_regs;
+    // todo: presently it hold only gpr's. If you need to manually assign vec's, implement reg_type or create a second map
+    std::map<tensor, Reg> manually_assigned_regs;
     const auto IS_MANUALLY_ALLOCATED_REG = SIZE_MAX;
     const auto num_parameters = f->get_parameters().size();
     for (const auto& op : ops) {
         if (const auto& param = ov::as_type_ptr<ov::op::v0::Parameter>(op)) {
-            manually_allocated_regs[op->output(0).get_tensor_ptr()] =
+            manually_assigned_regs[op->output(0).get_tensor_ptr()] =
                     static_cast<Reg>(f->get_parameter_index(param));
         } else if (const auto& result = ov::as_type_ptr<opset1::Result>(op)) {
             // here we use the fact that Result input & output tensors are identical by construction
-            manually_allocated_regs[op->output(0).get_tensor_ptr()] =
+            manually_assigned_regs[op->output(0).get_tensor_ptr()] =
                     static_cast<Reg>(f->get_result_index(result) + num_parameters);
         }
     }
-    auto enumerate_out_tensors = [&manually_allocated_regs] (const std::shared_ptr<ov::Node>& op,
+    auto enumerate_out_tensors = [&manually_assigned_regs] (const std::shared_ptr<ov::Node>& op,
                                      decltype(regs_vec)& reg_map,
                                      size_t& counter) {
         for (const auto& output : op->outputs()) {
@@ -78,7 +79,7 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
             // Note that some ops might have identical input&output tensors (Result and Tile* for ex.)
             // so we have to check that the tensor has not been enumerated already
             if (reg_map.count(t) == 0) {
-                reg_map[t] = manually_allocated_regs.count(t) == 0 ? counter++ : IS_MANUALLY_ALLOCATED_REG;
+                reg_map[t] = manually_assigned_regs.count(t) == 0 ? counter++ : IS_MANUALLY_ALLOCATED_REG;
             }
         }
     };
@@ -249,14 +250,18 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
     print_live_intervals(live_intervals_vec);
     std::cerr << "NEW live_intervals (GPR):\n";
     print_live_intervals(live_intervals_gpr);
-    auto linescan_assign_registers = [](const decltype(live_intervals_vec)& live_intervals) {
+
+    auto linescan_assign_registers = [](const decltype(live_intervals_vec)& live_intervals,
+                                        const std::set<Reg>& reg_pool) {
         // http://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf
         // todo: do we need multimap? <=> can an op have two inputs from the same op?
         std::map<std::pair<int, int>, Reg, by_ending> active;
         // uniquely defined register => reused reg (reduced subset enabled by reg by reusage)
         std::map<Reg, Reg> register_map;
         std::stack<Reg> bank;
-        for (int i = 0; i < 16; i++) bank.push(16 - 1 - i);
+        // regs are stored in ascending order in reg_pool, so walk in reverse to assign them the same way
+        for (auto rit = reg_pool.crbegin(); rit != reg_pool.crend(); rit++)
+            bank.push(*rit);
 
         std::pair<int, int> interval, active_interval;
         Reg unique_reg, active_unique_reg;
@@ -273,7 +278,7 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
                 bank.push(register_map[active_unique_reg]);
             }
             // allocate
-            if (active.size() == 16) {
+            if (active.size() == reg_pool.size()) {
                 throw ngraph::ngraph_error("can't allocate registers for a snippet ");
             } else {
                 register_map[unique_reg] = bank.top();
@@ -283,8 +288,15 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
         }
         return register_map;
     };
-    auto unique2reused_map_vec = linescan_assign_registers(live_intervals_vec);
-    auto unique2reused_map_gpr = linescan_assign_registers(live_intervals_gpr);
+    // todo: vec_/gpr_pool are hardware-specific and should be provided by a backend, e.g. overloaded generator
+    std::set<Reg> vec_pool;
+    for (Reg i  = 0; i < 16; i++)
+        vec_pool.insert(i);
+    auto unique2reused_map_vec = linescan_assign_registers(live_intervals_vec, vec_pool);
+    std::set<Reg> gpr_pool(std::move(vec_pool));
+    for (const auto& t_reg : manually_assigned_regs)
+        gpr_pool.erase(t_reg.second);
+    auto unique2reused_map_gpr = linescan_assign_registers(live_intervals_gpr, gpr_pool);
 
     std::cerr << "Register map dump (VEC):\n";
     for (auto p : unique2reused_map_vec)
@@ -293,7 +305,7 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
     for (auto p : unique2reused_map_gpr)
         std::cerr << p.first << " => " << p.second << "\n";
 
-    std::map<tensor, Reg> assigned_regs(std::move(manually_allocated_regs));
+    std::map<tensor, Reg> assigned_regs(std::move(manually_assigned_regs));
     auto register_assigned_regs = [&assigned_regs](const std::map<tensor, Reg>& unique_regs,
                                                    const std::map<Reg, Reg>& unique2reused) {
         for (const auto& reg : unique_regs) {
