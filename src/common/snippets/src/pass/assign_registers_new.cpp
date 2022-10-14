@@ -12,6 +12,7 @@
 #include <ngraph/opsets/opset1.hpp>
 
 #include <iterator>
+#include <limits.h>
 
 bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_ptr<ov::Model>& f) {
     RUN_ON_MODEL_SCOPE(AssignRegistersNew);
@@ -55,15 +56,30 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
     size_t counter_vec = 0;
     size_t counter_gpr = 0;
     std::map<tensor, Reg> regs_vec, regs_gpr;
-    auto enumerate_out_tensors = [] (const std::shared_ptr<ov::Node>& op,
+    // Define a set of immune tensors that will be ignored by auto reg allocation => their reg allocation will be done manually
+    std::map<tensor, Reg> manually_allocated_regs;
+    const auto IS_MANUALLY_ALLOCATED_REG = SIZE_MAX;
+    const auto num_parameters = f->get_parameters().size();
+    for (const auto& op : ops) {
+        if (const auto& param = ov::as_type_ptr<ov::op::v0::Parameter>(op)) {
+            manually_allocated_regs[op->output(0).get_tensor_ptr()] =
+                    static_cast<Reg>(f->get_parameter_index(param));
+        } else if (const auto& result = ov::as_type_ptr<opset1::Result>(op)) {
+            // here we use the fact that Result input & output tensors are identical by construction
+            manually_allocated_regs[op->output(0).get_tensor_ptr()] =
+                    static_cast<Reg>(f->get_result_index(result) + num_parameters);
+        }
+    }
+    auto enumerate_out_tensors = [&manually_allocated_regs] (const std::shared_ptr<ov::Node>& op,
                                      decltype(regs_vec)& reg_map,
                                      size_t& counter) {
         for (const auto& output : op->outputs()) {
             const auto& t = output.get_tensor_ptr();
             // Note that some ops might have identical input&output tensors (Result and Tile* for ex.)
             // so we have to check that the tensor has not been enumerated already
-            if (reg_map.count(t) == 0)
-                reg_map[t] = counter++;
+            if (reg_map.count(t) == 0) {
+                reg_map[t] = manually_allocated_regs.count(t) == 0 ? counter++ : IS_MANUALLY_ALLOCATED_REG;
+            }
         }
     };
     for (const auto& t_op : typed_ops) {
@@ -86,8 +102,11 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
 
     auto tensor2reg = [] (const std::vector<tensor>& tensors, const std::map<tensor, Reg>& reg_map) {
         std::set<Reg> result;
-        for (const auto& t : tensors)
-            result.insert(reg_map.at(t));
+        for (const auto& t : tensors) {
+            Reg reg_id = reg_map.at(t);
+            if (reg_id != IS_MANUALLY_ALLOCATED_REG)
+                result.insert(reg_id);
+        }
         return result;
     };
 //    std::cerr << "NEW:\n";
@@ -212,19 +231,24 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
         }
         return i;
     };
-    std::cerr << "NEW live_intervals (0):\n";
+    auto print_live_intervals = [] (decltype(live_intervals_vec) live_intervals) {
+        std::pair<int, int> interval;
+        Reg reg_id;
+        for (const auto& interval_reg : live_intervals) {
+            std::tie(interval, reg_id) = interval_reg;
+            std::cerr << "Reg# : " << reg_id << " : " << interval.first << " : " << interval.second << "\n";
+        }
+    };
     for (size_t i = 0; i < typed_ops.size(); i++) {
-        for (const auto& def : defined_vec[i]) {
-            const auto& l = std::make_pair(i, find_last_use(life_in_vec, static_cast<int>(def)));
-            live_intervals_vec[l] = def;
-            std::cerr << i << ": VEC: " << l.first << " : " << l.second << "\n";
-        }
-        for (const auto& def : defined_gpr[i]) {
-            const auto& l = std::make_pair(i, find_last_use(life_in_gpr, static_cast<int>(def)));
-            live_intervals_gpr[l] = def;
-            std::cerr << i << ": GPR: " << l.first << " : " << l.second << "\n";
-        }
+        for (const auto& def : defined_vec[i])
+            live_intervals_vec[std::make_pair(i, find_last_use(life_in_vec, static_cast<int>(def)))] = def;
+        for (const auto& def : defined_gpr[i])
+            live_intervals_gpr[std::make_pair(i, find_last_use(life_in_gpr, static_cast<int>(def)))] = def;
     }
+    std::cerr << "NEW live_intervals (VEC):\n";
+    print_live_intervals(live_intervals_vec);
+    std::cerr << "NEW live_intervals (GPR):\n";
+    print_live_intervals(live_intervals_gpr);
     auto linescan_assign_registers = [](const decltype(live_intervals_vec)& live_intervals) {
         // http://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf
         // todo: do we need multimap? <=> can an op have two inputs from the same op?
@@ -259,71 +283,37 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
         }
         return register_map;
     };
-    auto register_map_vec = linescan_assign_registers(live_intervals_vec);
-    auto register_map_gpr = linescan_assign_registers(live_intervals_gpr);
+    auto unique2reused_map_vec = linescan_assign_registers(live_intervals_vec);
+    auto unique2reused_map_gpr = linescan_assign_registers(live_intervals_gpr);
 
-    std::cerr << "Register map dump:\n";
-    for (auto p : register_map_vec)
+    std::cerr << "Register map dump (VEC):\n";
+    for (auto p : unique2reused_map_vec)
+        std::cerr << p.first << " => " << p.second << "\n";
+    std::cerr << "Register map dump (GPR):\n";
+    for (auto p : unique2reused_map_gpr)
         std::cerr << p.first << " => " << p.second << "\n";
 
-    std::map<std::shared_ptr<descriptor::Tensor>, Reg> physical_regs_gpr, physical_regs_vec;
-//    std::map<tensor, Reg> regs_vec, regs_gpr;
-// std::map<Reg, Reg> register_map;
-// todo: this seems useless, remove in the future
-    for (const auto& reg : regs_vec)
-        physical_regs_vec[reg.first] = register_map_vec[reg.second];
-    for (const auto& reg : regs_gpr)
-        physical_regs_gpr[reg.first] = register_map_gpr[reg.second];
+    std::map<tensor, Reg> assigned_regs(std::move(manually_allocated_regs));
+    auto register_assigned_regs = [&assigned_regs](const std::map<tensor, Reg>& unique_regs,
+                                                   const std::map<Reg, Reg>& unique2reused) {
+        for (const auto& reg : unique_regs) {
+            if (reg.second == IS_MANUALLY_ALLOCATED_REG)
+                continue;
+            if (unique2reused.count(reg.second) == 0)
+                ngraph::ngraph_error("Assign registers failed to allocate register for a tensor");
+            assigned_regs[reg.first] = unique2reused.at(reg.second);
+        }
+    };
+    register_assigned_regs(regs_vec, unique2reused_map_vec);
+    register_assigned_regs(regs_gpr, unique2reused_map_gpr);
 
     for (const auto& t_op : typed_ops) {
-        std::vector<tensor> out_tensors;
-        for (const auto& out : t_op.second->outputs())
-            out_tensors.push_back(out.get_tensor_ptr());
-
-        switch (t_op.first) {
-            case vec2vec:
-            case gpr2vec:
-                for (auto& t : out_tensors) {
-                    auto& rt = t->get_rt_info();
-                    rt["reginfo_new"] = std::vector<size_t>{physical_regs_vec[t]};
-                }
-                break;
-            case gpr2gpr:
-            case vec2gpr:
-                for (auto& t : out_tensors) {
-                    auto& rt = t->get_rt_info();
-                    rt["reginfo_new_gpr"] = std::vector<size_t>{physical_regs_gpr[t]};
-                }
-                break;
+        for (const auto& out : t_op.second->outputs()) {
+            const auto& t = out.get_tensor_ptr();
+            auto& rt = t->get_rt_info();
+            rt["reginfo_new"] = std::vector<size_t>{assigned_regs[t]};
         }
     }
-
-    /*
-    const auto num_parameters = f->get_parameters().size();
-    for (const auto& n : f->get_ordered_ops()) {
-        // The main idea here is that each operation stores its output regs in rt["reginfo"]. Input and output regs are
-        // then derived by parsing node's and parent's rt["reginfo"], look into ngraph::snippets::getRegisters for details.
-        // Note also that Parameter and Result store general-purpose register index, because they work with memory
-        // (memory pointer is stored in gpr). All other "regular" ops store vector regs indexes, since calculations are
-        // performed on registers.
-        if (is_type<ov::op::v0::Result>(n)) {
-            continue;
-        } else if (const auto& param = ov::as_type_ptr<ov::op::v0::Parameter>(n)) {
-            auto& rt  =  n->get_output_tensor(0).get_rt_info();
-            rt["reginfo"] = std::vector<size_t>{static_cast<size_t>(f->get_parameter_index(param))};
-        } else if (const auto& store = ov::as_type_ptr<ngraph::snippets::op::Store>(n)) {
-            auto& rt  = n->get_output_tensor(0).get_rt_info();
-            rt["reginfo"] = std::vector<size_t>{static_cast<size_t>(f->get_result_index(store) + num_parameters)};
-        } else {
-            for (const auto& output : n->outputs()) {
-                auto out_tensor = output.get_tensor_ptr();
-                auto& rt  = out_tensor->get_rt_info();
-                rt["reginfo"] = std::vector<size_t>{physical_regs[out_tensor]};
-            }
-        }
-    }
-    */
-
     return false;
 }
 
