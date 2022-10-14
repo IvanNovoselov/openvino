@@ -255,16 +255,20 @@ bool ngraph::snippets::pass::AssignRegistersNew::run_on_model(const std::shared_
     auto register_map_vec = linescan_assign_registers(live_intervals_vec);
     auto register_map_gpr = linescan_assign_registers(live_intervals_gpr);
 
+    std::map<Reg, Reg> register_map_vec_2;
+
     std::cerr << "Register map dump:\n";
-    for (auto p : register_map_vec)
+    for (auto p : register_map_vec) {
         std::cerr << p.first << " => " << p.second << "\n";
+        register_map_vec_2[*defined_vec[p.first].begin()] = p.second;
+    }
 
     std::map<std::shared_ptr<descriptor::Tensor>, Reg> physical_regs_gpr, physical_regs_vec;
 //    std::map<tensor, Reg> regs_vec, regs_gpr;
 // std::map<Reg, Reg> register_map;
 // todo: this seems useless, remove in the future
     for (const auto& reg : regs_vec)
-        physical_regs_vec[reg.first] = register_map_vec[reg.second];
+        physical_regs_vec[reg.first] = register_map_vec_2[reg.second];
     for (const auto& reg : regs_gpr)
         physical_regs_gpr[reg.first] = register_map_gpr[reg.second];
 
