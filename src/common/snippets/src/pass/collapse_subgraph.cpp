@@ -46,6 +46,21 @@ auto outputs_are_not_broadcastable(const std::shared_ptr<const Node>& node) -> b
 
 auto is_supported_op(const std::shared_ptr<const Node> &n) -> bool {
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::is_supported_op")
+    auto is_supported_transpose = [](const std::shared_ptr<const Node>& n) -> bool {
+        const auto& transpose = as_type_ptr<const opset1::Transpose>(n);
+        if (transpose && n->get_input_size() == 2) {
+            const auto& order = as_type_ptr<const opset1::Constant>(n->get_input_node_shared_ptr(1));
+            if (order && order->get_output_element_type(0) == element::i32) {
+                const auto values = order->get_vector<int>();
+                const std::vector<std::vector<int>> supported{{0, 2, 1, 3}, {0, 2, 3, 1}};
+                bool res = std::find(supported.begin(), supported.end(), values) != supported.end();
+                return res;
+//                return std::find(supported.begin(), supported.end(), values) != supported.end();
+            }
+        }
+        return false;
+    };
+
     auto is_supported_fq_op = [](const std::shared_ptr<const Node>& n) -> bool {
         // TODO [92179]: Add support of FakeQuantize with non-constants inputs and with binarization algorithm.
         const auto fq = ov::as_type_ptr<const opset1::FakeQuantize>(n);
@@ -101,7 +116,8 @@ auto is_supported_op(const std::shared_ptr<const Node> &n) -> bool {
             || ov::is_type<ngraph::op::v4::Swish>(n)
             || ov::is_type<ngraph::op::v4::HSwish>(n);
     };
-    return is_supported_fq_op(n) || is_supported_unary_eltwise_op(n) || is_supported_binary_eltwise_op(n);
+    return is_supported_fq_op(n) || is_supported_unary_eltwise_op(n) || is_supported_binary_eltwise_op(n) ||
+           is_supported_transpose(n);
 }
 
 auto has_supported_in_out(const std::shared_ptr<const Node> &n) -> bool {
