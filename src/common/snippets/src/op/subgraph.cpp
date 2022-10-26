@@ -42,14 +42,22 @@ void snippets::op::Subgraph::set_non_scalar_constants_count(const size_t count) 
     m_non_scalar_constants_count = count;
 }
 
+void snippets::op::Subgraph::set_overriden_shapes(std::vector<ov::Shape> new_shapes) {
+    OPENVINO_ASSERT(has_domain_sensitive_ops(), "You can override io shapes only if Subgraph body contains domain-sensitive ops");
+    size_t body_io_size = m_body->get_parameters().size() + m_body->get_results().size();
+    OPENVINO_ASSERT(new_shapes.size() == body_io_size, "Invalid number of overriden shapes, must be a shape for every result and parameter");
+    overriden_io_shapes = std::move(new_shapes);
+}
+
 snippets::op::Subgraph::Subgraph(const OutputVector& args, std::shared_ptr<ov::Model> body)
-    : Op(args), m_body(body), m_generator(nullptr) {
+    : Op(args), m_body(body), m_generator(nullptr), overriden_io_shapes({}) {
     const auto ops = m_body->get_ops();
     for (const auto& op : ops) {
         config.m_is_quantized = config.m_is_quantized || ov::is_type<ov::op::v0::FakeQuantize>(op);
         config.m_has_type_relaxed_ops = config.m_has_type_relaxed_ops || std::dynamic_pointer_cast<ngraph::op::TypeRelaxedBase>(op);
         config.m_is_needed_to_align_precision = config.m_is_needed_to_align_precision || is_quantized() || has_type_relaxed_ops() ||
             snippets::pass::AlignElementType::opNeedsAlignElementType(op, execution_element_type);
+        config.m_has_domain_sensitive_ops = config.m_has_domain_sensitive_ops || ov::is_type<ov::op::v1::Transpose>(op);
     }
 
     constructor_validate_and_infer_types();
@@ -400,7 +408,9 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
         // todo: get_lanes() assumes fp32. Could there be any int8 issues?
         // Note that InsertLoops requires validate_and_infer_types afterwards, so add it manually if
         // automatic validation will be disabled in the pass manager
-        manager.register_pass<snippets::pass::InsertLoops>(master_shape, m_generator->get_target_machine()->get_lanes());
+        manager.register_pass<snippets::pass::InsertLoops>(master_shape,
+                                                           m_generator->get_target_machine()->get_lanes(),
+                                                           overriden_io_shapes);
     }
     manager.run_passes(m_body);
 }

@@ -101,6 +101,16 @@ public:
         return config.m_has_type_relaxed_ops;
     }
 
+    bool has_domain_sensitive_ops() const {
+        return config.m_has_domain_sensitive_ops;
+    }
+
+    const std::vector<ov::Shape>& get_overriden_shapes() const {
+        return overriden_io_shapes;
+    }
+
+    void set_overriden_shapes(std::vector<ov::Shape>);
+
     snippets::Schedule generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes, ngraph::pass::Manager& opt,
                                 const void* compile_params = nullptr);
     snippets::Schedule generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes, const void* compile_params = nullptr);
@@ -150,9 +160,16 @@ private:
         // True if Subgraph contains TypeRelaxed nodes -> for several streams in tp mode we should copy body using mutexes
         // because TypeRelaxed::copy_with_new_inputs() isn't save-thread method
         bool m_has_type_relaxed_ops = false;
+        // True if body has operations that don't support plugin-side domain optimizations
+        // (e.g. Transpose in general doesn't support dimensions collapsing)
+        bool m_has_domain_sensitive_ops = false;
     } config;
 
     ov::PartialShape master_shape;
+    // Input and output shapes that will be passed to snippets::pass::InsertLoops.
+    // overriden_io_shapes are used to propagate scheduling shapes without a proper body reshape in cases when
+    // body contains domain-sensitive operations that can't be easily reshaped to an arbitrary domain (e.g. Transpose)
+    std::vector<ov::Shape> overriden_io_shapes;
 };
 
 static inline std::ostream& operator<<(std::ostream& os, const op::Subgraph::BlockedShape& blocked_shape) {

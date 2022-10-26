@@ -264,13 +264,12 @@ void Snippet::optimizeExecDomain(std::vector<VectorDims>& inputShapes, std::vect
             if (static_cast<int>(domain.size()) - collapsedDims - 2 < 0)
                 break;
 
-            bool canCollapse = true;
-            for (size_t i = 0; i < inputShapes.size(); i++) {
+            bool canCollapse = !snippet->has_domain_sensitive_ops();
+            for (size_t i = 0; i < inputShapes.size() && canCollapse; i++) {
                 const size_t last = inputShapes[i].size() - 1;
                 if ((inputShapes[i][last - 1] != 1 && inputShapes[i][last] == 1) ||
                     (inputShapes[i][last - 1] == 1 && inputShapes[i][last] != 1)) {
                     canCollapse = false;
-                    break;
                 }
             }
 
@@ -479,18 +478,33 @@ void Snippet::prepareParams() {
         dim = 1;
     }
 
-    std::vector<ov::Shape> new_shapes;
-    for (const auto& s : normInputShapes) {
-        ov::Shape ns(tileRank, 0);
-        const int offset = s.size() - tileRank;
-        // todo: this check is excessive, remove it before merge
-        if (offset < 0)
-            IE_THROW() << "Error during creating reduced body shapes: tileRank is larger than the input size";
-        std::copy(s.begin() + offset, s.end(), ns.begin());
-        new_shapes.emplace_back(std::move(ns));
-    }
+    // ov::pass::Serialize("tile_initial.xml", "tile_initial.bin").run_on_model(snippet->get_body());
+    //
+    auto get_shapes_for_snippet = [](const std::vector<VectorDims>& normShapes, const size_t tileRank) {
+        std::vector<ov::Shape> new_shapes;
+        for (const auto& s : normShapes) {
+            ov::Shape ns(tileRank, 0);
+            const int offset = s.size() - tileRank;
+            // todo: this check is excessive, remove it before merge
+            if (offset < 0)
+                IE_THROW() << "Error during creating reduced body shapes: tileRank is larger than the input size";
+            std::copy(s.begin() + offset, s.end(), ns.begin());
+            new_shapes.emplace_back(std::move(ns));
+        }
+        return new_shapes;
+    };
+
+    std::vector<ov::Shape> new_shapes(get_shapes_for_snippet(normInputShapes, tileRank));
     snippet->set_master_shape(PartialShape(scheduler_work_amounts));
-    snippet->reshape_body(new_shapes);
+    // If the snippets has domain sensitive ops (e.g. Transpose) then domain optimizations are not performed
+    // so need only update Parameter and Result shapes so Loops will be appropriately inserted in the snippets::pass::InsertLoops
+    if (snippet->has_domain_sensitive_ops()) {
+        for (const auto& s : get_shapes_for_snippet(normOutputShapes, tileRank))
+            new_shapes.push_back(s);
+        snippet->set_overriden_shapes(new_shapes);
+    } else {
+        snippet->reshape_body(new_shapes);
+    }
 }
 
 bool Snippet::needPrepareParams() const {

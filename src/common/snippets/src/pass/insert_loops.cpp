@@ -8,8 +8,9 @@
 
 #include <ngraph/rt_info.hpp>
 
-ngraph::snippets::pass::InsertLoops::InsertLoops(ov::PartialShape master_shape, size_t vector_size)
-: master_shape(std::move(master_shape)), vector_size(vector_size) {
+ngraph::snippets::pass::InsertLoops::InsertLoops(ov::PartialShape master_shape, size_t vector_size,
+                                                 std::vector<ov::Shape> overriden_shapes = {})
+: master_shape(std::move(master_shape)), vector_size(vector_size), overriden_shapes(std::move(overriden_shapes)) {
 }
 
 bool ngraph::snippets::pass::InsertLoops::run_on_model(const std::shared_ptr<ov::Model> &model) {
@@ -29,11 +30,21 @@ bool ngraph::snippets::pass::InsertLoops::run_on_model(const std::shared_ptr<ov:
     const auto& orig_results = model->get_results();
     ResultVector commonResults(orig_results.rbegin(), orig_results.rend());
     std::vector<PartialShape> ioShapes;
-    ioShapes.reserve(commonParams.size() + commonResults.size());
-    std::transform(commonParams.begin(), commonParams.end(), std::back_inserter(ioShapes),
-                   [](const std::shared_ptr<Node>& n) { return n->get_output_partial_shape(0); });
-    std::transform(commonResults.begin(), commonResults.end(), std::back_inserter(ioShapes),
-                   [](const std::shared_ptr<Node>& n) { return n->get_input_partial_shape(0); });
+    if (overriden_shapes.empty()) {
+        ioShapes.reserve(commonParams.size() + commonResults.size());
+        std::transform(commonParams.begin(), commonParams.end(), std::back_inserter(ioShapes),
+                       [](const std::shared_ptr<Node>& n) { return n->get_output_partial_shape(0); });
+        std::transform(commonResults.begin(), commonResults.end(), std::back_inserter(ioShapes),
+                       [](const std::shared_ptr<Node>& n) { return n->get_input_partial_shape(0); });
+    } else {
+        if (overriden_shapes.size() != commonResults.size() + commonParams.size())
+            throw ngraph_error("InsertLoops got invalid number of overriden shapes");
+        for (int i = 0; i < commonParams.size(); i++)
+            ioShapes.emplace_back(overriden_shapes[i]);
+        // reverse overriden_shapes for results since commonResults are reversed with respect to model->get_parameters()
+        for (int i = 0; i < commonResults.size(); i++)
+            ioShapes.emplace_back(overriden_shapes[overriden_shapes.size() - 1 - i]);
+    }
 
     if (inner_work_amount > 0) {
         std::vector<bool> apply_increments;
