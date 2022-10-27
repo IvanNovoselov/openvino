@@ -442,6 +442,7 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
 
     convert_to_snippet_dialect();
+    ov::pass::Serialize("transpose_decomposed.xml", "transpose_decomposed.bin").run_on_model(m_body);
     opt.run_passes(m_body);
 
     snippets::pass::AssignRegisters().run_on_model(m_body);
