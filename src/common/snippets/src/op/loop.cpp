@@ -39,7 +39,7 @@ size_t LoopBase::get_dimension() const {
 
 LoopBegin::LoopBegin(const std::vector<Output<Node>> &args, size_t dimension, size_t work_amount, size_t increment)
         : LoopBase(args, dimension, work_amount, increment),
-        begin_address(nullptr), input_regs({}) {
+        begin_address(nullptr), input_regs({}), avoid_scalar_loop_injection(false) {
     // We can only call a reduced validate_and_infer types from the constructor, since LoopEnd might not be attached
     // to the LoopBegin at this point (which is usually the case: create LoopBegin first => then attach LoopEnd to it)
     validate_and_infer_types_except_LoopEnd();
@@ -51,7 +51,10 @@ LoopBegin::LoopBegin(const std::vector<Output<Node>> &args)
 }
 
 std::shared_ptr<Node> LoopBegin::clone_with_new_inputs(const OutputVector& inputs) const {
-    return std::shared_ptr<LoopBegin>(new LoopBegin(inputs, dimension, work_amount, increment));
+    auto res = std::shared_ptr<LoopBegin>(new LoopBegin(inputs, dimension, work_amount, increment));
+    res->avoid_scalar_loop_injection = avoid_scalar_loop_injection;
+    return res;
+//    return std::shared_ptr<LoopBegin>(new LoopBegin(inputs, dimension, work_amount, increment));
 }
 
 

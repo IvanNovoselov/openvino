@@ -37,6 +37,7 @@ protected:
 class LoopEnd;
 class LoopBegin : public LoopBase {
     friend LoopEnd;
+
 public:
     OPENVINO_OP("LoopBegin", "SnippetsOpset");
     /// \brief Construct an Loop
@@ -55,6 +56,9 @@ public:
     // begin_address and input_regs are needed to communicate information between LoopBegin and LoopEnd emitters
     const uint8_t* begin_address;
     std::vector<size_t> input_regs;
+    // true if scalar loop is not needed for tile processing;
+    bool avoid_scalar_loop_injection;
+
 private:
     void validate_and_infer_types_except_LoopEnd();
     LoopBegin(const std::vector<Output<Node>>& args, size_t dimension, size_t work_amount, size_t increment);
