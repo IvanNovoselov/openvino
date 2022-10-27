@@ -8,9 +8,23 @@
 
 #include <ngraph/rt_info.hpp>
 
-ngraph::snippets::pass::InsertLoops::InsertLoops(ov::PartialShape master_shape, size_t vector_size,
-                                                 std::vector<ov::Shape> overriden_shapes = {})
-: master_shape(std::move(master_shape)), vector_size(vector_size), overriden_shapes(std::move(overriden_shapes)) {
+ngraph::snippets::pass::InsertLoops::InsertLoops(ov::PartialShape arg_master_shape, size_t vector_size,
+                                                 std::vector<ov::Shape> arg_overriden_shapes,
+                                                 std::vector<size_t> arg_loop_over_dims)
+: master_shape(std::move(arg_master_shape)), vector_size(vector_size), overriden_shapes(std::move(arg_overriden_shapes)) {
+    if (arg_loop_over_dims.empty()) {
+        const auto s = master_shape.size();
+        if (s >=2 )
+            loop_over_dims.push_back(master_shape.size() - 2);
+        if (s >= 1)
+            loop_over_dims.push_back(master_shape.size() - 1);
+        else
+            throw ngraph_error("InsertLoops can't insert loops for an empty master shape");
+    } else {
+        loop_over_dims = std::move(arg_loop_over_dims);
+        if (loop_over_dims.size() > 2)
+            throw ngraph_error("InsertLoops currently supports loop_over_dims up to 2");
+    }
 }
 
 bool ngraph::snippets::pass::InsertLoops::run_on_model(const std::shared_ptr<ov::Model> &model) {
@@ -18,11 +32,11 @@ bool ngraph::snippets::pass::InsertLoops::run_on_model(const std::shared_ptr<ov:
     if (master_shape.is_dynamic())
         throw ngraph_error("InsertLoops doesn't support dynamic shapes yet");
 
-    const auto inner_dim = master_shape.size() - 1;
-    // Note: outer_dim could overflow if master_shape.size() < 2
-    const auto outer_dim = master_shape.size() - 2;
+    const auto inner_dim = loop_over_dims.back();
+    // Note: outer_dim will not be used if master_shape.size() < 2
+    const auto outer_dim = loop_over_dims.size() == 2 ? loop_over_dims.front() : -1;
     const auto inner_work_amount = master_shape[inner_dim].get_length();
-    const auto outer_work_amount = master_shape.size() >= 2 ? master_shape[outer_dim].get_length() : 1;
+    const auto outer_work_amount = loop_over_dims.size() == 2 ? master_shape[outer_dim].get_length() : 1;
 
     ParameterVector commonParams = model->get_parameters();
     // Note that topological sort parses node arguments in reversed order, but results are added  - in direct order

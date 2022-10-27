@@ -85,13 +85,14 @@ ngraph::snippets::pass::TransposeDecomposition::TransposeDecomposition() {
         //  default: pointer_increment = WA_increment * data_size
         //  extended: pointer_increment >= WA_increment * data_size for strided data access
         // work around with finalization offset for now, but this is an additional addition!
-        const std::vector<int64_t> finalization_offsets_C {-1 * static_cast<int64_t>(size_H * size_W * size_C)};
+        const std::vector<int64_t> finalization_offsets_C {-1 * static_cast<int64_t>(size_H * size_W * size_C), 0};
+        const std::vector<bool> apply_increments {true, true};
         auto loop_C_end = std::make_shared<op::LoopEnd>(OutputVector{store->output(0), loop_C_begin->output(1)},
                                                       dim_C_idx, size_H * size_W * size_C, size_H * size_W,
-                                                      std::vector<bool>{true}, finalization_offsets_C);
+                                                        apply_increments, finalization_offsets_C);
         auto loop_W_end = std::make_shared<op::LoopEnd>(OutputVector{loop_C_end->output(0), loop_W_begin->output(1)},
                                                         dim_W_idx, size_W, 1,
-                                                        std::vector<bool>{true}, std::vector<int64_t>{});
+                                                        apply_increments, std::vector<int64_t>{});
 
         for (auto& input : transpose->output(0).get_target_inputs()) {
             input.replace_source_output(loop_W_end->output(0));

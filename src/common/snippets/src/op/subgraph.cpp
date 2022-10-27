@@ -15,6 +15,7 @@
 #include "snippets/pass/convert_power_to_powerstatic.hpp"
 #include "snippets/pass/vector_to_scalar.hpp"
 #include "snippets/pass/insert_loops.hpp"
+#include "snippets/pass/transpose_decomposition.hpp"
 #include "snippets/pass/transform_convert.hpp"
 #include "snippets/pass/align_element_type.hpp"
 #include "snippets/utils.hpp"
@@ -372,8 +373,11 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
     ngraph::pass::Manager manager;
     manager.register_pass<snippets::pass::ConvertConstantsToScalars>();
     manager.register_pass<snippets::pass::ConvertPowerToPowerStatic>();
+    manager.register_pass<snippets::pass::TransposeDecomposition>();
+    manager.register_pass<ov::pass::Serialize>("transpose_decomposed.xml", "transpose_decomposed.bin");
     manager.register_pass<snippets::pass::InsertLoad>(count);
     manager.register_pass<snippets::pass::InsertStore>(count);
+    manager.register_pass<ov::pass::Serialize>("transpose_decomposed_loads.xml", "transpose_decomposed_loads.bin");
     // todo: presently dynamic pipeline is activated even if the last two dimension are static
     //  In general, we can use static kernels in this case, but several parameters (src and dst memory pointers for example)
     //  should be passed as run-time args, so it's a mixed regime: kernel is shape-aware, but some additional runtime args are required
@@ -408,9 +412,11 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
         // todo: get_lanes() assumes fp32. Could there be any int8 issues?
         // Note that InsertLoops requires validate_and_infer_types afterwards, so add it manually if
         // automatic validation will be disabled in the pass manager
+        std::vector<size_t> loop_over_dims{0, 2};
         manager.register_pass<snippets::pass::InsertLoops>(master_shape,
                                                            m_generator->get_target_machine()->get_lanes(),
                                                            overriden_io_shapes);
+        manager.register_pass<ov::pass::Serialize>("transpose_lowered.xml", "transpose_lowered.bin");
     }
     manager.run_passes(m_body);
 }
@@ -442,7 +448,6 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
 
     convert_to_snippet_dialect();
-    ov::pass::Serialize("transpose_decomposed.xml", "transpose_decomposed.bin").run_on_model(m_body);
     opt.run_passes(m_body);
 
     snippets::pass::AssignRegisters().run_on_model(m_body);
