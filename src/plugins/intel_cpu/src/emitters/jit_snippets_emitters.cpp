@@ -299,9 +299,9 @@ LoopEndEmitter::LoopEndEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::imp
     // Note that 1 edge connects LoopBegin and LoopEnd
     num_inputs = loop_begin->get_input_size();
     num_outputs = loop_end->get_output_size();
-    increment = loop_end->get_increment();
+    wa_increment = loop_end->get_increment();
     work_amount = loop_end->get_work_amount();
-    apply_increments = loop_end->get_apply_increment();
+    ptr_increments = loop_end->get_ptr_increments();
     finalization_offsets = loop_end->get_finalization_offsets();
     evaluate_once = loop_end->get_evaluate_once();
     for (int i = 0; i < num_inputs; i++)
@@ -331,8 +331,8 @@ void LoopEndEmitter::validate_arguments(const std::vector<size_t> &in,
     if (in.size() != num_outputs + 1)
         IE_THROW() << "Invalid number of in arguments: expected " << num_inputs + 1 << " got " << in.size();
     const auto io_size = num_inputs + num_outputs;
-    if (apply_increments.size() != io_size)
-        IE_THROW() << "Invalid apply_increments size: expected " << io_size << " got " << apply_increments.size();
+    if (ptr_increments.size() != io_size)
+        IE_THROW() << "Invalid apply_increments size: expected " << io_size << " got " << ptr_increments.size();
     if (finalization_offsets.size() != io_size)
         IE_THROW() << "Invalid finalization_offsets size: expected: " << io_size << " got " << finalization_offsets.size();
 }
@@ -350,11 +350,11 @@ void LoopEndEmitter::emit_impl(const std::vector<size_t>& in,
     Reg64 reg_work_amount = Reg64(in.back());
     if (!evaluate_once) {
         for (int idx = 0; idx < data_ptr_regs.size(); idx++) {
-            if (apply_increments[idx])
-                h->add(data_ptr_regs[idx], increment * io_data_size[idx]);
+            if (ptr_increments[idx] != 0)
+                h->add(data_ptr_regs[idx], ptr_increments[idx] * io_data_size[idx]);
         }
-        h->sub(reg_work_amount, increment);
-        h->cmp(reg_work_amount, increment);
+        h->sub(reg_work_amount, wa_increment);
+        h->cmp(reg_work_amount, wa_increment);
         h->jge(loop_begin->begin_address);
     }
 

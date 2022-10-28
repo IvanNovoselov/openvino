@@ -89,11 +89,10 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
         if (loop->get_work_amount() < 2 * loop->get_increment()) {
             loop->set_evaluate_once(true);
             if (force_ptr_increment || loop->has_outer_loop) {
-                const auto increment = loop->get_increment();
                 std::vector<int64_t> new_finalization_offsets(loop->get_finalization_offsets());
-                const auto& apply_increments = loop->get_apply_increment();
+                const auto& ptr_increments = loop->get_ptr_increments();
                 for (auto i = 0; i < new_finalization_offsets.size(); i++) {
-                    new_finalization_offsets[i] += increment * apply_increments[i];
+                    new_finalization_offsets[i] += ptr_increments[i];
                 }
                 loop->set_finalization_offsets(new_finalization_offsets);
             }
@@ -150,6 +149,8 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
                 tail_loop_end = ov::as_type_ptr<op::LoopEnd>(*tail_loop.rbegin());
                 tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
                 tail_loop_end->set_increment(tail_size);
+                // ptr increments were set to the old increment, need to update them in accordance with the new one
+                tail_loop_end->update_ptr_increments(static_cast<int64_t>(tail_size));
                 tail_loop_end->set_work_amount(tail_size);
                 tail_loop_end->has_outer_loop = vector_loop_end->has_outer_loop;
                 // tail loop is always executed once

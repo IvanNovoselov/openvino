@@ -155,10 +155,10 @@ private:
     size_t num_inputs = 0;
     size_t num_outputs = 0;
     std::vector<size_t> io_data_size {};
-    size_t increment = 0;
+    size_t wa_increment = 0;
     size_t work_amount = 0;
     bool evaluate_once = false;
-    std::vector<bool> apply_increments;
+    std::vector<int64_t> ptr_increments;
     std::vector<int64_t> finalization_offsets;
 };
 
