@@ -154,7 +154,8 @@ private:
 
     size_t num_inputs = 0;
     size_t num_outputs = 0;
-    std::vector<size_t> io_data_size {};
+    // keep data_size int64_t to avoid conversion to size_t (and overflow) when multiplied by negative increments or offsets
+    std::vector<int64_t> io_data_size {};
     size_t wa_increment = 0;
     size_t work_amount = 0;
     bool evaluate_once = false;

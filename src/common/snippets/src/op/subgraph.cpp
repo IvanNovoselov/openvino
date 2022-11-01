@@ -412,10 +412,10 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
         // todo: get_lanes() assumes fp32. Could there be any int8 issues?
         // Note that InsertLoops requires validate_and_infer_types afterwards, so add it manually if
         // automatic validation will be disabled in the pass manager
-        std::vector<size_t> loop_over_dims{0, 2};
-        manager.register_pass<snippets::pass::InsertLoops>(master_shape,
-                                                           m_generator->get_target_machine()->get_lanes(),
-                                                           overriden_io_shapes);
+//        std::vector<size_t> loop_over_dims{0, 2};
+//        manager.register_pass<snippets::pass::InsertLoops>(master_shape,
+//                                                           m_generator->get_target_machine()->get_lanes(),
+//                                                           overriden_io_shapes);
         manager.register_pass<ov::pass::Serialize>("transpose_lowered.xml", "transpose_lowered.bin");
     }
     manager.run_passes(m_body);

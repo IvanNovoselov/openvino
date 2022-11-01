@@ -71,28 +71,26 @@ ngraph::snippets::pass::TransposeDecomposition::TransposeDecomposition() {
         const auto dim_C_idx = data_shape.size() - 3;
         const auto dim_H_idx = data_shape.size() - 2;
         const auto dim_W_idx = data_shape.size() - 1;
-        const auto size_C = data_shape[dim_C_idx];
-        const auto size_W = data_shape[dim_W_idx];
-        const auto size_H = data_shape[dim_H_idx];
+        const auto size_C = static_cast<int64_t>(data_shape[dim_C_idx]);
+        const auto size_W = static_cast<int64_t>(data_shape[dim_W_idx]);
+        const auto size_H = static_cast<int64_t>(data_shape[dim_H_idx]);
 
         auto loop_W_begin = std::make_shared<op::LoopBegin>(OutputVector{data_input});
-        // todo: we need to prevent scalar tile injection for this "vector" tile
         auto loop_C_begin = std::make_shared<op::LoopBegin>(OutputVector{loop_W_begin->output(0)});
-        loop_C_begin->avoid_scalar_loop_injection = true;
         auto load = std::make_shared<snippets::op::Load>(loop_C_begin->output(0), 1);
         auto store = std::make_shared<snippets::op::Store>(load->output(0), 1);
         // todo: extend Loop functionality: provide method to override default pointer increments:
         //  default: pointer_increment = WA_increment * data_size
         //  extended: pointer_increment >= WA_increment * data_size for strided data access
         // work around with finalization offset for now, but this is an additional addition!
-        const std::vector<int64_t> finalization_offsets_C {-1 * static_cast<int64_t>(size_H * size_W * size_C), 0};
-        const std::vector<bool> apply_increments {true, true};
+        const std::vector<int64_t> ptr_increments_C {size_H * size_W, 1};
+        const std::vector<int64_t> finalization_offsets_C {1 - size_H * size_W * size_C, 0};
         auto loop_C_end = std::make_shared<op::LoopEnd>(OutputVector{store->output(0), loop_C_begin->output(1)},
-                                                      dim_C_idx, size_H * size_W * size_C, size_H * size_W,
-                                                        apply_increments, finalization_offsets_C);
+                                                      dim_C_idx, size_C, 1,
+                                                      ptr_increments_C, finalization_offsets_C);
         auto loop_W_end = std::make_shared<op::LoopEnd>(OutputVector{loop_C_end->output(0), loop_W_begin->output(1)},
                                                         dim_W_idx, size_W, 1,
-                                                        apply_increments, std::vector<int64_t>{});
+                                                        std::vector<int64_t>{0, 0}, std::vector<int64_t>{0, 0});
 
         for (auto& input : transpose->output(0).get_target_inputs()) {
             input.replace_source_output(loop_W_end->output(0));

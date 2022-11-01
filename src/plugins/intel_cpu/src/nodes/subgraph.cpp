@@ -222,7 +222,9 @@ void Snippet::calcJITParams(std::vector<int64_t>& offsets) const {
     auto offset_calculation = [offset_rank, this](int64_t *off, const std::vector<size_t>& dims, const size_t data_size) {
         size_t k = dims.back();
         for (int i = offset_rank - 1; i >= 0; i--) {
-            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
+//            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
+            // dims could be either master_shape[i] or 1
+            auto tmp = (dims[i] != 1) ? k : 0;
             off[i] = tmp * data_size;
             k *= dims[i];
         }
@@ -587,13 +589,20 @@ void Snippet::generate(const jit_snippets_compile_args* jcp) {
 }
 
 void Snippet::schedule_6d(const jit_snippets_call_args& call_args) const {
-    const auto& dom = exec_domain;
+//    const auto& dom = exec_domain;
+// todo: check src offsets and exec domain!
+    const auto& dom = std::vector<size_t>{1, 1, 1, 2, 1};
     // < N, C, H, W > < 1, 1, N, C*H*W>
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
         [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
             int64_t indexes[] = {d0, d1, d2, d3, d4};
             schedule.get_callable<kernel>()(indexes, &call_args);
         });
+    auto src = reinterpret_cast<const float*>(call_args.src_ptrs[0]);
+    auto dst = reinterpret_cast<float*>(call_args.dst_ptrs[0]);
+    for (int i=0; i < 10; i++) {
+        std::cerr << src[i] << " => " << dst[i] << "\n";
+    }
 }
 
 void Snippet::schedule_nt(const jit_snippets_call_args& call_args) const {

@@ -163,7 +163,9 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
     }
 
     OV_ITT_TASK_NEXT(GENERATE, "::EmitCode")
-    // emission
+    //todo: Kernel need info on i/o data access pattern and data shapes to calculate data offsets
+    // pass Params and Results
+    //emission
     auto loops2DKernel = std::make_shared<op::Kernel>(std::vector<AllocatedEmitter>{lowered});
     loops2DKernel->compile_params = compile_params;
     std::shared_ptr<Emitter> kernel = target->get(op::Kernel::get_type_info_static())(loops2DKernel);
