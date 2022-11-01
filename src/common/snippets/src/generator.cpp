@@ -45,30 +45,6 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
     if (!target->is_supported())
         throw ngraph_error("unsupported architecture for code generation");
 
-    auto params = m->get_parameters();
-    auto results = m->get_results();
-    auto in = params.size();
-    auto out = results.size();
-
-    std::vector<size_t> io_last_dims(in + out);
-    std::vector<size_t> io_data_sizes(in + out);
-    std::transform(params.begin(), params.end(), io_last_dims.begin(),
-                   [](const std::shared_ptr<Node>& n){
-                       auto last_dim = n->get_output_partial_shape(0).rbegin();
-                       return last_dim->is_dynamic() ? op::Subgraph::DYNAMIC_DIMENSION
-                                                     : last_dim->get_length();
-                   });
-    std::transform(results.begin(), results.end(), io_last_dims.begin() + in,
-                   [](const std::shared_ptr<Node> &n) {
-                       auto last_dim = n->get_input_partial_shape(0).rbegin();
-                       return last_dim->is_dynamic() ? op::Subgraph::DYNAMIC_DIMENSION
-                                                     : last_dim->get_length();
-                   });
-    std::transform(params.begin(), params.end(), io_data_sizes.begin(),
-                   [](const std::shared_ptr<Node>& n){return n->get_element_type().size();});
-    std::transform(results.begin(), results.end(), io_data_sizes.begin() + in,
-                   [](const std::shared_ptr<Node>& n){return n->get_element_type().size();});
-
     OV_ITT_TASK_CHAIN(GENERATE, ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator", "::VectorTile")
     // vector loop
     std::vector<AllocatedEmitter> lowered;
@@ -165,12 +141,14 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
     OV_ITT_TASK_NEXT(GENERATE, "::EmitCode")
     //todo: Kernel need info on i/o data access pattern and data shapes to calculate data offsets
     // pass Params and Results
+    // todo: it's probably better to move AllocaledEmitter creation inside Kernel constructor
+    //  So Kernel accepts only model ptr and target, and creates AllocatedEmitter inside
     //emission
-    auto loops2DKernel = std::make_shared<op::Kernel>(std::vector<AllocatedEmitter>{lowered});
+    auto loops2DKernel = std::make_shared<op::Kernel>(lowered, m);
     loops2DKernel->compile_params = compile_params;
     std::shared_ptr<Emitter> kernel = target->get(op::Kernel::get_type_info_static())(loops2DKernel);
 
-    kernel->emit_code({in, out}, {});
+    kernel->emit_code({}, {});
 
     OV_ITT_TASK_NEXT(GENERATE, "::EmitData")
     for (auto& op : lowered) {

@@ -93,6 +93,15 @@ private:
 
     jit_snippets_compile_args jcp;
     std::vector<size_t> gp_regs_pool;
+    size_t num_inputs;
+    size_t num_outputs;
+    // Vector of indices (lenght = input tensor rank) per every input and output that describes in which order
+    // corresponding tensor dimensions are accessed (default: consecutive dense, e.g. 0,1,2,3 for 4D tensor).
+    // Needed to calc i/o offsets.
+    std::vector<std::vector<size_t>> data_access_pattern;
+    std::vector<std::vector<size_t>> io_shapes = {};
+    std::vector<size_t> io_data_size {};
+
     // gpr's used to store data pointers, track them to apply offsets in Kernel
     std::vector<size_t> data_ptr_regs_idx;
     std::vector<size_t> vec_regs_pool;

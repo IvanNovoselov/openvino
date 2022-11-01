@@ -591,7 +591,7 @@ void Snippet::generate(const jit_snippets_compile_args* jcp) {
 void Snippet::schedule_6d(const jit_snippets_call_args& call_args) const {
 //    const auto& dom = exec_domain;
 // todo: check src offsets and exec domain!
-    const auto& dom = std::vector<size_t>{1, 1, 1, 2, 1};
+    const auto& dom = std::vector<size_t>{1, 1, 1, 1, 1};
     // < N, C, H, W > < 1, 1, N, C*H*W>
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
         [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {

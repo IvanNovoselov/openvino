@@ -103,6 +103,45 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
         IE_THROW() << "KernelEmitter invoked with op::Kernel that contains no compile_params";
     body = kernel->region;
     jcp = *reinterpret_cast<const jit_snippets_compile_args*>(kernel->compile_params);
+    // calc data access pattern. we'll need it for offsets calculation
+    const auto&  model = kernel->model;
+    const auto get_static_shape = [](const std::shared_ptr<ov::Node>& node) {
+        const auto& pshape = node->get_output_partial_shape(0);
+        if (pshape.is_dynamic())
+            IE_THROW() << "KernelEmitter can't calc offsets for dynamic shapes";
+        return pshape.get_shape();
+    };
+    const auto get_access_pattern = [](const std::shared_ptr<ov::Node>& node) {
+        const auto& pshape = node->get_output_partial_shape(0);
+        std::vector<size_t> access_pattern;
+        access_pattern.resize(pshape.size());
+        auto &rt = node->get_rt_info();
+        const auto rinfo = rt.find("NonDefaultAccessPattern");
+        // default access pattern
+        if (rinfo == rt.end()) {
+            std::iota(access_pattern.begin(), access_pattern.end(), 0);
+        } else {
+            const auto& pattern = rinfo->second.as<std::vector<size_t>>();
+            if (pattern.size() != access_pattern.size())
+                IE_THROW() << "KernelEmitter detected invalid non-default access pattern";
+            access_pattern = pattern;
+        }
+        return access_pattern;
+    };
+    auto params = model->get_parameters();
+    auto results = model->get_results();
+    num_inputs = params.size();
+    num_outputs = results.size();
+    for (const auto& op : params) {
+        data_access_pattern.push_back(get_access_pattern(op));
+        io_shapes.push_back(get_static_shape(op));
+        io_data_size.push_back(op->get_output_element_type(0).size());
+    }
+    for (const auto& op : results) {
+        data_access_pattern.push_back(get_access_pattern(op));
+        io_shapes.push_back(get_static_shape(op));
+        io_data_size.push_back(op->get_input_element_type(0).size());
+    }
     // Initialize pools of gp and vec registers
     gp_regs_pool.resize(16);
     vec_regs_pool.resize(16);
@@ -154,11 +193,11 @@ void KernelEmitter::validate_arguments(const std::vector<size_t> &in,
                                        const std::vector<size_t> &out,
                                        const std::vector<size_t> &pool,
                                        const std::vector<size_t> &gpr) const {
-    if (in.size() != 2)
-        IE_THROW() << "KernelEmitter got invalid number of inputs. Expected 2, got " << in.size();
+    if (!in.empty())
+        IE_THROW() << "KernelEmitter got invalid number of inputs. Expected 0, got " << in.size();
     if (!out.empty())
         IE_THROW() << "KernelEmitter got invalid number of outputs. Expected 0, got " << out.size();
-    const auto num_params = in[0] + in[1];
+    const auto num_params = num_inputs + num_outputs;
     // The number of used gpr may be >= num_params since LoopBegin+LoopEnd could also use gpr to store work_amount
     if (data_ptr_regs_idx.size() != num_params)
         IE_THROW() << "KernelEmitter arguments are inconsistent with the gpr_regs_used size: in[0] + in[1] = "
@@ -167,11 +206,43 @@ void KernelEmitter::validate_arguments(const std::vector<size_t> &in,
 
 void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
                                               const Reg64& reg_indexes, const Reg64& reg_const_params, const std::vector<Reg64>& data_ptr_regs) const {
+    // Note that we don't need offset for the last dim, since it's handled directly by Tile emitter
+    const size_t offset_rank = jcp.master_shape.size() - 1;
+    std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>(offset_rank, 1));
+    auto offset_calculation = [offset_rank](std::vector<size_t>& off, const std::vector<size_t>& dims,
+                                            const std::vector<size_t>& access_pattern, const size_t data_size) {
+        size_t k = dims[access_pattern.back()];
+        for (int i = offset_rank - 1; i >= 0; i--) {
+//            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
+            // dims could be either master_shape[i] or 1
+            auto tmp = (dims[access_pattern[i]] != 1) ? k : 0;
+            off[i] = tmp * data_size;
+            k *= dims[access_pattern[i]];
+        }
+    };
+    for (size_t i = 0; i < num_params; i++) {
+        offset_calculation(data_offsets[i], io_shapes[i],  data_access_pattern[i], io_data_size[i]);
+    }
+    // backup
+    /*
+    auto offset_calculation = [offset_rank](std::vector<size_t>& off, const std::vector<size_t>& dims, const size_t data_size) {
+        size_t k = dims.back();
+        for (int i = offset_rank - 1; i >= 0; i--) {
+//            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
+            // dims could be either master_shape[i] or 1
+            auto tmp = (dims[i] != 1) ? k : 0;
+            off[i] = tmp * data_size;
+            k *= dims[i];
+        }
+    };
+    for (size_t i = 0; i < num_params; i++) {
+        offset_calculation(data_offsets[i], io_shapes[i],  io_data_size[i]);
+    }
+     */
     // master_shape size must be valid in both static and dynamic cases
     const int64_t offsetRank = jcp.master_shape.size() - 1;
-    std::function<void(Reg64, size_t, Reg64)> init_ptr_with_offset;
-    init_ptr_with_offset = [&](Reg64 pointer, size_t offset_start_index, Reg64 reg_tmp) {
-        const int64_t *offsets =  jcp.data_offsets + offset_start_index;
+    std::function<void(Reg64, const std::vector<size_t>&, Reg64)> init_ptr_with_offset;
+    init_ptr_with_offset = [&](Reg64 pointer, const std::vector<size_t>& offsets, Reg64 reg_tmp) {
         for (int j = 0; j < offsetRank; j++) {
             if (jcp.master_shape[j] != 1 && offsets[j] != 0) {
                 h->mov(reg_tmp, offsets[j]);
@@ -192,7 +263,7 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
             h->mov(data_ptr_regs[i], h->ptr[reg_const_params + GET_OFF(src_ptrs) + i * sizeof(void*)]);
         else
             h->mov(data_ptr_regs[i], h->ptr[reg_const_params + GET_OFF(dst_ptrs) + (i - num_inputs) * sizeof(void*)]);
-        init_ptr_with_offset(data_ptr_regs[i], i * offsetRank, reg_tmp);
+        init_ptr_with_offset(data_ptr_regs[i], data_offsets[i], reg_tmp);
     }
     // a rare case when num_params is maximal, so we have no spare gprs
     // * Static case: we can use reg_const_params as the last reg_tmp for the last iteration (and corrupt it), since
@@ -203,7 +274,7 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
         h->mov(data_ptr_regs[i], h->ptr[reg_const_params + GET_OFF(dst_ptrs) + (i - num_inputs) * sizeof(void*)]);
         reg_tmp = reg_const_params;
         // can corrupt reg_const_params, since we won't use it anymore
-        init_ptr_with_offset(data_ptr_regs[i], i * offsetRank, reg_tmp);
+        init_ptr_with_offset(data_ptr_regs[i], data_offsets[i], reg_tmp);
     }
 }
 void KernelEmitter::emit_impl(const std::vector<size_t>& in,
@@ -212,9 +283,6 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
                               const std::vector<size_t>& gpr_pool,
                               const ov::intel_cpu::emitter_context *emit_context) const {
     h->preamble();
-
-    const size_t num_inputs = in[0];
-    const size_t num_outputs = in[1];
 
     Reg64 reg_indexes = Reg64(static_cast<int>(reg_indexes_idx));
     Reg64 reg_const_params = Reg64(static_cast<int>(reg_const_params_idx));

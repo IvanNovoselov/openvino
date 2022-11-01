@@ -17,8 +17,11 @@
 
 ngraph::snippets::pass::TransposeDecomposition::TransposeDecomposition() {
     MATCHER_SCOPE(TransposeDecomposition);
-
-    auto match_data = pattern::any_input();
+    // todo: we need a special transformation that detects and propagates data access pattern to Parameters and Results
+    //  this is needed to communicate access pattern to the plugin node and op::Kernel
+    // This is the reason we me match only to Parameter, this limitation could be relaxed if we propagate access pattern
+    // to the appropriate parameter
+    auto match_data = ngraph::pattern::wrap_type<opset1::Parameter>();
     auto match_order = ngraph::pattern::wrap_type<opset1::Constant>();
     auto match_transpose = ngraph::pattern::wrap_type<ngraph::opset1::Transpose>({match_data, match_order});
 
@@ -62,11 +65,14 @@ ngraph::snippets::pass::TransposeDecomposition::TransposeDecomposition() {
         }
          */
         auto data_input = pattern_to_output.at(match_data);
-        // checked that transpose is static above
+        auto &param_rt = data_input.get_node_shared_ptr()->get_rt_info();
+        // Note: store and usage inside emitters as size_t is more convenient, so static_cast here
+        std::vector<size_t> access_pattern;
+        std::copy(order_value.begin(), order_value.end(), std::back_inserter(access_pattern));
+        param_rt["NonDefaultAccessPattern"] = access_pattern;
+
+        // The line below is Ok, since we ensured that transpose is static above
         auto data_shape = data_input.get_shape();
-//        const auto dim_C_idx = data_shape.size() - 1;
-//        const auto dim_W_idx = data_shape.size() - 2;
-//        const auto dim_H_idx = data_shape.size() - 3;
         // dim indexes with respect to SRC
         const auto dim_C_idx = data_shape.size() - 3;
         const auto dim_H_idx = data_shape.size() - 2;
