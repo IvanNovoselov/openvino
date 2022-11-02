@@ -83,7 +83,9 @@ ngraph::snippets::pass::TransposeDecomposition::TransposeDecomposition() {
 
         auto loop_W_begin = std::make_shared<op::LoopBegin>(OutputVector{data_input});
         auto loop_C_begin = std::make_shared<op::LoopBegin>(OutputVector{loop_W_begin->output(0)});
-        auto load = std::make_shared<snippets::op::Load>(loop_C_begin->output(0), 1);
+        // todo: LoadReshape used here is essentially Load + an easy way to maintain correct shape propagation
+        //  fix this in future and develop a more consistent shape propagation approach.
+        auto load = std::make_shared<snippets::op::LoadReshape>(loop_C_begin->output(0), 1, access_pattern);
         auto store = std::make_shared<snippets::op::Store>(load->output(0), 1);
         // todo: extend Loop functionality: provide method to override default pointer increments:
         //  default: pointer_increment = WA_increment * data_size

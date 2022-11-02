@@ -371,13 +371,13 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
                                                         return p->get_partial_shape().rbegin()->is_dynamic();
                                                     });
     ngraph::pass::Manager manager;
+    manager.register_pass<ov::pass::Serialize>("transpose_canonicalized.xml", "transpose_canonicalized.bin");
     manager.register_pass<snippets::pass::ConvertConstantsToScalars>();
     manager.register_pass<snippets::pass::ConvertPowerToPowerStatic>();
     manager.register_pass<snippets::pass::TransposeDecomposition>();
     manager.register_pass<ov::pass::Serialize>("transpose_decomposed.xml", "transpose_decomposed.bin");
     manager.register_pass<snippets::pass::InsertLoad>(count);
     manager.register_pass<snippets::pass::InsertStore>(count);
-    manager.register_pass<ov::pass::Serialize>("transpose_decomposed_loads.xml", "transpose_decomposed_loads.bin");
     // todo: presently dynamic pipeline is activated even if the last two dimension are static
     //  In general, we can use static kernels in this case, but several parameters (src and dst memory pointers for example)
     //  should be passed as run-time args, so it's a mixed regime: kernel is shape-aware, but some additional runtime args are required

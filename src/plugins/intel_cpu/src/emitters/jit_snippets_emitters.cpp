@@ -211,15 +211,37 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
     std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>(offset_rank, 0));
     auto offset_calculation = [offset_rank](std::vector<size_t>& offsets, const std::vector<size_t>& shape,
                                             const std::vector<size_t>& access_pattern, const size_t data_size) {
-        auto dim_it = access_pattern.rbegin();
-        auto offset_it = offsets.rbegin();
-        size_t k = shape[*dim_it++];
-        for (; dim_it < access_pattern.rend(); dim_it++, offset_it++) {
-//            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
-            // dims could be either master_shape[i] or 1
-            *offset_it = (shape[*dim_it] != 1) ? k * data_size : 0;
-            k *= shape[*dim_it];
-        }
+        std::cerr << "Shape: ";
+        for (auto a : shape)
+            std::cerr << a << " ";
+        std::cerr << "\n";
+        std::vector<size_t> strides(shape.size(), 1);
+        std::partial_sum(shape.rbegin(), shape.rend() - 1, strides.rbegin() + 1, std::multiplies<size_t>());
+        std::cerr << "Strides(1): ";
+        for (auto a : strides)
+            std::cerr << a << " ";
+        std::cerr << "\n";
+        std::vector<size_t> reordered_strides(access_pattern.size(), 0);
+        for (auto i = 0; i < access_pattern.size() - 1; i++)
+            offsets[offsets.size() - access_pattern.size() + 1 + i] = strides[access_pattern[i]] * data_size;
+//        strides = std::move(reordered_strides);
+
+//        std::accumulate(strides.begin(), strides.end() - 1, data_size, std::multiplies<size_t>());
+        std::cerr << "Strides(2): ";
+        for (auto a : strides)
+            std::cerr << a << " ";
+        std::cerr << "\n";
+//        std::copy(strides.rbegin(), strides.rend(), offsets.rbegin());
+
+//        auto dim_it = access_pattern.rbegin();
+//        auto offset_it = offsets.rbegin();
+//        size_t k = shape[*dim_it++];
+//        for (; dim_it < access_pattern.rend(); dim_it++, offset_it++) {
+////            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
+//            // dims could be either master_shape[i] or 1
+//            *offset_it = (shape[*dim_it] != 1) ? k * data_size : 0;
+//            k *= shape[*dim_it];
+//        }
 
 
 //        for (int i = offset_rank - 1; i >= 0; i--) {
@@ -231,7 +253,10 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
 //        }
     };
     for (size_t i = 0; i < num_params; i++) {
-        offset_calculation(data_offsets[i], io_shapes[i],  data_access_pattern[i], io_data_size[i]);
+        auto& offsets = data_offsets[i];
+        offset_calculation(offsets, io_shapes[i],  data_access_pattern[i], io_data_size[i]);
+        for (auto j = 0; j < jcp.tile_rank - 1; j++)
+            offsets[offsets.size() - 1 - j] = 0;
     }
 //    data_offsets[0].back() = 0;
     std::vector<std::string> labels{"IN", "OUT"};
@@ -241,16 +266,16 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
             std::cerr << d / 4 << " ";
         std::cerr << "\n";
     }
-    data_offsets[0] = {0, 0, 3 * 16 * 2 * 4, 16 * 4, 0};
-    data_offsets[1] = {0, 0, 3 * 16 * 2 * 4, 16 * 2 * 4, 0};
-    std::cerr << "=========================\n";
-    std::cerr << "TARGET:\n";
-    for (int i = 0; i < 2; i++) {
-        std::cerr << labels[i] << ": ";
-        for (auto d : data_offsets[i])
-            std::cerr << d / 4 << " ";
-        std::cerr << "\n";
-    }
+//    data_offsets[0] = {0, 0, 3 * 16 * 2 * 4, 16 * 4, 0};
+//    data_offsets[1] = {0, 0, 3 * 16 * 2 * 4, 16 * 2 * 4, 0};
+//    std::cerr << "=========================\n";
+//    std::cerr << "TARGET:\n";
+//    for (int i = 0; i < 2; i++) {
+//        std::cerr << labels[i] << ": ";
+//        for (auto d : data_offsets[i])
+//            std::cerr << d / 4 << " ";
+//        std::cerr << "\n";
+//    }
     // backup
     /*
     auto offset_calculation = [offset_rank](std::vector<size_t>& off, const std::vector<size_t>& dims, const size_t data_size) {

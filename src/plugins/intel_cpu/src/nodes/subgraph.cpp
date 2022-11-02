@@ -266,7 +266,7 @@ void Snippet::optimizeExecDomain(std::vector<VectorDims>& inputShapes, std::vect
             if (static_cast<int>(domain.size()) - collapsedDims - 2 < 0)
                 break;
 
-            bool canCollapse = !snippet->has_domain_sensitive_ops();
+            bool canCollapse = true;
             for (size_t i = 0; i < inputShapes.size() && canCollapse; i++) {
                 const size_t last = inputShapes[i].size() - 1;
                 if ((inputShapes[i][last - 1] != 1 && inputShapes[i][last] == 1) ||
@@ -365,7 +365,8 @@ void Snippet::createPrimitive() {
 
     prepareParams();
     jcp.master_shape = masterShape;
-    std::copy(data_offsets.begin(), data_offsets.end(), jcp.data_offsets);
+    jcp.tile_rank = tileRank;
+//    std::copy(data_offsets.begin(), data_offsets.end(), jcp.data_offsets);
     generate(&jcp);
 }
 
@@ -442,7 +443,11 @@ void Snippet::prepareParams() {
     tileRank = 1;
     fullWorkAmount = std::accumulate(masterShape.begin(), masterShape.end(), 1, std::multiplies<size_t>());
     // optimizeExecDomain will collapse shape dimensions and adjust tile Rank
-    optimizeExecDomain(normInputShapes, normOutputShapes, masterShape, tileRank);
+    // todo: domain-sensitive ops presently support only 2D tiles. Relax this limitation in future
+    if (snippet->has_domain_sensitive_ops())
+        tileRank = 2;
+    else
+        optimizeExecDomain(normInputShapes, normOutputShapes, masterShape, tileRank);
     exec_domain = masterShape;
 
     // todo: probably better to pass a call_args instance
@@ -589,9 +594,9 @@ void Snippet::generate(const jit_snippets_compile_args* jcp) {
 }
 
 void Snippet::schedule_6d(const jit_snippets_call_args& call_args) const {
-//    const auto& dom = exec_domain;
+    const auto& dom = exec_domain;
 // todo: check src offsets and exec domain!
-    const auto& dom = std::vector<size_t>{1, 1, 1, 1, 1};
+//    const auto& dom = std::vector<size_t>{1, 1, 2, 3, 1};
     // < N, C, H, W > < 1, 1, N, C*H*W>
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
         [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
