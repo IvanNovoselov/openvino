@@ -208,20 +208,48 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
                                               const Reg64& reg_indexes, const Reg64& reg_const_params, const std::vector<Reg64>& data_ptr_regs) const {
     // Note that we don't need offset for the last dim, since it's handled directly by Tile emitter
     const size_t offset_rank = jcp.master_shape.size() - 1;
-    std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>(offset_rank, 1));
-    auto offset_calculation = [offset_rank](std::vector<size_t>& off, const std::vector<size_t>& dims,
+    std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>(offset_rank, 0));
+    auto offset_calculation = [offset_rank](std::vector<size_t>& offsets, const std::vector<size_t>& shape,
                                             const std::vector<size_t>& access_pattern, const size_t data_size) {
-        size_t k = dims[access_pattern.back()];
-        for (int i = offset_rank - 1; i >= 0; i--) {
+        auto dim_it = access_pattern.rbegin();
+        auto offset_it = offsets.rbegin();
+        size_t k = shape[*dim_it++];
+        for (; dim_it < access_pattern.rend(); dim_it++, offset_it++) {
 //            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
             // dims could be either master_shape[i] or 1
-            auto tmp = (dims[access_pattern[i]] != 1) ? k : 0;
-            off[i] = tmp * data_size;
-            k *= dims[access_pattern[i]];
+            *offset_it = (shape[*dim_it] != 1) ? k * data_size : 0;
+            k *= shape[*dim_it];
         }
+
+
+//        for (int i = offset_rank - 1; i >= 0; i--) {
+////            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
+//            // dims could be either master_shape[i] or 1
+//            auto tmp = (dims[access_pattern[i]] != 1) ? k : 0;
+//            off[i] = tmp * data_size;
+//            k *= dims[access_pattern[i]];
+//        }
     };
     for (size_t i = 0; i < num_params; i++) {
         offset_calculation(data_offsets[i], io_shapes[i],  data_access_pattern[i], io_data_size[i]);
+    }
+//    data_offsets[0].back() = 0;
+    std::vector<std::string> labels{"IN", "OUT"};
+    for (int i = 0; i < 2; i++) {
+        std::cerr << labels[i] << ": ";
+        for (auto d : data_offsets[i])
+            std::cerr << d / 4 << " ";
+        std::cerr << "\n";
+    }
+    data_offsets[0] = {0, 0, 3 * 16 * 2 * 4, 16 * 4, 0};
+    data_offsets[1] = {0, 0, 3 * 16 * 2 * 4, 16 * 2 * 4, 0};
+    std::cerr << "=========================\n";
+    std::cerr << "TARGET:\n";
+    for (int i = 0; i < 2; i++) {
+        std::cerr << labels[i] << ": ";
+        for (auto d : data_offsets[i])
+            std::cerr << d / 4 << " ";
+        std::cerr << "\n";
     }
     // backup
     /*
@@ -553,7 +581,7 @@ LoadEmitter::LoadEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl::cpu
     if (src_prc != dst_prc)
         IE_THROW() << "LoadEmitter supports only equal input and output types but gets: " << src_prc.name() << " and " << dst_prc.name();
 
-    count = ov::as_type_ptr<ngraph::snippets::op::Load>(n)->get_count();
+    count = std::dynamic_pointer_cast<ngraph::snippets::op::Load>(n)->get_count();
     in_out_type_ = emitter_in_out_map::gpr_to_vec;
     load_emitter.reset(new jit_load_emitter(h, isa, src_prc, dst_prc, count));
 }
