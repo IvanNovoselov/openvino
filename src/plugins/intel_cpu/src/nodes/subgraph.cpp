@@ -235,7 +235,7 @@ void Snippet::calcJITParams(std::vector<int64_t>& offsets) const {
                            dataSize[i]);
     }
 }
-void Snippet::optimizeExecDomain(std::vector<VectorDims>& inputShapes, std::vector<VectorDims>& outputShapes,
+bool Snippet::optimizeExecDomain(std::vector<VectorDims>& inputShapes, std::vector<VectorDims>& outputShapes,
                                  VectorDims &domain, size_t& TileRank) const {
     const size_t minimalConcurrency = parallel_get_max_threads();
     const size_t minimalJitWorkAmount = 256;
@@ -243,7 +243,7 @@ void Snippet::optimizeExecDomain(std::vector<VectorDims>& inputShapes, std::vect
     if ( ds <= 2 || // not enough dimensions to collapse
          domain[ds-1] >= minimalJitWorkAmount || // There is enough work for 1D Tiles, no need to collapse
          domain[ds-1] * domain[ds-2] >= fullWorkAmount / minimalConcurrency) // There won't be enough work for every thread (even one iter) if we collapse
-        return;
+        return false;
     auto findDimsToCollapse = [&]() {
         auto collapseLastDims = [](VectorDims& dims, size_t dimsToCollapse) {
             if (dimsToCollapse >= dims.size() - 1)
@@ -267,11 +267,12 @@ void Snippet::optimizeExecDomain(std::vector<VectorDims>& inputShapes, std::vect
                 break;
 
             bool canCollapse = true;
-            for (size_t i = 0; i < inputShapes.size() && canCollapse; i++) {
+            for (size_t i = 0; i < inputShapes.size(); i++) {
                 const size_t last = inputShapes[i].size() - 1;
                 if ((inputShapes[i][last - 1] != 1 && inputShapes[i][last] == 1) ||
                     (inputShapes[i][last - 1] == 1 && inputShapes[i][last] != 1)) {
                     canCollapse = false;
+                    break;
                 }
             }
 
@@ -297,9 +298,9 @@ void Snippet::optimizeExecDomain(std::vector<VectorDims>& inputShapes, std::vect
                 break;
             }
         }
-        return domain;
+        return collapsedDims > 0;
     };
-    findDimsToCollapse();
+    return findDimsToCollapse();
 }
 ov::PartialShape Snippet::canonicalizeBody() {
     auto edgeToBlockedShape = [](const EdgePtr& edge) {
@@ -442,12 +443,14 @@ void Snippet::prepareParams() {
 
     tileRank = 1;
     fullWorkAmount = std::accumulate(masterShape.begin(), masterShape.end(), 1, std::multiplies<size_t>());
-    // optimizeExecDomain will collapse shape dimensions and adjust tile Rank
     // todo: domain-sensitive ops presently support only 2D tiles. Relax this limitation in future
-    if (snippet->has_domain_sensitive_ops())
+    bool execDomainIsUpdated = false;
+    if (snippet->has_domain_sensitive_ops()) {
         tileRank = 2;
-    else
-        optimizeExecDomain(normInputShapes, normOutputShapes, masterShape, tileRank);
+    } else {
+        // optimizeExecDomain will collapse shape dimensions and adjust tile Rank
+        execDomainIsUpdated = optimizeExecDomain(normInputShapes, normOutputShapes, masterShape, tileRank);
+    }
     exec_domain = masterShape;
 
     // todo: probably better to pass a call_args instance
@@ -485,24 +488,8 @@ void Snippet::prepareParams() {
         dim = 1;
     }
 
-    auto get_shapes_for_snippet = [](const std::vector<VectorDims>& normShapes, const size_t tileRank) {
-        std::vector<ov::Shape> new_shapes;
-        for (const auto& s : normShapes) {
-            ov::Shape ns(tileRank, 0);
-            const int offset = s.size() - tileRank;
-            // todo: this check is excessive, remove it before merge
-            if (offset < 0)
-                IE_THROW() << "Error during creating reduced body shapes: tileRank is larger than the input size";
-            std::copy(s.begin() + offset, s.end(), ns.begin());
-            new_shapes.emplace_back(std::move(ns));
-        }
-        return new_shapes;
-    };
-
-//    std::vector<ov::Shape> new_shapes(get_shapes_for_snippet(normInputShapes, tileRank));
-//    for (const auto& s : get_shapes_for_snippet(normOutputShapes, tileRank))
-//        new_shapes.push_back(s);
-    if (!snippet->has_domain_sensitive_ops()) {
+    // Note: if exec domain is updated (dimensions are collapsed) then we need to communicate updated shapes
+    if (execDomainIsUpdated) {
         auto& body_rt_info = snippet->get_body()->get_rt_info();
         std::vector<std::vector<size_t>> new_shapes;
         std::copy(normInputShapes.begin(), normInputShapes.end(), std::back_inserter(new_shapes));
