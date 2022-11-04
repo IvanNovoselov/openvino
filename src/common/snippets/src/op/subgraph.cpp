@@ -44,7 +44,7 @@ void snippets::op::Subgraph::set_non_scalar_constants_count(const size_t count) 
 }
 
 void snippets::op::Subgraph::set_overriden_shapes(std::vector<ov::Shape> new_shapes) {
-    OPENVINO_ASSERT(has_domain_sensitive_ops(), "You can override io shapes only if Subgraph body contains domain-sensitive ops");
+//    OPENVINO_ASSERT(has_domain_sensitive_ops(), "You can override io shapes only if Subgraph body contains domain-sensitive ops");
     size_t body_io_size = m_body->get_parameters().size() + m_body->get_results().size();
     OPENVINO_ASSERT(new_shapes.size() == body_io_size, "Invalid number of overriden shapes, must be a shape for every result and parameter");
     overriden_io_shapes = std::move(new_shapes);
@@ -371,11 +371,11 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
                                                         return p->get_partial_shape().rbegin()->is_dynamic();
                                                     });
     ngraph::pass::Manager manager;
-    manager.register_pass<ov::pass::Serialize>("transpose_canonicalized.xml", "transpose_canonicalized.bin");
+//    manager.register_pass<ov::pass::Serialize>("transpose_canonicalized.xml", "transpose_canonicalized.bin");
     manager.register_pass<snippets::pass::ConvertConstantsToScalars>();
     manager.register_pass<snippets::pass::ConvertPowerToPowerStatic>();
     manager.register_pass<snippets::pass::TransposeDecomposition>();
-    manager.register_pass<ov::pass::Serialize>("transpose_decomposed.xml", "transpose_decomposed.bin");
+//    manager.register_pass<ov::pass::Serialize>("transpose_decomposed.xml", "transpose_decomposed.bin");
     manager.register_pass<snippets::pass::InsertLoad>(count);
     manager.register_pass<snippets::pass::InsertStore>(count);
     // todo: presently dynamic pipeline is activated even if the last two dimension are static
@@ -413,9 +413,9 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
         // Note that InsertLoops requires validate_and_infer_types afterwards, so add it manually if
         // automatic validation will be disabled in the pass manager
 //        std::vector<size_t> loop_over_dims{0, 2};
-//        manager.register_pass<snippets::pass::InsertLoops>(master_shape,
-//                                                           m_generator->get_target_machine()->get_lanes(),
-//                                                           overriden_io_shapes);
+        if (!has_domain_sensitive_ops())
+            manager.register_pass<snippets::pass::InsertLoops>(master_shape, tileRank,
+                                                           m_generator->get_target_machine()->get_lanes());
         manager.register_pass<ov::pass::Serialize>("transpose_lowered.xml", "transpose_lowered.bin");
     }
     manager.run_passes(m_body);

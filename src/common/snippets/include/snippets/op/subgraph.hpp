@@ -110,6 +110,7 @@ public:
     }
 
     void set_overriden_shapes(std::vector<ov::Shape>);
+    size_t tileRank = 0; // set by plugin to facilitate scheduling
 
     snippets::Schedule generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes, ngraph::pass::Manager& opt,
                                 const void* compile_params = nullptr);

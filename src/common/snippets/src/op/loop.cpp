@@ -46,7 +46,7 @@ LoopBegin::LoopBegin(const std::vector<Output<Node>> &args, size_t dimension, si
 }
 
 LoopBegin::LoopBegin(const std::vector<Output<Node>> &args)
-        : LoopBase(args, 0, 0, 0), begin_address(nullptr), input_regs({}) {
+        : LoopBase(args, 0, 0, 0), begin_address(nullptr), input_regs({}), avoid_scalar_loop_injection(false) {
     validate_and_infer_types_except_LoopEnd();
 }
 

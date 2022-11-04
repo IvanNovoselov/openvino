@@ -452,6 +452,11 @@ void Snippet::prepareParams() {
 
     // todo: probably better to pass a call_args instance
     calcJITParams(data_offsets);
+    std::cerr << "Plugin-calculated offsets: ";
+    for (int i = 0; i < data_offsets.size(); i++) {
+        std::cerr << data_offsets[i] << " ";
+    }
+    std::cerr << "\n";
     auto initStartMemoryOffsets = [this]() {
         const auto config = getSelectedPrimitiveDescriptor()->getConfig();
         const size_t numInputs = inputShapes.size();
@@ -501,7 +506,21 @@ void Snippet::prepareParams() {
         return new_shapes;
     };
 
-    std::vector<ov::Shape> new_shapes(get_shapes_for_snippet(normInputShapes, tileRank));
+//    std::vector<ov::Shape> new_shapes(get_shapes_for_snippet(normInputShapes, tileRank));
+//    for (const auto& s : get_shapes_for_snippet(normOutputShapes, tileRank))
+//        new_shapes.push_back(s);
+    if (!snippet->has_domain_sensitive_ops()) {
+        auto& body_rt_info = snippet->get_body()->get_rt_info();
+        std::vector<std::vector<size_t>> new_shapes;
+        std::copy(normInputShapes.begin(), normInputShapes.end(), std::back_inserter(new_shapes));
+        std::copy(normOutputShapes.begin(), normOutputShapes.end(), std::back_inserter(new_shapes));
+        body_rt_info["PluginShapesOverride"] = new_shapes;
+        snippet->set_master_shape(ov::PartialShape(masterShape));
+    }
+//    snippet->set_overriden_shapes(new_shapes);
+    // todo: tileRank should be determined by snippets based on body shapes and operation semantics, not by plugin
+    snippet->tileRank = tileRank;
+    /*
     snippet->set_master_shape(PartialShape(scheduler_work_amounts));
     // If the snippets has domain sensitive ops (e.g. Transpose) then domain optimizations are not performed
     // so need only update Parameter and Result shapes so Loops will be appropriately inserted in the snippets::pass::InsertLoops
@@ -512,6 +531,7 @@ void Snippet::prepareParams() {
     } else {
         snippet->reshape_body(new_shapes);
     }
+    */
 }
 
 bool Snippet::needPrepareParams() const {
@@ -595,6 +615,11 @@ void Snippet::generate(const jit_snippets_compile_args* jcp) {
 
 void Snippet::schedule_6d(const jit_snippets_call_args& call_args) const {
     const auto& dom = exec_domain;
+    std::cerr << "Tile rank: " << tileRank << "\n";
+    std::cerr << "Exec domain: ";
+    for (auto d : exec_domain)
+        std::cerr << d << " ";
+    std::cerr << "\n";
 // todo: check src offsets and exec domain!
 //    const auto& dom = std::vector<size_t>{1, 1, 2, 3, 1};
     // < N, C, H, W > < 1, 1, N, C*H*W>
@@ -603,11 +628,11 @@ void Snippet::schedule_6d(const jit_snippets_call_args& call_args) const {
             int64_t indexes[] = {d0, d1, d2, d3, d4};
             schedule.get_callable<kernel>()(indexes, &call_args);
         });
-    auto src = reinterpret_cast<const float*>(call_args.src_ptrs[0]);
-    auto dst = reinterpret_cast<float*>(call_args.dst_ptrs[0]);
-    for (int i=0; i < 10; i++) {
-        std::cerr << src[i] << " => " << dst[i] << "\n";
-    }
+//    auto src = reinterpret_cast<const float*>(call_args.src_ptrs[0]);
+//    auto dst = reinterpret_cast<float*>(call_args.dst_ptrs[0]);
+//    for (int i=0; i < 10; i++) {
+//        std::cerr << src[i] << " => " << dst[i] << "\n";
+//    }
 }
 
 void Snippet::schedule_nt(const jit_snippets_call_args& call_args) const {

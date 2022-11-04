@@ -119,7 +119,7 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
         const auto rinfo = rt.find("NonDefaultAccessPattern");
         // default access pattern
         if (rinfo == rt.end()) {
-            std::iota(access_pattern.begin(), access_pattern.end(), 0);
+            return std::vector<size_t> {};
         } else {
             const auto& pattern = rinfo->second.as<std::vector<size_t>>();
             if (pattern.size() != access_pattern.size())
@@ -132,14 +132,26 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     auto results = model->get_results();
     num_inputs = params.size();
     num_outputs = results.size();
+
+    const auto& model_rt_info = model->get_rt_info();
+    const auto& plugin_shapes = model_rt_info.find("PluginShapesOverride");
+    if (plugin_shapes == model_rt_info.end()) {
+        for (const auto& op : params)
+            io_shapes.push_back(get_static_shape(op));
+        for (const auto& op : results)
+            io_shapes.push_back(get_static_shape(op));
+    } else {
+        const auto& new_shapes = plugin_shapes->second.as<std::vector<std::vector<size_t>>>();
+        if (new_shapes.size() != num_inputs + num_outputs)
+            IE_THROW() << "JIT KernelEmitter detected invalid plugin-overriden shapes";
+        io_shapes = new_shapes;
+    }
     for (const auto& op : params) {
         data_access_pattern.push_back(get_access_pattern(op));
-        io_shapes.push_back(get_static_shape(op));
         io_data_size.push_back(op->get_output_element_type(0).size());
     }
     for (const auto& op : results) {
         data_access_pattern.push_back(get_access_pattern(op));
-        io_shapes.push_back(get_static_shape(op));
         io_data_size.push_back(op->get_input_element_type(0).size());
     }
     // Initialize pools of gp and vec registers
@@ -221,9 +233,15 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
         for (auto a : strides)
             std::cerr << a << " ";
         std::cerr << "\n";
-        std::vector<size_t> reordered_strides(access_pattern.size(), 0);
-        for (auto i = 0; i < access_pattern.size() - 1; i++)
-            offsets[offsets.size() - access_pattern.size() + 1 + i] = strides[access_pattern[i]] * data_size;
+//        std::vector<size_t> reordered_strides(access_pattern.size(), 0);
+        if (access_pattern.empty()) {
+            for (auto i = 0; i < shape.size() - 1; i++) {
+                offsets[offsets.size() - shape.size() + 1 + i] = shape[i] != 1 ? strides[i] * data_size : 0;
+            }
+        } else {
+            for (auto i = 0; i < access_pattern.size() - 1; i++)
+                offsets[offsets.size() - access_pattern.size() + 1 + i] = strides[access_pattern[i]] * data_size;
+        }
 //        strides = std::move(reordered_strides);
 
 //        std::accumulate(strides.begin(), strides.end() - 1, data_size, std::multiplies<size_t>());
@@ -260,8 +278,8 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
     }
 //    data_offsets[0].back() = 0;
     std::vector<std::string> labels{"IN", "OUT"};
-    for (int i = 0; i < 2; i++) {
-        std::cerr << labels[i] << ": ";
+    for (int i = 0; i < data_offsets.size(); i++) {
+        std::cerr << i << " : ";
         for (auto d : data_offsets[i])
             std::cerr << d / 4 << " ";
         std::cerr << "\n";
