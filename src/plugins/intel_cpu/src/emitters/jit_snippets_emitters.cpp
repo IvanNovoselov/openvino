@@ -111,15 +111,14 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
             IE_THROW() << "KernelEmitter can't calc offsets for dynamic shapes";
         return pshape.get_shape();
     };
-    const auto get_access_pattern = [](const std::shared_ptr<ov::Node>& node) {
-        const auto& pshape = node->get_output_partial_shape(0);
+    const auto get_access_pattern = [](const std::shared_ptr<ov::Node>& node, const std::vector<size_t>& shape) {
         std::vector<size_t> access_pattern{};
         auto &rt = node->get_rt_info();
         const auto rinfo = rt.find("NonDefaultAccessPattern");
         // default access pattern
         if (rinfo != rt.end()) {
             access_pattern = rinfo->second.as<std::vector<size_t>>();
-            if (access_pattern.size() != pshape.size())
+            if (access_pattern.size() != shape.size())
                 IE_THROW() << "KernelEmitter detected invalid non-default access pattern";
         }
         return access_pattern;
@@ -128,13 +127,14 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     auto results = model->get_results();
     num_inputs = params.size();
     num_outputs = results.size();
+    NodeVector io_nodes;
+    std::copy(params.begin(), params.end(), std::back_inserter(io_nodes));
+    std::copy(results.begin(), results.end(), std::back_inserter(io_nodes));
 
     const auto& model_rt_info = model->get_rt_info();
     const auto& plugin_shapes = model_rt_info.find("PluginShapesOverride");
     if (plugin_shapes == model_rt_info.end()) {
-        for (const auto& op : params)
-            io_shapes.push_back(get_static_shape(op));
-        for (const auto& op : results)
+        for (const auto& op : io_nodes)
             io_shapes.push_back(get_static_shape(op));
     } else {
         const auto& new_shapes = plugin_shapes->second.as<std::vector<std::vector<size_t>>>();
@@ -142,14 +142,10 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
             IE_THROW() << "JIT KernelEmitter detected invalid plugin-overriden shapes";
         io_shapes = new_shapes;
     }
-    // todo: check that access_pattern corresponds with the actual used shape size
-    for (const auto& op : params) {
-        data_access_pattern.push_back(get_access_pattern(op));
+    for (int i = 0; i < io_nodes.size(); i++) {
+        const auto& op = io_nodes[i];
+        data_access_pattern.push_back(get_access_pattern(op, io_shapes[i]));
         io_data_size.push_back(op->get_output_element_type(0).size());
-    }
-    for (const auto& op : results) {
-        data_access_pattern.push_back(get_access_pattern(op));
-        io_data_size.push_back(op->get_input_element_type(0).size());
     }
     // Initialize pools of gp and vec registers
     gp_regs_pool.resize(16);
