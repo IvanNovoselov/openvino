@@ -105,11 +105,6 @@ public:
         return config.m_has_domain_sensitive_ops;
     }
 
-    const std::vector<ov::Shape>& get_overriden_shapes() const {
-        return overriden_io_shapes;
-    }
-
-    void set_overriden_shapes(std::vector<ov::Shape>);
     size_t tileRank = 0; // set by plugin to facilitate scheduling
 
     snippets::Schedule generate(const BlockedShapeVector& output_shapes, const BlockedShapeVector& input_shapes, ngraph::pass::Manager& opt,
@@ -167,10 +162,6 @@ private:
     } config;
 
     ov::PartialShape master_shape;
-    // Input and output shapes that will be passed to snippets::pass::InsertLoops.
-    // overriden_io_shapes are used to propagate scheduling shapes without a proper body reshape in cases when
-    // body contains domain-sensitive operations that can't be easily reshaped to an arbitrary domain (e.g. Transpose)
-    std::vector<ov::Shape> overriden_io_shapes;
 };
 
 static inline std::ostream& operator<<(std::ostream& os, const op::Subgraph::BlockedShape& blocked_shape) {

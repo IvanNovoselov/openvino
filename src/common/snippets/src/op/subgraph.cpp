@@ -43,15 +43,8 @@ void snippets::op::Subgraph::set_non_scalar_constants_count(const size_t count) 
     m_non_scalar_constants_count = count;
 }
 
-void snippets::op::Subgraph::set_overriden_shapes(std::vector<ov::Shape> new_shapes) {
-//    OPENVINO_ASSERT(has_domain_sensitive_ops(), "You can override io shapes only if Subgraph body contains domain-sensitive ops");
-    size_t body_io_size = m_body->get_parameters().size() + m_body->get_results().size();
-    OPENVINO_ASSERT(new_shapes.size() == body_io_size, "Invalid number of overriden shapes, must be a shape for every result and parameter");
-    overriden_io_shapes = std::move(new_shapes);
-}
-
 snippets::op::Subgraph::Subgraph(const OutputVector& args, std::shared_ptr<ov::Model> body)
-    : Op(args), m_body(body), m_generator(nullptr), overriden_io_shapes({}) {
+    : Op(args), m_body(std::move(body)), m_generator(nullptr) {
     const auto ops = m_body->get_ops();
     for (const auto& op : ops) {
         config.m_is_quantized = config.m_is_quantized || ov::is_type<ov::op::v0::FakeQuantize>(op);
@@ -65,7 +58,7 @@ snippets::op::Subgraph::Subgraph(const OutputVector& args, std::shared_ptr<ov::M
 }
 
 snippets::op::Subgraph::Subgraph(const NodeVector& args, std::shared_ptr<ov::Model> body)
-    : Subgraph(as_output_vector(args), body) {}
+    : Subgraph(as_output_vector(args), std::move(body)) {}
 
 std::shared_ptr<Node> snippets::op::Subgraph::clone_with_new_inputs(const OutputVector& inputs) const {
     INTERNAL_OP_SCOPE(Subgraph);
@@ -415,7 +408,7 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
         if (!has_domain_sensitive_ops())
             manager.register_pass<snippets::pass::InsertLoops>(master_shape, tileRank,
                                                            m_generator->get_target_machine()->get_lanes());
-        manager.register_pass<ov::pass::Serialize>("transpose_lowered.xml", "transpose_lowered.bin");
+//        manager.register_pass<ov::pass::Serialize>("transpose_lowered.xml", "transpose_lowered.bin");
     }
     manager.run_passes(m_body);
 }
