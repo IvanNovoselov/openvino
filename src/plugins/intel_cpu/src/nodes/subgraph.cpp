@@ -452,11 +452,6 @@ void Snippet::prepareParams() {
 
     // todo: probably better to pass a call_args instance
     calcJITParams(data_offsets);
-    std::cerr << "Plugin-calculated offsets: ";
-    for (int i = 0; i < data_offsets.size(); i++) {
-        std::cerr << data_offsets[i] << " ";
-    }
-    std::cerr << "\n";
     auto initStartMemoryOffsets = [this]() {
         const auto config = getSelectedPrimitiveDescriptor()->getConfig();
         const size_t numInputs = inputShapes.size();
@@ -490,8 +485,6 @@ void Snippet::prepareParams() {
         dim = 1;
     }
 
-    // ov::pass::Serialize("tile_initial.xml", "tile_initial.bin").run_on_model(snippet->get_body());
-    //
     auto get_shapes_for_snippet = [](const std::vector<VectorDims>& normShapes, const size_t tileRank) {
         std::vector<ov::Shape> new_shapes;
         for (const auto& s : normShapes) {
@@ -615,24 +608,12 @@ void Snippet::generate(const jit_snippets_compile_args* jcp) {
 
 void Snippet::schedule_6d(const jit_snippets_call_args& call_args) const {
     const auto& dom = exec_domain;
-    std::cerr << "Tile rank: " << tileRank << "\n";
-    std::cerr << "Exec domain: ";
-    for (auto d : exec_domain)
-        std::cerr << d << " ";
-    std::cerr << "\n";
-// todo: check src offsets and exec domain!
-//    const auto& dom = std::vector<size_t>{1, 1, 2, 3, 1};
     // < N, C, H, W > < 1, 1, N, C*H*W>
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
         [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
             int64_t indexes[] = {d0, d1, d2, d3, d4};
             schedule.get_callable<kernel>()(indexes, &call_args);
         });
-//    auto src = reinterpret_cast<const float*>(call_args.src_ptrs[0]);
-//    auto dst = reinterpret_cast<float*>(call_args.dst_ptrs[0]);
-//    for (int i=0; i < 10; i++) {
-//        std::cerr << src[i] << " => " << dst[i] << "\n";
-//    }
 }
 
 void Snippet::schedule_nt(const jit_snippets_call_args& call_args) const {

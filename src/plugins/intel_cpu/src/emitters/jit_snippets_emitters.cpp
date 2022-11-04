@@ -217,10 +217,9 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
                                               const Reg64& reg_indexes, const Reg64& reg_const_params, const std::vector<Reg64>& data_ptr_regs) const {
     // Note that we don't need offset for the last dim, since it's handled directly by Tile emitter
     const size_t offset_rank = jcp.master_shape.size() - 1;
-    const size_t tile_rank = jcp.tile_rank;
-//    std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>(offset_rank, 0));
+    //const size_t tile_rank = jcp.tile_rank;
     std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>{});
-    auto offset_calculation = [offset_rank, tile_rank](const std::vector<size_t>& shape,
+    auto offset_calculation = [=](const std::vector<size_t>& shape,
                                             const std::vector<size_t>& access_pattern, const size_t data_size) {
         // Strides represent distance between consecutive elements of corresponding dimension.
         // If a dim size == 1, then the next dim starts immediately and the stride is 0
@@ -258,19 +257,10 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
     for (size_t i = 0; i < num_params; i++) {
         data_offsets[i] = offset_calculation(io_shapes[i],  data_access_pattern[i], io_data_size[i]);
     }
-//    data_offsets[0].back() = 0;
-    std::vector<std::string> labels{"IN", "OUT"};
-    for (int i = 0; i < data_offsets.size(); i++) {
-        std::cerr << i << " : ";
-        for (auto d : data_offsets[i])
-            std::cerr << d / 4 << " ";
-        std::cerr << "\n";
-    }
     // master_shape size must be valid in both static and dynamic cases
-    const int64_t offsetRank = jcp.master_shape.size() - 1;
     std::function<void(Reg64, const std::vector<size_t>&, Reg64)> init_ptr_with_offset;
     init_ptr_with_offset = [&](Reg64 pointer, const std::vector<size_t>& offsets, Reg64 reg_tmp) {
-        for (int j = 0; j < offsetRank; j++) {
+        for (int j = 0; j < offset_rank; j++) {
             if (jcp.master_shape[j] != 1 && offsets[j] != 0) {
                 h->mov(reg_tmp, offsets[j]);
                 h->imul(reg_tmp, h->ptr[reg_indexes + j * sizeof(size_t)]);

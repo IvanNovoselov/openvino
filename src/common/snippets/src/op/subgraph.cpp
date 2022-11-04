@@ -412,7 +412,6 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
         // todo: get_lanes() assumes fp32. Could there be any int8 issues?
         // Note that InsertLoops requires validate_and_infer_types afterwards, so add it manually if
         // automatic validation will be disabled in the pass manager
-//        std::vector<size_t> loop_over_dims{0, 2};
         if (!has_domain_sensitive_ops())
             manager.register_pass<snippets::pass::InsertLoops>(master_shape, tileRank,
                                                            m_generator->get_target_machine()->get_lanes());
