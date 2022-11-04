@@ -11,10 +11,10 @@ namespace snippets {
 
 
 namespace {
-
+std::vector<ov::PartialShape> input_shapes{{2, 3, 5, 13}, {2, 3, 2, 4}, {1, 7, 1, 4}};
 INSTANTIATE_TEST_SUITE_P(smoke_Snippets_Transpose, Transpose,
                      ::testing::Combine(
-                             ::testing::Values(ov::PartialShape {2, 2, 3, 16}),
+                             ::testing::ValuesIn(input_shapes),
                              ::testing::Values(std::vector<int> {0, 2,  3, 1}),
                              ::testing::Values(2), // Sinh + Transpose
                              ::testing::Values(1), // Tokenized Transpose
