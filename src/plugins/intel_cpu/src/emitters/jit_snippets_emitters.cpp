@@ -113,18 +113,14 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     };
     const auto get_access_pattern = [](const std::shared_ptr<ov::Node>& node) {
         const auto& pshape = node->get_output_partial_shape(0);
-        std::vector<size_t> access_pattern;
-        access_pattern.resize(pshape.size());
+        std::vector<size_t> access_pattern{};
         auto &rt = node->get_rt_info();
         const auto rinfo = rt.find("NonDefaultAccessPattern");
         // default access pattern
-        if (rinfo == rt.end()) {
-            return std::vector<size_t> {};
-        } else {
-            const auto& pattern = rinfo->second.as<std::vector<size_t>>();
-            if (pattern.size() != access_pattern.size())
+        if (rinfo != rt.end()) {
+            access_pattern = rinfo->second.as<std::vector<size_t>>();
+            if (access_pattern.size() != pshape.size())
                 IE_THROW() << "KernelEmitter detected invalid non-default access pattern";
-            access_pattern = pattern;
         }
         return access_pattern;
     };
@@ -146,6 +142,7 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
             IE_THROW() << "JIT KernelEmitter detected invalid plugin-overriden shapes";
         io_shapes = new_shapes;
     }
+    // todo: check that access_pattern corresponds with the actual used shape size
     for (const auto& op : params) {
         data_access_pattern.push_back(get_access_pattern(op));
         io_data_size.push_back(op->get_output_element_type(0).size());
@@ -220,61 +217,46 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
                                               const Reg64& reg_indexes, const Reg64& reg_const_params, const std::vector<Reg64>& data_ptr_regs) const {
     // Note that we don't need offset for the last dim, since it's handled directly by Tile emitter
     const size_t offset_rank = jcp.master_shape.size() - 1;
-    std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>(offset_rank, 0));
-    auto offset_calculation = [offset_rank](std::vector<size_t>& offsets, const std::vector<size_t>& shape,
+    const size_t tile_rank = jcp.tile_rank;
+//    std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>(offset_rank, 0));
+    std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>{});
+    auto offset_calculation = [offset_rank, tile_rank](const std::vector<size_t>& shape,
                                             const std::vector<size_t>& access_pattern, const size_t data_size) {
-        std::cerr << "Shape: ";
-        for (auto a : shape)
-            std::cerr << a << " ";
-        std::cerr << "\n";
-        std::vector<size_t> strides(shape.size(), 1);
-        std::partial_sum(shape.rbegin(), shape.rend() - 1, strides.rbegin() + 1, std::multiplies<size_t>());
-        std::cerr << "Strides(1): ";
-        for (auto a : strides)
-            std::cerr << a << " ";
-        std::cerr << "\n";
-//        std::vector<size_t> reordered_strides(access_pattern.size(), 0);
-        if (access_pattern.empty()) {
-            for (auto i = 0; i < shape.size() - 1; i++) {
-                offsets[offsets.size() - shape.size() + 1 + i] = shape[i] != 1 ? strides[i] * data_size : 0;
-            }
-        } else {
-            for (auto i = 0; i < access_pattern.size() - 1; i++)
-                offsets[offsets.size() - access_pattern.size() + 1 + i] = strides[access_pattern[i]] * data_size;
+        // Strides represent distance between consecutive elements of corresponding dimension.
+        // If a dim size == 1, then the next dim starts immediately and the stride is 0
+        // case 1:
+        //    shape:         s0,    s1, s2, s3
+        //    strides: s1*s2*s3, s2*s3, s3,  1
+        // case 2:
+        //    shape:      s0, s1, s2 == 1, s3
+        //    strides: s1*s3, s3,       0,  1
+        std::vector<size_t> strides(shape.size());
+        size_t dim_step = 1;
+        strides[shape.size() - 1] = 1;
+        for (int k = static_cast<int>(shape.size()) - 2; k >= 0; k--) {
+            dim_step *= shape[k+1];
+            strides[k] = shape[k] != 1 ? dim_step * data_size : 0;
         }
-//        strides = std::move(reordered_strides);
+        // Note: this is an extra copy, but let's keep it for clarity
+        if (!access_pattern.empty()) {
+            std::vector<size_t> reordered_strides(strides.size());
+            for (auto i = 0; i < access_pattern.size(); i++)
+                reordered_strides[i] = strides[access_pattern[i]];
+            strides = std::move(reordered_strides);
+        }
+        // the last stride is ignored, since the entire last dim is processed by kernel
+        // and no parallel_for data_ptr offsets can be applied in this case (cover tile_rank == 1)
+        strides.pop_back();
+        // if tile_rank > 1, then zero corresponding strides since no external offset can be applied
+        // for (auto j = 0; j < tile_rank - 1; j++)
+        //    strides[strides.size() - 1 - j] = 0;
+        // actual offset size might be larger that the shape size due to 6D scheduling
+        strides.insert(strides.begin(), offset_rank - strides.size(), 0);
 
-//        std::accumulate(strides.begin(), strides.end() - 1, data_size, std::multiplies<size_t>());
-        std::cerr << "Strides(2): ";
-        for (auto a : strides)
-            std::cerr << a << " ";
-        std::cerr << "\n";
-//        std::copy(strides.rbegin(), strides.rend(), offsets.rbegin());
-
-//        auto dim_it = access_pattern.rbegin();
-//        auto offset_it = offsets.rbegin();
-//        size_t k = shape[*dim_it++];
-//        for (; dim_it < access_pattern.rend(); dim_it++, offset_it++) {
-////            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
-//            // dims could be either master_shape[i] or 1
-//            *offset_it = (shape[*dim_it] != 1) ? k * data_size : 0;
-//            k *= shape[*dim_it];
-//        }
-
-
-//        for (int i = offset_rank - 1; i >= 0; i--) {
-////            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
-//            // dims could be either master_shape[i] or 1
-//            auto tmp = (dims[access_pattern[i]] != 1) ? k : 0;
-//            off[i] = tmp * data_size;
-//            k *= dims[access_pattern[i]];
-//        }
+        return strides;
     };
     for (size_t i = 0; i < num_params; i++) {
-        auto& offsets = data_offsets[i];
-        offset_calculation(offsets, io_shapes[i],  data_access_pattern[i], io_data_size[i]);
-        for (auto j = 0; j < jcp.tile_rank - 1; j++)
-            offsets[offsets.size() - 1 - j] = 0;
+        data_offsets[i] = offset_calculation(io_shapes[i],  data_access_pattern[i], io_data_size[i]);
     }
 //    data_offsets[0].back() = 0;
     std::vector<std::string> labels{"IN", "OUT"};
@@ -284,32 +266,6 @@ void KernelEmitter::init_data_pointers(size_t num_inputs, size_t num_params,
             std::cerr << d / 4 << " ";
         std::cerr << "\n";
     }
-//    data_offsets[0] = {0, 0, 3 * 16 * 2 * 4, 16 * 4, 0};
-//    data_offsets[1] = {0, 0, 3 * 16 * 2 * 4, 16 * 2 * 4, 0};
-//    std::cerr << "=========================\n";
-//    std::cerr << "TARGET:\n";
-//    for (int i = 0; i < 2; i++) {
-//        std::cerr << labels[i] << ": ";
-//        for (auto d : data_offsets[i])
-//            std::cerr << d / 4 << " ";
-//        std::cerr << "\n";
-//    }
-    // backup
-    /*
-    auto offset_calculation = [offset_rank](std::vector<size_t>& off, const std::vector<size_t>& dims, const size_t data_size) {
-        size_t k = dims.back();
-        for (int i = offset_rank - 1; i >= 0; i--) {
-//            auto tmp = (dims[i] == masterShape[i] && masterShape[i] != 1) ? k : 0;
-            // dims could be either master_shape[i] or 1
-            auto tmp = (dims[i] != 1) ? k : 0;
-            off[i] = tmp * data_size;
-            k *= dims[i];
-        }
-    };
-    for (size_t i = 0; i < num_params; i++) {
-        offset_calculation(data_offsets[i], io_shapes[i],  io_data_size[i]);
-    }
-     */
     // master_shape size must be valid in both static and dynamic cases
     const int64_t offsetRank = jcp.master_shape.size() - 1;
     std::function<void(Reg64, const std::vector<size_t>&, Reg64)> init_ptr_with_offset;
