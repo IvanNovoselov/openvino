@@ -19,14 +19,13 @@ namespace pass {
 class InsertLoops: public ngraph::pass::FunctionPass {
 public:
     OPENVINO_RTTI("InsertLoops", "0");
-    InsertLoops(ov::PartialShape master_shape, size_t loop_depth, size_t vector_size, std::vector<size_t> loop_over_dims = {});
+    InsertLoops(ov::PartialShape master_shape, size_t loop_depth, size_t vector_size);
     bool run_on_model(const std::shared_ptr<ngraph::Function>& m) override;
 
 private:
     ov::PartialShape m_master_shape;
     size_t m_loop_depth;
     size_t m_vector_size;
-    std::vector<size_t> m_loop_over_dims;
 };
 
 }  // namespace pass
