@@ -126,7 +126,7 @@ auto has_supported_in_out(const std::shared_ptr<const Node> &n) -> bool {
         //  So i32 is supported exclusively for transposes
         return t.get_partial_shape().is_static() &&
                 (supported_data_types.count(t.get_element_type()) != 0 ||
-                 ov::is_type<const opset1::Transpose>(n) && t.get_element_type() == ngraph::element::i32);
+                (ov::is_type<const opset1::Transpose>(n) && t.get_element_type() == ngraph::element::i32));
     };
     const auto & inputs = n->inputs();
     const auto & outputs = n->outputs();

@@ -10,7 +10,7 @@
 
 ngraph::snippets::pass::InsertLoops::InsertLoops(ov::PartialShape master_shape, size_t loop_depth, size_t vector_size)
 : m_master_shape(std::move(master_shape)), m_loop_depth(loop_depth), m_vector_size(vector_size) {
-    if (m_master_shape.size() <= m_loop_depth)
+    if (m_master_shape.size() < m_loop_depth)
         throw ngraph_error("InsertLoops can't insert loops: master shape rank is too small");
 }
 
