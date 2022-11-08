@@ -38,9 +38,7 @@ void Transpose::SetUp() {
 }
 
 TEST_P(Transpose, CompareWithRefImpl) {
-//    GTEST_SKIP();
     run();
-//    ov::pass::Serialize("transpose_test.xml", "transpose_tests.bin").run_on_model(function);
     validateNumSubgraphs();
 }
 

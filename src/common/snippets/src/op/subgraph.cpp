@@ -364,11 +364,9 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
                                                         return p->get_partial_shape().rbegin()->is_dynamic();
                                                     });
     ngraph::pass::Manager manager;
-//    manager.register_pass<ov::pass::Serialize>("transpose_canonicalized.xml", "transpose_canonicalized.bin");
     manager.register_pass<snippets::pass::ConvertConstantsToScalars>();
     manager.register_pass<snippets::pass::ConvertPowerToPowerStatic>();
     manager.register_pass<snippets::pass::TransposeDecomposition>();
-//    manager.register_pass<ov::pass::Serialize>("transpose_decomposed.xml", "transpose_decomposed.bin");
     manager.register_pass<snippets::pass::InsertLoad>(count);
     manager.register_pass<snippets::pass::InsertStore>(count);
     // todo: presently dynamic pipeline is activated even if the last two dimension are static

@@ -61,8 +61,6 @@ CommonOptimizations::CommonOptimizations() {
 
         auto body = subgraph->get_body();
         const auto is_quantized = subgraph->is_quantized();
-        // todo: remove DEBUG!
-        ov::pass::Serialize("tokenized_body.xml", "tokenized_body.bin").run_on_model(body);
 
         // Firsly we should transform all original Converts inside body to ConvertTruncation to save original behavior.
         // Then if Subgraph contains FakeQuantize we enable specific transformation for quantized subgraphs.
