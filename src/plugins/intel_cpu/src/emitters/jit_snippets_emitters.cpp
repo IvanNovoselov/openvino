@@ -134,8 +134,7 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     const auto& model_rt_info = model->get_rt_info();
     const auto& plugin_shapes = model_rt_info.find("PluginShapesOverride");
     if (plugin_shapes == model_rt_info.end()) {
-        for (const auto& op : io_nodes)
-            io_shapes.push_back(get_static_shape(op));
+        IE_THROW() << "JIT KernelEmitter requires plugin-overriden shapes in model rt_info";
     } else {
         const auto& new_shapes = plugin_shapes->second.as<std::vector<std::vector<size_t>>>();
         if (new_shapes.size() != num_inputs + num_outputs)
