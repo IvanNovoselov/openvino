@@ -111,15 +111,22 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
             IE_THROW() << "KernelEmitter can't calc offsets for dynamic shapes";
         return pshape.get_shape();
     };
-    const auto get_access_pattern = [](const std::shared_ptr<ov::Node>& node, const std::vector<size_t>& shape) {
+    const auto get_access_pattern = [](const std::shared_ptr<ov::Node>& node, std::vector<size_t>& shape) {
         std::vector<size_t> access_pattern{};
         auto &rt = node->get_rt_info();
         const auto rinfo = rt.find("NonDefaultAccessPattern");
         // default access pattern
         if (rinfo != rt.end()) {
             access_pattern = rinfo->second.as<std::vector<size_t>>();
-            if (access_pattern.size() != shape.size())
-                IE_THROW() << "KernelEmitter detected invalid non-default access pattern";
+            const int64_t pattern_shape_diff = static_cast<int64_t>(shape.size()) - static_cast<int64_t>(access_pattern.size());
+            // Plugin can (and usually does) prepend shapes with 1's to facilitate scheduling, here we can safely remove leading 1's
+            if (pattern_shape_diff > 0) {
+                if (std::any_of(shape.begin(), shape.begin() + pattern_shape_diff, [](size_t x){return x != 1;}))
+                    IE_THROW() << "KernelEmitter detected shape vs access pattern conflict: only leading 1's can be removed from the shape";
+                shape.erase(shape.begin(), shape.begin() + pattern_shape_diff);
+            } else if (pattern_shape_diff < 0) {
+                IE_THROW() << "KernelEmitter detected invalid access pattern: pattern size can't be larger than shape size";
+            }
         }
         return access_pattern;
     };
@@ -143,6 +150,7 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     }
     for (int i = 0; i < io_nodes.size(); i++) {
         const auto& op = io_nodes[i];
+
         data_access_pattern.push_back(get_access_pattern(op, io_shapes[i]));
         io_data_size.push_back(op->get_output_element_type(0).size());
     }
