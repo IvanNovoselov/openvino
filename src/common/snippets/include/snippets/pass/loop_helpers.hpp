@@ -68,6 +68,24 @@ std::shared_ptr<LoopEnd> insertLoopEndBeforeInputs(const std::vector<Input<Node>
                                                   size_t work_amount, size_t increment,
                                                   std::vector<bool> apply_increment = {},
                                                   std::vector<int64_t> finalization_offsets = {});
+/**
+ * @interface insertLoopBeginAfterOutputs
+ * @brief  Inserts LoopBegin operation after the group of operations described
+ *          by the input argument (vector of inputs). Use insertLoopEnd instead - it has a more universal interface.
+ * @param originalInputs LoopEnd will be inserted before these inputs
+ * @param loopBegin pointer to the beginning of the Loop region
+ * @param work_amount total number of evaluations to be processed by the loop
+ * @param increment number of evaluations processed in one iteration of the loop
+ * @param ptr_increments specifies arbitrary increments that will be applied to i/o pointers on every loop iteration
+ * should be used when Loop is connected to Parameters and/or Results
+ * @param finalization_offsets pointer shifts that should be applied to data pointers before exiting the loop
+ * @ingroup snippets
+ */
+std::shared_ptr<LoopEnd> insertLoopEndBeforeInputs(const std::vector<Input<Node>>& originalInputs,
+                                                   const std::shared_ptr<LoopBegin>& loopBegin,
+                                                   size_t work_amount, size_t increment,
+                                                   std::vector<int64_t> ptr_increments = {},
+                                                   std::vector<int64_t> finalization_offsets = {});
 
 /**
  * @interface insertLoopEnd

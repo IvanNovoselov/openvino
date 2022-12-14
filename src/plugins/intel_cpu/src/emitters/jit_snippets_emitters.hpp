@@ -388,14 +388,13 @@ private:
     void initBrgemm(brgemmCtx& ctx, std::unique_ptr<brgemm_kernel_t>& brgKernel, bool use_amx) const;
     template <dnnl::impl::cpu::x64::cpu_isa_t isa>
     void callBrgemm(brgemmCtx& ctx, std::unique_ptr<brgemm_kernel_t>& brgKernel, const void* pin0, const void* pin1, void* pout, void* wsp) const;
-    size_t getBrgIdx(size_t mIdx, size_t kIdx, size_t nIdx) const;
+    size_t getBrgIdx(size_t kIdx, size_t nIdx) const;
     template <dnnl::impl::cpu::x64::cpu_isa_t isa>
     void emit_brgemm_kernel_call(const brgemm_kernel_t *brg_kernel, int bs,
                                              Reg64 addr_A, Reg64 addr_B,
                                               const brgemm_batch_element_t *batch, Reg64 addr_C, void *scratch) const;
 
-    static constexpr size_t BRGEMM_KERNELS_NUM = 8;
-    static constexpr size_t matmulOptimalM = 32;
+    static constexpr size_t BRGEMM_KERNELS_NUM = 4;
     brgemmCtx brgCtxs0[BRGEMM_KERNELS_NUM];
     std::unique_ptr<dnnl::impl::cpu::x64::brgemm_kernel_t> brgKernels0[BRGEMM_KERNELS_NUM];
 

@@ -43,6 +43,25 @@ std::shared_ptr<LoopEnd> insertLoopEndBeforeInputs(const std::vector<Input<Node>
     return loop_end;
 }
 
+std::shared_ptr<LoopEnd> insertLoopEndBeforeInputs(const std::vector<Input<Node>>& originalInputs,
+                                                   const std::shared_ptr<LoopBegin>& loopBegin,
+                                                   size_t work_amount, size_t increment,
+                                                   std::vector<int64_t> ptr_increments,
+                                                   std::vector<int64_t> finalization_offsets) {
+    OutputVector originalParentOutputs;
+    for (const auto& in : originalInputs) {
+        originalParentOutputs.push_back(in.get_source_output());
+    }
+    originalParentOutputs.push_back(loopBegin->output(loopBegin->get_output_size() - 1));
+    auto loop_end = std::make_shared<LoopEnd>(originalParentOutputs, work_amount, increment,
+                                              std::move(ptr_increments), std::move(finalization_offsets));
+
+    for (int i = 0; i < originalInputs.size(); i++) {
+        originalInputs[i].replace_source_output(loop_end->output(i));
+    }
+    return loop_end;
+}
+
 } // namespace op
 } // namespace snippets
 } // namespace ngraph

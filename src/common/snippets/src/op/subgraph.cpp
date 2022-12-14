@@ -15,6 +15,7 @@
 #include "snippets/pass/convert_power_to_powerstatic.hpp"
 #include "snippets/pass/vector_to_scalar.hpp"
 #include "snippets/pass/insert_loops.hpp"
+#include "snippets/pass/insert_brgemm_loops.hpp"
 #include "snippets/pass/transpose_decomposition.hpp"
 #include "snippets/pass/transform_convert.hpp"
 #include "snippets/pass/align_element_type.hpp"
@@ -425,9 +426,12 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
         // todo: get_lanes() assumes fp32. Could there be any int8 issues?
         // Note that InsertLoops requires validate_and_infer_types afterwards, so add it manually if
         // automatic validation will be disabled in the pass manager
-        if (!has_domain_sensitive_ops())
+        if (!has_domain_sensitive_ops()) {
             manager.register_pass<snippets::pass::InsertLoops>(master_shape, tileRank,
-                                                           m_generator->get_target_machine()->get_lanes());
+                                                               m_generator->get_target_machine()->get_lanes());
+        } else {
+            manager.register_pass<snippets::pass::InsertBrgemmLoops>();
+        }
     }
     manager.run_passes(m_body);
 }
@@ -460,6 +464,8 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
     convert_to_snippet_dialect();
     opt.run_passes(m_body);
+
+    ov::pass::Serialize("snsdebug_lowered.xml", "snsdebug_lowered.bin").run_on_model(m_body);
     snippets::pass::AssignRegisters().run_on_model(m_body);
 
     ngraph::snippets::Generator::GeneratorConfig generatorConfig;

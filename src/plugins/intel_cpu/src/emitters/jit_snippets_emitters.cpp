@@ -721,39 +721,22 @@ void StoreConvertEmitter::emit_isa(const std::vector<size_t> &in, const std::vec
 void StoreConvertEmitter::emit_data() const {
     store_emitter->emit_data();
 }
-size_t BrgemmEmitter::getBrgIdx(size_t mIdx, size_t kIdx, size_t nIdx) const {
-    return mIdx * 4 + kIdx * 2 + nIdx;
+size_t BrgemmEmitter::getBrgIdx(size_t kIdx, size_t nIdx) const {
+    return kIdx * 2 + nIdx;
 }
 BrgemmEmitter::BrgemmEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl::cpu::x64::cpu_isa_t isa,
                                          const std::shared_ptr<ov::Node>& node) : jit_emitter(h, isa, node) {
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
-    const auto& brgemm_node = as_type_ptr<ngraph::snippets::op::Brgemm>(node);
+    const auto& brgemm_node = ov::as_type_ptr<ngraph::snippets::op::Brgemm>(node);
     if (brgemm_node->is_dynamic())
         IE_THROW() << "Snippets don't support code generation for dynamic Brgemm";
     const OutputVector io_values {brgemm_node->input_value(0), brgemm_node->input_value(1), brgemm_node->output(0)};
     std::vector<size_t> leading_dimensions;
     std::vector<std::vector<size_t>> io_layouts;
-    for (const auto& val : io_values) {
-        const auto& layout = ngraph::snippets::utils::get_node_output_layout(val.get_node_shared_ptr());
-        const auto& io_shape = val.get_shape();
-        if (layout.empty()) {
-            // empty value indicates a planar layout
-            leading_dimensions.push_back(io_shape.back());
-            std::vector<size_t> default_layout(io_shape.size());
-            std::iota(default_layout.begin(), default_layout.end(), 0);
-            io_layouts.push_back(default_layout);
-        } else {
-            // The idea here is to find "2" (for 4D shapes) in the layout and multiply dimensions that are to the right
-            // This implies that "3" is the last layout value, otherwise this layout is not supported.
-            // counting from the end since shape could be prepended with ones
-            const int64_t num_last_dims = layout.end() - std::find(layout.begin(), layout.end(), layout.size() - 2) - 1;
-            if (layout.back() != layout.size() - 1 || num_last_dims < 1)
-                IE_THROW() << "BrgemmEmitter detected invalid layout values: " <<
-                    "check that this shape + layout combination is schedulable";
-            leading_dimensions.emplace_back(
-                    std::accumulate(io_shape.end() - num_last_dims, io_shape.end(), 1, std::multiplies<size_t>()));
-            io_layouts.push_back(layout);
-        }
+    for (int i = 0; i < io_values.size(); i++) {
+            const auto& lld = brgemm_node->get_layout_and_leading_dimension(i);
+            io_layouts.push_back(lld.first);
+            leading_dimensions.push_back(lld.second);
     }
     // todo: leave AMX and VNNI related code for now, it'll help to enable int8 and bf16 support
     bool isAMXSupported = mayiuse(avx512_core_bf16_amx_int8) || mayiuse(avx512_core_bf16_amx_bf16);
@@ -765,7 +748,7 @@ BrgemmEmitter::BrgemmEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
 
     M = C_shape[C_layout[2]];
     K = A_shape[A_layout[3]];
-    M_blk = matmulOptimalM;
+    M_blk = brgemm_node->get_M_block_size();
     M_tail = M % M_blk;
     // B_shape[B_layout[3]]
     N = C_shape[C_layout[3]];
@@ -784,33 +767,30 @@ BrgemmEmitter::BrgemmEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     K_tail = K % K_blk;
 
     size_t brg0BaseIdx = -1;
-    for (size_t m = 0; m < 2; m++) {
-        for (size_t k = 0; k < 2; k++) {
-            for (size_t n = 0; n < 2; n++) {
-                auto& brgemmCtx = brgCtxs0[getBrgIdx(m, k, n)];
+    for (size_t k = 0; k < 2; k++) {
+        for (size_t n = 0; n < 2; n++) {
+            auto& brgemmCtx = brgCtxs0[getBrgIdx(k, n)];
 
-                auto M_ = m ? M_tail
-                            : M < M_blk ? 0 : M_blk;
-                auto N_ = n ? N_tail : N - N_tail;
-                auto K_ = k ? K_tail : K - K_tail;
-                auto beta = k && brgCtxs0[getBrgIdx(m, 0, n)].K != 0 ? 1.0f : 0.0f;
+            auto M_ = M_blk;
+            auto N_ = n ? N_tail : N - N_tail;
+            auto K_ = k ? K_tail : K - K_tail;
+            auto beta = k && brgCtxs0[getBrgIdx(0, n)].K != 0 ? 1.0f : 0.0f;
 
-                brgemmCtx.M = M_;
-                brgemmCtx.N = N_;
-                brgemmCtx.K = K_;
-                brgemmCtx.LDA = leading_dimensions[0];
-                brgemmCtx.LDB = leading_dimensions[1];
-                brgemmCtx.LDC = leading_dimensions[2];
-                brgemmCtx.dt_in0 = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::IEPrecisionToDataType(brg0Prc));
-                brgemmCtx.dt_in1 = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::IEPrecisionToDataType(brg1Prc));
-                brgemmCtx.beta = beta;
+            brgemmCtx.M = M_;
+            brgemmCtx.N = N_;
+            brgemmCtx.K = K_;
+            brgemmCtx.LDA = leading_dimensions[0];
+            brgemmCtx.LDB = leading_dimensions[1];
+            brgemmCtx.LDC = leading_dimensions[2];
+            brgemmCtx.dt_in0 = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::IEPrecisionToDataType(brg0Prc));
+            brgemmCtx.dt_in1 = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::IEPrecisionToDataType(brg1Prc));
+            brgemmCtx.beta = beta;
 
-                // don't create brgemm kernels for empty tiles
-                if (M_ != 0 && K_ != 0 && N_ != 0) {
-                    if (brg0BaseIdx == -1)
-                        brg0BaseIdx = getBrgIdx(m, k, n);
-                    initBrgemm(brgemmCtx, brgKernels0[getBrgIdx(m, k, n)], brg0WithAMX);
-                }
+            // don't create brgemm kernels for empty tiles
+            if (M_ != 0 && K_ != 0 && N_ != 0) {
+                if (brg0BaseIdx == -1)
+                    brg0BaseIdx = getBrgIdx(k, n);
+                initBrgemm(brgemmCtx, brgKernels0[getBrgIdx(k, n)], brg0WithAMX);
             }
         }
     }
@@ -961,18 +941,18 @@ void BrgemmEmitter::emit_isa(const std::vector<size_t> &in, const std::vector<si
     Reg64 input_1(static_cast<int>(in[1]));
     Reg64 output_0(static_cast<int>(out[0]));
 
+    // todo: Must have: eliminate loop over M - this is the job of outer Loop
     for (size_t mb = 0; mb < div_up(M, M_blk); mb++) {
         const bool is_M_tail = (M - mb * M_blk < M_blk);
 
-        size_t brgIdx0 = getBrgIdx(0, 0, 0);
+        size_t brgIdx0 = getBrgIdx(0, 0);
         size_t K0_step0 = brgCtxs0[brgIdx0].K;
         size_t K0_step1 = brgCtxs0[brgIdx0].K * brgCtxs0[brgIdx0].LDB;
         size_t N0_step0 = brgCtxs0[brgIdx0].N * brg0VnniFactor;
         size_t N0_step1 = brgCtxs0[brgIdx0].N;
         for (size_t n = 0; n < 2; n++) {
             for (size_t k = 0; k < 2; k++) {
-                size_t mIdx = is_M_tail ? 1 : 0;
-                auto& brgemmCtx = brgCtxs0[getBrgIdx(mIdx, k, n)];
+                auto& brgemmCtx = brgCtxs0[getBrgIdx(k, n)];
 
                 if (brgemmCtx.K != 0 && brgemmCtx.N != 0) {
                     const size_t in0_offset = (k * K0_step0 + mb * M_blk * brgemmCtx.LDA) * io_data_size[0];
@@ -984,7 +964,7 @@ void BrgemmEmitter::emit_isa(const std::vector<size_t> &in, const std::vector<si
                         h->add(input_1, in1_offset);
                     if (out0_offset != 0)
                         h->add(output_0, out0_offset);
-                    emit_brgemm_kernel_call<isa>(brgKernels0[getBrgIdx(mIdx, k, n)].get(),
+                    emit_brgemm_kernel_call<isa>(brgKernels0[getBrgIdx(k, n)].get(),
                                                  1,
                                                  input_0,
                                                  input_1,

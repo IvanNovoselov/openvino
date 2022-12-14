@@ -121,8 +121,11 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
                 std::transform(tail_loop.begin(), tail_loop.end(), tail_loop.begin(),
                                [tail_size](const std::shared_ptr<Node>& n){
                                    const auto& memory_access = std::dynamic_pointer_cast<ngraph::snippets::op::MemoryAccess>(n);
+                                   const auto& brgemm = std::dynamic_pointer_cast<ngraph::snippets::op::Brgemm>(n);
                                    if (memory_access && memory_access->get_count() != 1) {
                                        memory_access->set_count(tail_size);
+                                   } else if (brgemm) {
+                                       brgemm->set_count(tail_size);
                                    }
                                    return n;
                                });
@@ -164,7 +167,11 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
     //  remove this when kernel caching is implemented. Don't forget to make generate const method.
     if (config.m_save_lowered_code)
         lowered_saved = lowered;
+    std::cerr << "Allocated emitters:\n";
 
+    for (int i = 0; i < lowered.size(); i++) {
+        std::cerr << i << " : " << lowered[i].first->get_original_node_type_info() << "\n";
+    }
     return target->get_snippet();
 }
 
