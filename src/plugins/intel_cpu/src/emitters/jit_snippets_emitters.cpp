@@ -746,10 +746,10 @@ BrgemmEmitter::BrgemmEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     const auto& C_shape = io_values[2].get_shape();
     const auto& C_layout = io_layouts[2];
 
-    M = C_shape[C_layout[2]];
+//    M = C_shape[C_layout[2]];
     K = A_shape[A_layout[3]];
-    M_blk = brgemm_node->get_M_block_size();
-    M_tail = M % M_blk;
+    // todo: rename M_blk -> M_rows?
+    M_blk = brgemm_node->get_count();
     // B_shape[B_layout[3]]
     N = C_shape[C_layout[3]];
 
@@ -941,43 +941,38 @@ void BrgemmEmitter::emit_isa(const std::vector<size_t> &in, const std::vector<si
     Reg64 input_1(static_cast<int>(in[1]));
     Reg64 output_0(static_cast<int>(out[0]));
 
-    // todo: Must have: eliminate loop over M - this is the job of outer Loop
-    for (size_t mb = 0; mb < div_up(M, M_blk); mb++) {
-        const bool is_M_tail = (M - mb * M_blk < M_blk);
+    size_t brgIdx0 = getBrgIdx(0, 0);
+    size_t K0_step0 = brgCtxs0[brgIdx0].K;
+    size_t K0_step1 = brgCtxs0[brgIdx0].K * brgCtxs0[brgIdx0].LDB;
+    size_t N0_step0 = brgCtxs0[brgIdx0].N * brg0VnniFactor;
+    size_t N0_step1 = brgCtxs0[brgIdx0].N;
+    for (size_t n = 0; n < 2; n++) {
+        for (size_t k = 0; k < 2; k++) {
+            auto& brgemmCtx = brgCtxs0[getBrgIdx(k, n)];
 
-        size_t brgIdx0 = getBrgIdx(0, 0);
-        size_t K0_step0 = brgCtxs0[brgIdx0].K;
-        size_t K0_step1 = brgCtxs0[brgIdx0].K * brgCtxs0[brgIdx0].LDB;
-        size_t N0_step0 = brgCtxs0[brgIdx0].N * brg0VnniFactor;
-        size_t N0_step1 = brgCtxs0[brgIdx0].N;
-        for (size_t n = 0; n < 2; n++) {
-            for (size_t k = 0; k < 2; k++) {
-                auto& brgemmCtx = brgCtxs0[getBrgIdx(k, n)];
-
-                if (brgemmCtx.K != 0 && brgemmCtx.N != 0) {
-                    const size_t in0_offset = (k * K0_step0 + mb * M_blk * brgemmCtx.LDA) * io_data_size[0];
-                    const size_t in1_offset = (k * K0_step1 + n * N0_step0) * io_data_size[1];
-                    const size_t out0_offset = (n * N0_step1 + mb * M_blk * brgemmCtx.LDC) * io_data_size[2];
-                    if (in0_offset != 0)
-                        h->add(input_0, in0_offset);
-                    if (in1_offset != 0)
-                        h->add(input_1, in1_offset);
-                    if (out0_offset != 0)
-                        h->add(output_0, out0_offset);
-                    emit_brgemm_kernel_call<isa>(brgKernels0[getBrgIdx(k, n)].get(),
-                                                 1,
-                                                 input_0,
-                                                 input_1,
-                                                 nullptr,
-                                                 output_0,
-                                                 nullptr);
-                    if (in0_offset != 0)
-                        h->sub(input_0, in0_offset);
-                    if (in1_offset != 0)
-                        h->sub(input_1, in1_offset);
-                    if (out0_offset != 0)
-                        h->sub(output_0, out0_offset);
-                }
+            if (brgemmCtx.K != 0 && brgemmCtx.N != 0) {
+                const size_t in0_offset = k * K0_step0 * io_data_size[0];
+                const size_t in1_offset = (k * K0_step1 + n * N0_step0) * io_data_size[1];
+                const size_t out0_offset = n * N0_step1 * io_data_size[2];
+                if (in0_offset != 0)
+                    h->add(input_0, in0_offset);
+                if (in1_offset != 0)
+                    h->add(input_1, in1_offset);
+                if (out0_offset != 0)
+                    h->add(output_0, out0_offset);
+                emit_brgemm_kernel_call<isa>(brgKernels0[getBrgIdx(k, n)].get(),
+                                             1,
+                                             input_0,
+                                             input_1,
+                                             nullptr,
+                                             output_0,
+                                             nullptr);
+                if (in0_offset != 0)
+                    h->sub(input_0, in0_offset);
+                if (in1_offset != 0)
+                    h->sub(input_1, in1_offset);
+                if (out0_offset != 0)
+                    h->sub(output_0, out0_offset);
             }
         }
     }

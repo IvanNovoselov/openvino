@@ -398,7 +398,7 @@ private:
     brgemmCtx brgCtxs0[BRGEMM_KERNELS_NUM];
     std::unique_ptr<dnnl::impl::cpu::x64::brgemm_kernel_t> brgKernels0[BRGEMM_KERNELS_NUM];
 
-    size_t M, M_blk, M_tail;
+    size_t M_blk;
     size_t K, K_blk, K_tail;
     size_t N, N_blk, N_tail;
     size_t brg0VnniFactor;
