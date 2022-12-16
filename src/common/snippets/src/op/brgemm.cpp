@@ -21,11 +21,10 @@ std::pair<std::vector<size_t>, size_t> get_node_layout_and_leading_dimension(con
     if (ov::is_type<snippets::op::LoopBegin>(in_node)) {
         in_node = in_node->get_input_node_shared_ptr(in.get_index());;
     }
-    const auto& forced_layout = ngraph::snippets::utils::get_node_output_layout(in_node);
-    std::vector<size_t> layout;
+    auto layout = ngraph::snippets::utils::get_node_output_layout(in_node);
     size_t leading_dimension;
     const auto& io_shape = in.get_shape();
-    if (forced_layout.empty()) {
+    if (layout.empty()) {
         // empty value indicates a planar layout
         leading_dimension = io_shape.back();
         layout.resize(io_shape.size());
@@ -34,7 +33,6 @@ std::pair<std::vector<size_t>, size_t> get_node_layout_and_leading_dimension(con
         // The idea here is to find "2" (for 4D shapes) in the layout and multiply dimensions that are to the right
         // This implies that "3" is the last layout value, otherwise this layout is not supported.
         // counting from the end since shape could be prepended with ones
-        layout = forced_layout;
         const int64_t num_last_dims = layout.end() - std::find(layout.begin(), layout.end(), layout.size() - 2) - 1;
         if (layout.back() != layout.size() - 1 || num_last_dims < 1)
             throw ngraph_error("Brgemm detected unschedulable shape + layout combination");

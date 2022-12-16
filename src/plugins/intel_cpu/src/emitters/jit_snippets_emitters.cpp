@@ -115,7 +115,17 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
         return pshape.get_shape();
     };
     const auto get_data_layout = [](const Output<ov::Node>& out, std::vector<size_t>& shape) {
-        const auto& layout = ngraph::snippets::utils::get_node_output_layout(out.get_node_shared_ptr());
+        auto node = out.get_node_shared_ptr();
+        // If input is LoopBegin then it has multiple outputs and doesn't store output layout,
+        // so we have to check the original input node rt_info
+        if (ov::is_type<ngraph::snippets::op::LoopEnd>(node)) {
+            node = node->get_input_node_shared_ptr(out.get_index());;
+        }
+        const auto& layout = ngraph::snippets::utils::get_node_output_layout(node);
+//        planar_input_shapes.push_back(utils::get_reordered_planar_shape(in.get_partial_shape(), layout));
+//
+//
+//        const auto& layout = ngraph::snippets::utils::get_node_output_layout(out.get_node_shared_ptr());
         // default access pattern
         if (!layout.empty()) {
             const auto layout_shape_diff = static_cast<int64_t>(shape.size()) - static_cast<int64_t>(layout.size());
