@@ -40,6 +40,10 @@ public:
     std::pair<std::vector<size_t>, size_t> get_layout_and_leading_dimension(int index);
 
 private:
+    // When the node is copied, first constructor and validate_and_infer_types is called, and only after that rt_info is copied
+    // Since output layout is stored in rt_info, node copy always changes output shape if output layout is not planar.
+    // To fix this behavior, we need to propagate the node rt_info before constructor_validate_and_infer_types() is called.
+    // This is the purpose of this constructor, also have a look at clone_with_new_inputs.
     Brgemm(const Output<Node>& A, const Output<Node>& B, size_t M_block_size, size_t count, const std::vector<size_t>& output_layout);
     size_t m_optimal_M_block_size = 0;
     size_t m_count = 0;

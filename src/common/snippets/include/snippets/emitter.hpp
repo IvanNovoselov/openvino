@@ -24,9 +24,7 @@ public:
      * @brief Default constructor
      */
     Emitter(const std::shared_ptr<ngraph::Node>& n) {
-        node_type_info = n->get_type_info();
     }
-    std::string get_original_node_type_info() {return node_type_info;}
 
     Emitter(std::vector<std::pair<std::shared_ptr<Emitter>, RegInfo>>& region) {
     }
@@ -51,9 +49,6 @@ public:
     virtual void emit_data() const {
     }
     virtual ~Emitter() = default;
-
-private:
-    DiscreteTypeInfo node_type_info;
 };
 
 using AllocatedEmitter = std::pair<std::shared_ptr<Emitter>, ngraph::snippets::RegInfo>;

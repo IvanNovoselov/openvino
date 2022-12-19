@@ -464,8 +464,6 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
     convert_to_snippet_dialect();
     opt.run_passes(m_body);
-
-    ov::pass::Serialize("snsdebug_lowered.xml", "snsdebug_lowered.bin").run_on_model(m_body);
     snippets::pass::AssignRegisters().run_on_model(m_body);
 
     ngraph::snippets::Generator::GeneratorConfig generatorConfig;

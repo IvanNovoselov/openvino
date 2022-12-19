@@ -126,9 +126,6 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
                                        memory_access->set_count(tail_size);
                                    } else if (brgemm) {
                                        brgemm->set_count(tail_size);
-//                                       brgemm->validate_and_infer_types();
-                                       auto res = brgemm->get_layout_and_leading_dimension(2);
-                                       std::cerr << "LDC must be == 10: " << res.second << "\n";
                                    }
                                    return n;
                                });
@@ -136,11 +133,14 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
                 tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
                 const auto original_increment = tail_loop_end->get_increment();
                 tail_loop_end->set_increment(tail_size);
-                // ptr increments were set to the old increment, need to update them in accordance with the new one
-//                tail_loop_end->update_ptr_increments(static_cast<int64_t>(tail_size));
                 auto ptr_increments = tail_loop_end->get_ptr_increments();
-                for (auto &p : ptr_increments)
-                    p = (p / original_increment) * tail_size;
+                for (auto &p : ptr_increments) {
+                    // Assumption: ptr_increments are proportional to the loop work amount increment
+                    if (p % static_cast<int64_t>(original_increment) != 0)
+                        throw ngraph_error("Loop ptr increment is not proportional to work_amount  increment");
+                    // If the assumption holds, ptr_increments should be rescaled, since tail loop has a different increment
+                    p = (p / static_cast<int64_t>(original_increment)) * static_cast<int64_t>(tail_size);
+                }
                 tail_loop_end->set_ptr_increments(ptr_increments);
 
                 tail_loop_end->set_work_amount(tail_size);
@@ -176,11 +176,7 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
     //  remove this when kernel caching is implemented. Don't forget to make generate const method.
     if (config.m_save_lowered_code)
         lowered_saved = lowered;
-    std::cerr << "Allocated emitters:\n";
 
-    for (int i = 0; i < lowered.size(); i++) {
-        std::cerr << i << " : " << lowered[i].first->get_original_node_type_info() << "\n";
-    }
     return target->get_snippet();
 }
 

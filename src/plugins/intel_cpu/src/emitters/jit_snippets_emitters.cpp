@@ -122,10 +122,6 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
             node = node->get_input_node_shared_ptr(out.get_index());;
         }
         const auto& layout = ngraph::snippets::utils::get_node_output_layout(node);
-//        planar_input_shapes.push_back(utils::get_reordered_planar_shape(in.get_partial_shape(), layout));
-//
-//
-//        const auto& layout = ngraph::snippets::utils::get_node_output_layout(out.get_node_shared_ptr());
         // default access pattern
         if (!layout.empty()) {
             const auto layout_shape_diff = static_cast<int64_t>(shape.size()) - static_cast<int64_t>(layout.size());
@@ -737,7 +733,7 @@ size_t BrgemmEmitter::getBrgIdx(size_t kIdx, size_t nIdx) const {
 BrgemmEmitter::BrgemmEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl::cpu::x64::cpu_isa_t isa,
                                          const std::shared_ptr<ov::Node>& node) : jit_emitter(h, isa, node) {
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
-    const auto& brgemm_node = ov::as_type_ptr<ngraph::snippets::op::Brgemm>(node);
+    const auto& brgemm_node = as_type_ptr<ngraph::snippets::op::Brgemm>(node);
     if (brgemm_node->is_dynamic())
         IE_THROW() << "Snippets don't support code generation for dynamic Brgemm";
     const OutputVector io_values {brgemm_node->input_value(0), brgemm_node->input_value(1), brgemm_node->output(0)};
@@ -756,11 +752,9 @@ BrgemmEmitter::BrgemmEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     const auto& C_shape = io_values[2].get_shape();
     const auto& C_layout = io_layouts[2];
 
-//    M = C_shape[C_layout[2]];
     K = A_shape[A_layout[3]];
     // todo: rename M_blk -> M_rows?
     M_blk = brgemm_node->get_count();
-    // B_shape[B_layout[3]]
     N = C_shape[C_layout[3]];
 
     auto brg0Prc = InferenceEngine::details::convertPrecision(brgemm_node->get_input_element_type(0));
