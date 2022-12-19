@@ -28,20 +28,20 @@ public:
     bool visit_attributes(AttributeVisitor& visitor) override;
 
     bool has_evaluate() const override { return false; }
-    // Brgemm incorporates memory i/o semantics, so we introduce MemoryAccess-like methods
+    // Brgemm incorporates memory i/o semantics, so we need MemoryAccess-like methods
     size_t get_count() const;
     void set_count(size_t count);
     /**
     * @interface get_layout_and_leading_dimension
     * @brief Returns a <layout, leading_dimension> tuple.
-     * @param index - i/o por number: 0 - 0th input, 1 - 1st input, 2 - 0th output.
+     * @param index - i/o port number: 0 - 0th input, 1 - 1st input, 2 - 0th output.
     * @ingroup snippets
     */
     std::pair<std::vector<size_t>, size_t> get_layout_and_leading_dimension(int index);
 
 private:
-    // When the node is copied, first constructor and validate_and_infer_types is called, and only after that rt_info is copied
-    // Since output layout is stored in rt_info, node copy always changes output shape if output layout is not planar.
+    // When a node is cloned its rt_info is copied after the constructor_validate_and_infer_types() call.
+    // So the cloning always changes the output shape (if output layout is not planar), since the output layout is stored in rt_info.
     // To fix this behavior, we need to propagate the node rt_info before constructor_validate_and_infer_types() is called.
     // This is the purpose of this constructor, also have a look at clone_with_new_inputs.
     Brgemm(const Output<Node>& A, const Output<Node>& B, size_t M_block_size, size_t count, const std::vector<size_t>& output_layout);

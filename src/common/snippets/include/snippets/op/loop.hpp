@@ -89,9 +89,11 @@ public:
     const std::vector<int64_t>& get_ptr_increments() const;
     void set_finalization_offsets(std::vector<int64_t> offsets);
     void set_ptr_increments(std::vector<int64_t> new_ptr_increments);
-    // update_ptr_increments resets non-zero increments to the new_increments. It's used when work_amount_increment is
-    // updated and we need to refresh ptr increments accordingly while respecting the broadcasting pattern
-    void update_ptr_increments(int64_t new_increment);
+    /**
+     * @brief Set work_amount increment and rescale pointer increments by new_increment/old_increment ratio.
+     * @param new_increment new work_amount increment
+     */
+    void update_increments(int64_t new_increment);
     void set_work_amount(size_t new_work_amount);
     void set_increment(size_t new_increment);
     void set_evaluate_once(bool once);

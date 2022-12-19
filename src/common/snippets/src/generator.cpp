@@ -131,18 +131,8 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
                                });
                 tail_loop_end = ov::as_type_ptr<op::LoopEnd>(*tail_loop.rbegin());
                 tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
-                const auto original_increment = tail_loop_end->get_increment();
-                tail_loop_end->set_increment(tail_size);
-                auto ptr_increments = tail_loop_end->get_ptr_increments();
-                for (auto &p : ptr_increments) {
-                    // Assumption: ptr_increments are proportional to the loop work amount increment
-                    if (p % static_cast<int64_t>(original_increment) != 0)
-                        throw ngraph_error("Loop ptr increment is not proportional to work_amount  increment");
-                    // If the assumption holds, ptr_increments should be rescaled, since tail loop has a different increment
-                    p = (p / static_cast<int64_t>(original_increment)) * static_cast<int64_t>(tail_size);
-                }
-                tail_loop_end->set_ptr_increments(ptr_increments);
-
+                // ptr increments were set to the old increment, need to update them in accordance with the new one
+                tail_loop_end->update_increments(static_cast<int64_t>(tail_size));
                 tail_loop_end->set_work_amount(tail_size);
                 tail_loop_end->has_outer_loop = vector_loop_end->has_outer_loop;
                 // tail loop is always executed once

@@ -28,32 +28,19 @@ InsertBrgemmLoops::InsertBrgemmLoops() {
         std::tie(layout_A, leading_dim_A) = brgemm->get_layout_and_leading_dimension(0);
         const auto& shape_A =  utils::get_reordered_planar_shape(brgemm->get_input_shape(0), layout_A);
         const auto M_rows = shape_A[shape_A.size() - 2].get_length();
-        const auto K_cols = shape_A[shape_A.size() - 1].get_length();
         if (M_rows > M_block_size) {
             const auto& loop_begin = op::insertLoopBegin(brgemm->input_values());
-//            OutputVector child_inputs;
-//            for (const auto& in : brgemm->output(0).get_target_inputs())
-//                child_inputs.push_back(in.get_source_output());
-
-//            const auto LDA = brgemm->get_layout_and_leading_dimension(0).second;
             const auto leading_dim_C = brgemm->get_layout_and_leading_dimension(2).second;
-
             const std::vector<int64_t> ptr_increments {static_cast<int64_t>(M_block_size * leading_dim_A),
                                                        0,
                                                        static_cast<int64_t>(M_block_size * leading_dim_C)};
             const std::vector<int64_t> finalization_offsets(ptr_increments.size(), 0);
 
-//            OutputVector loop_end_inputs(brgemm->outputs());
-//            loop_end_inputs.push_back(loop_begin->output(loop_begin->get_output_size() - 1));
-//            auto loop_end = std::make_shared<op::LoopEnd>(loop_end_inputs, num_M_rows, M_block_size,
-//                                                                              ptr_increments, finalization_offsets);
-
-
             std::vector<Input<Node>> child_inputs;
             for (const auto& in : brgemm->output(0).get_target_inputs())
                 child_inputs.push_back(in);
-            const auto& inner_loop_end = insertLoopEnd(child_inputs, loop_begin, M_rows, M_block_size,
-                                                       ptr_increments,  finalization_offsets);
+            insertLoopEnd(child_inputs, loop_begin, M_rows, M_block_size,
+                          ptr_increments,  finalization_offsets);
             return true;
         }
         brgemm->set_count(M_rows);

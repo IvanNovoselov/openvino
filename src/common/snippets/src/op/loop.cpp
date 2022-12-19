@@ -129,11 +129,16 @@ void LoopEnd::set_ptr_increments(std::vector<int64_t> new_ptr_increments) {
     ptr_increments = std::move(new_ptr_increments);
 }
 
-void LoopEnd::update_ptr_increments(int64_t new_increment) {
-    std::transform(ptr_increments.begin(), ptr_increments.end(), ptr_increments.begin(),
-                   [new_increment](int64_t old_increment){
-                        return old_increment != 0 ? new_increment : 0;
-                   });
+void LoopEnd::update_increments(int64_t new_increment) {
+    for (auto &p : ptr_increments) {
+        // Assumption: ptr_increments are proportional to the loop work amount increment
+        if (p % static_cast<int64_t>(work_amount_increment) != 0)
+            throw ngraph_error("It's illegal to call update_ptr_increments"
+                               " if ptr_increment is not proportional to work_amount_increment");
+        // If the assumption holds, ptr_increments should be rescaled, since tail loop has a different increment
+        p = (p / static_cast<int64_t>(work_amount_increment)) * static_cast<int64_t>(new_increment);
+    }
+    work_amount_increment = new_increment;
 }
 
 void LoopEnd::set_work_amount(size_t new_work_amount) {
