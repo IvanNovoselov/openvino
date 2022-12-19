@@ -44,7 +44,7 @@ std::vector<element::Type> precisions{element::f32};
 
 namespace transpose_output {
 std::vector<std::vector<ov::PartialShape>> transpose_input_shapes{
-        {{2, 1, 49, 13}, {1, 2, 13, 39}}
+        {{1, 1, 34, 10}, {1, 2, 10, 5}}
 };
 INSTANTIATE_TEST_SUITE_P(smoke_Snippets_MatMult, TransposeMatMul,
                          ::testing::Combine(

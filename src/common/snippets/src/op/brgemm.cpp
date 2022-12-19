@@ -42,10 +42,18 @@ std::pair<std::vector<size_t>, size_t> get_node_layout_and_leading_dimension(con
 }
 } //namespace
 
-Brgemm::Brgemm(const Output<Node>& A, const Output<Node>& B, size_t M_block_size, size_t count)
+Brgemm::Brgemm(const Output<Node>& A, const Output<Node>& B, const size_t M_block_size, const size_t count)
     : MatMul(), m_optimal_M_block_size(M_block_size), m_count(count) {
     set_arguments({A, B});
     set_output_size(1);
+    constructor_validate_and_infer_types();
+}
+
+Brgemm::Brgemm(const Output<Node>& A, const Output<Node>& B, const size_t M_block_size, const size_t count, const std::vector<size_t>& output_layout)
+    : MatMul(), m_optimal_M_block_size(M_block_size), m_count(count) {
+    set_arguments({A, B});
+    set_output_size(1);
+    get_rt_info()["Layout"] = output_layout;
     constructor_validate_and_infer_types();
 }
 
@@ -96,7 +104,7 @@ void Brgemm::validate_and_infer_types() {
     std::vector<ov::PartialShape> output_shapes = {ov::PartialShape{}};
     ov::op::v0::shape_infer(this, planar_input_shapes, output_shapes);
     const auto& output_layout = utils::get_node_output_layout(this);
-        output_shapes[0] = utils::get_reordered_planar_shape(output_shapes[0], output_layout);
+    output_shapes[0] = utils::get_reordered_planar_shape(output_shapes[0], output_layout);
     set_output_type(0, result_et, output_shapes[0]);
 }
 
@@ -109,7 +117,12 @@ bool Brgemm::visit_attributes(AttributeVisitor& visitor) {
 std::shared_ptr<Node> Brgemm::clone_with_new_inputs(const OutputVector& new_args) const {
     INTERNAL_OP_SCOPE(Brgemm_clone_with_new_inputs);
     check_new_args_count(this, new_args);
-    return std::make_shared<Brgemm>(new_args.at(0), new_args.at(1), m_optimal_M_block_size, m_count);
+    auto layout = ngraph::snippets::utils::get_node_output_layout(this);
+    const auto& A = new_args.at(0);
+    const auto& B = new_args.at(1);
+    return layout.empty() ?
+           std::make_shared<Brgemm>(A, B, m_optimal_M_block_size, m_count) :
+           std::shared_ptr<Brgemm>(new Brgemm(A, B, m_optimal_M_block_size, m_count, layout));
 }
 
 std::pair<std::vector<size_t>, size_t> Brgemm::get_layout_and_leading_dimension(const int index) {

@@ -126,6 +126,9 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
                                        memory_access->set_count(tail_size);
                                    } else if (brgemm) {
                                        brgemm->set_count(tail_size);
+//                                       brgemm->validate_and_infer_types();
+                                       auto res = brgemm->get_layout_and_leading_dimension(2);
+                                       std::cerr << "LDC must be == 10: " << res.second << "\n";
                                    }
                                    return n;
                                });

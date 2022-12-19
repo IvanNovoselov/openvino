@@ -40,6 +40,7 @@ public:
     std::pair<std::vector<size_t>, size_t> get_layout_and_leading_dimension(int index);
 
 private:
+    Brgemm(const Output<Node>& A, const Output<Node>& B, size_t M_block_size, size_t count, const std::vector<size_t>& output_layout);
     size_t m_optimal_M_block_size = 0;
     size_t m_count = 0;
 };
