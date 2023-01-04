@@ -13,6 +13,9 @@
 
 std::vector<std::string> disabledTestPatterns() {
     std::vector<std::string> retVector{
+        //todo: temprorary skipped, enable when softmax decomposition is enabled
+//        R"(.*MHA.*)",
+//        R"(.*TransposeSoftmax.*)",
         // TODO: Issue 31841
         R"(.*(QuantGroupConvBackpropData3D).*)",
         // TODO: Issue 31843

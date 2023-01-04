@@ -34,14 +34,17 @@
 #include "ngraph/pass/constant_folding.hpp"
 #include "ov_ops/type_relaxed.hpp"
 #include <openvino/pass/serialize.hpp>
+#include "snippets/tensor_descriptor.hpp"
 
 #include <algorithm>
 #include <memory>
 #include <array>
 
 using namespace std;
-using namespace ngraph;
 using namespace ov::op::util;
+
+namespace ngraph {
+namespace snippets {
 
 void snippets::op::Subgraph::set_generator(std::shared_ptr<ngraph::snippets::Generator> generator) {
     m_generator = generator;
@@ -497,8 +500,10 @@ void snippets::op::Subgraph::initialize_buffer_scratchpad_size() {
             // Transpose and MatMul ops should have different memories on inputs and outputs to avoid data corruption,
             // so after them, we should allocate new memory. Other operations (Eltwises, Convert) can be executed inplace.
             const auto parent = buffer->get_input_node_shared_ptr(0);
-            if (ov::is_type<op::Brgemm>(parent) || is_transpose_loop(parent)) {
+//            if (ov::is_type<op::Brgemm>(parent) || is_transpose_loop(parent)) {
+            if (ov::is_type<op::Brgemm>(parent) || ov::is_type<opset1::Transpose>(parent)) {
                 offset = m_buffer_scratchpad;
+                buffer->set_offset(offset);
                 propagate_offset(buffer, offset);
                 m_buffer_scratchpad += buffer_size;
                 continue;
@@ -541,7 +546,7 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
     if (config.m_has_domain_sensitive_ops) {
         manager.register_pass<snippets::pass::MatMulToBrgemm>();
         manager.register_pass<snippets::pass::FuseTransposeBrgemm>();
-        manager.register_pass<snippets::pass::InsertBuffer>(allocationRank);
+//        manager.register_pass<snippets::pass::InsertBuffer>(allocationRank);
         manager.register_pass<snippets::pass::SoftmaxDecomposition>(count, allocationRank);
         manager.register_pass<snippets::pass::TransposeDecomposition>();
     }
@@ -583,12 +588,12 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
         }
         // Note that InsertLoops requires validate_and_infer_types afterwards, so add it manually if
         // automatic validation will be disabled in the pass manager
-        manager.register_pass<snippets::pass::InsertLoops>(master_shape, tileRank,
-            m_generator->get_target_machine()->get_lanes(), !config.m_explicit_loop_insertion);
-        if (config.m_has_domain_sensitive_ops) {
-            manager.register_pass<snippets::pass::LoopFusion>();
-            manager.register_pass<snippets::pass::ResetBufferState>();
-        }
+//        manager.register_pass<snippets::pass::InsertLoops>(master_shape, tileRank,
+//            m_generator->get_target_machine()->get_lanes(), !config.m_explicit_loop_insertion);
+//        if (config.m_has_domain_sensitive_ops) {
+//            manager.register_pass<snippets::pass::LoopFusion>();
+//            manager.register_pass<snippets::pass::ResetBufferState>();
+//        }
     }
     manager.run_passes(body_ptr());
 }
@@ -617,27 +622,70 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
     INTERNAL_OP_SCOPE(Subgraph);
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::op::generate")
     NGRAPH_CHECK(m_generator != nullptr, "generate is called while generator is not set");
-
     convert_to_snippet_dialect();
     opt.run_passes(body_ptr());
-
+    ov::pass::Serialize("snsdebug_lowered.xml", "snsdebug_lowered.bin").run_on_model(body_ptr());
     // After all passes, when all optimizations are completed and all MemoryAccess ops are inserted,
     // we can calculate common buffer scratchpad size and propagate offset from Buffer to the corresponding MemoryAccess ops
     if (config.m_has_domain_sensitive_ops)
         initialize_buffer_scratchpad_size();
+    /*
+    const auto& model_rt_info = body_ptr()->get_rt_info();
+    const auto& plugin_shapes = model_rt_info.find("PluginShapesOverride");
+    if (plugin_shapes == model_rt_info.end()) {
+        throw ngraph_error("Subgraph generate(...) requires plugin-overriden shapes in model rt_info");
+    } else {
+        const auto& new_shapes = plugin_shapes->second.as<std::vector<std::vector<size_t>>>();
+        auto& parameters = body_ptr()->get_parameters();
+        auto& results = body_ptr()->get_results();
+        if (new_shapes.size() != parameters.size() + results.size())
+            throw ngraph_error("Subgraph generate(...) detected invalid plugin-overriden shapes");
+        int idx = 0;
+        auto update_tensor_descriptor = [](const std::shared_ptr<Node>& n,
+                                                                          const std::vector<size_t>& overriden_shape){
+            auto td = ngraph::snippets::get_tensor_descriptor_ptr(n);
+            auto canonicalized_shape = overriden_shape;
+            const auto& layout = td->get_layout();
+            // todo: overriden shapes could be removed when collapsing of dimensions will be performed inside snippets
+            if (overriden_shape.size() != td->get_tensor().size()) {
+                std::vector<size_t> tmp_shape(overriden_shape.end() - static_cast<int64_t>(layout.size()), overriden_shape.end());
+                // todo: we need some king of checks here to avoid incompatible shapes in plugin override
+                // std::vector<size_t> planar_layout(layout.size(), 0);
+                // std::iota(planar_layout.begin(), planar_layout.end(), 0);
+                //  if (layout != planar_layout)
+                //      throw ngraph_error("Plugin is not allowed to override shapes with non-planar layout");
+                canonicalized_shape = tmp_shape;
+            }
+            ngraph::snippets::set_tensor_descriptor_ptr(n->output(0),
+                                                        std::make_shared<TensorDescriptor>(canonicalized_shape, td->get_subtensor(), layout));
+        };
 
-    snippets::pass::AssignRegisters().run_on_model(body_ptr());
+        for (const auto& p : parameters) {
+            auto overriden_shape = new_shapes[idx++];
+            update_tensor_descriptor(p, overriden_shape);
+        }
+        for (const auto& r : results) {
+            // Note: In case of results, we have to update parent's descriptors, since the node stores only output tds in its rt_info
+            auto parent = r->get_input_node_shared_ptr(0);
+            update_tensor_descriptor(parent, new_shapes[idx++]);
+        }
+    }
+     */
 
     const auto ops = body_ptr()->get_ops();
-    ngraph::snippets::Generator::GeneratorConfig generatorConfig;
-    generatorConfig.m_save_lowered_code = config.m_has_domain_sensitive_ops;
-    generatorConfig.m_need_fill_tail_register = config.m_has_domain_sensitive_ops;
-    generatorConfig.m_optimize_single_evaluation = std::none_of(ops.begin(), ops.end(), [](const std::shared_ptr<ov::Node>& op) {
+    // actual code emission
+    LoweringConfig lowering_config;
+    lowering_config.m_save_lowered_code = config.m_has_domain_sensitive_ops;
+    lowering_config.m_need_fill_tail_register = config.m_has_domain_sensitive_ops;
+    lowering_config.m_optimize_single_evaluation = std::none_of(ops.begin(), ops.end(), [](const std::shared_ptr<ov::Node>& op) {
         return ov::is_type<ngraph::snippets::op::Buffer>(op);
     });
-
-    // actual code emission
-    ngraph::snippets::code ptr = m_generator->generate(body_ptr(), generatorConfig, compile_params);
+    lowering_config.m_loop_depth = tileRank;
+    lowering_config.m_master_shape = master_shape;
+    lowering_config.m_explicit_loop_insertion = config.m_explicit_loop_insertion;
+    const auto& lowering_result = m_generator->generate(body_ptr(), lowering_config, compile_params);
+    ngraph::snippets::code ptr = lowering_result.binary_code;
+    m_buffer_scratchpad = lowering_result.buffer_scratchpad_size;
 
     return {master_shape, false /*canBeLinearized*/, ptr};
 }
@@ -735,3 +783,6 @@ void snippets::op::Subgraph::serialize() const {
     auto m_model = xmlFile.str();
     std::cout << m_model << std::endl;
 }
+
+} // namespace snippets
+} // namespace ngraph
