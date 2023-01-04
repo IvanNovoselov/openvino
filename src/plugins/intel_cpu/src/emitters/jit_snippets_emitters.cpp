@@ -13,6 +13,7 @@
 
 using namespace Xbyak;
 using ngraph::snippets::op::Subgraph;
+using ngraph::snippets::LoweredExpr;
 
 namespace ov {
 namespace intel_cpu {
@@ -28,7 +29,7 @@ jit_container_emitter::jit_container_emitter(dnnl::impl::cpu::x64::jit_generator
 }
 
 void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  mapping_info& vec_map_pool,
-                            std::vector<AllocatedEmitter>& allocated_emitters) const {
+                            ngraph::snippets::LoweredExprIR& allocated_emitters) const {
     if (allocated_emitters.empty())
         IE_THROW() << "Cannot map registers when there is no allocated_emitters provided";
     auto map_regs = [](const std::vector<size_t>& abstract_regs, mapping_info& mapping) {
@@ -51,10 +52,10 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
         return physical_regs;
     };
 
-    for (auto& code : allocated_emitters) {
-        const auto& emitter = code.first;
+    for (auto& lowered_code : allocated_emitters.get_ops()) {
+        const auto& emitter = lowered_code.get_emitter();
         std::vector<size_t> in_abstract_regs, out_abstract_regs;
-        std::tie(in_abstract_regs, out_abstract_regs) = code.second;
+        std::tie(in_abstract_regs, out_abstract_regs) = lowered_code.get_reg_info();
         std::vector<size_t> in_physical_regs, out_physical_regs;
         switch (std::dynamic_pointer_cast<jit_emitter>(emitter)->get_in_out_type()) {
             case gpr_to_gpr:
@@ -89,8 +90,8 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
             default:
                 IE_THROW() << "Unhandled in_out type";
         }
-        code.second = std::make_pair(in_physical_regs, out_physical_regs);
-        if (auto container = std::dynamic_pointer_cast<jit_container_emitter>(code.first))
+        lowered_code.set_reg_info({in_physical_regs, out_physical_regs});
+        if (auto container = std::dynamic_pointer_cast<jit_container_emitter>(lowered_code.get_emitter()))
             container->map_abstract_registers(gpr_map_pool,  vec_map_pool, allocated_emitters);
     }
 }
@@ -168,15 +169,16 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
 
     mapping_info gpr_map_pool({}, gp_regs_pool);
     mapping_info vec_map_pool({}, vec_regs_pool);
-    std::vector<AllocatedEmitter> data_io_emitters;
-    std::copy_if(body.begin(), body.end(), std::back_inserter(data_io_emitters),
-                           [](const AllocatedEmitter& code){
-                                   const auto& emitter = code.first;
-                                   const auto emitter_type = std::dynamic_pointer_cast<jit_emitter>(emitter)->get_in_out_type();
+    ngraph::snippets::LoweredExprIR data_io_emitters;
+    const auto& lowered_ops = body.get_ops();
+    std::copy_if(lowered_ops.begin(), lowered_ops.end(), std::back_inserter(data_io_emitters.get_ops()),
+                           [](const LoweredExpr& le){
+                                   const auto& emitter = le.get_emitter();
+                                   const auto emitter_type = std::dynamic_pointer_cast<const jit_emitter>(emitter)->get_in_out_type();
                                    // todo: how this will be handled if Brgemm in & out are op::Buffer
                                    // Brgemm is a special case since it incorporates input and output (we use onednn kernel)
                                    // Just like Load & Store it requires offsets calculation
-                                   const auto is_brgemm = std::dynamic_pointer_cast<BrgemmEmitter>(emitter) != nullptr;
+                                   const auto is_brgemm = std::dynamic_pointer_cast<const BrgemmEmitter>(emitter) != nullptr;
                                    return emitter_type == gpr_to_vec || emitter_type == vec_to_gpr || is_brgemm;
                            });
     // Note that we can't use reg_indexes_idx or reg_const_params_idx to store data pointers because these two
@@ -314,10 +316,10 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
     transform_idxs_to_regs(data_ptr_regs_idx, data_ptr_regs);
 
     init_data_pointers(num_inputs, num_inputs + num_outputs, is_buffer_needed, reg_indexes, reg_const_params, data_ptr_regs);
-    for (const auto& c : body) {
-        const auto& emitter = c.first;
+    for (const auto& lowered_code : body.get_ops()) {
+        const auto& emitter = lowered_code.get_emitter();
         std::vector<size_t> in_regs, out_regs;
-        std::tie(in_regs, out_regs) = c.second;
+        std::tie(in_regs, out_regs) = lowered_code.get_reg_info();
         emitter->emit_code(in_regs, out_regs, vec_regs_pool, gp_regs_pool);
     }
     h->postamble();

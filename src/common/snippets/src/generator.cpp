@@ -3,6 +3,7 @@
 //
 
 #include "snippets/generator.hpp"
+#include "snippets/lowered_expr.hpp"
 #include "snippets/pass/assign_registers.hpp"
 #include "snippets/pass/vector_to_scalar.hpp"
 #include "snippets/pass/insert_load_store.hpp"
@@ -16,29 +17,6 @@
 
 namespace ngraph {
 namespace snippets {
-
-auto getRegisters(const std::shared_ptr<ngraph::Node> &n) -> RegInfo {
-    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::getRegisters")
-
-    // ToDo: change to reg_t
-    std::vector<size_t> rin, rout;
-
-    for (const auto& output : n->outputs()) {
-        const auto& rt = output.get_tensor_ptr()->get_rt_info();
-        auto it_rt = rt.find("reginfo");
-        if (it_rt != rt.end())
-            rout.push_back(it_rt->second.as<size_t>());
-    }
-
-    for (const auto& input : n->inputs()) {
-        auto rt = input.get_source_output().get_tensor_ptr()->get_rt_info();
-        auto it_rt = rt.find("reginfo");
-        if (it_rt != rt.end())
-            rin.push_back(it_rt->second.as<size_t>());
-    }
-
-    return std::make_pair(rin, rout);
-}
 
 auto tail_transformations(NodeVector& tail, const size_t tail_size, const ngraph::snippets::Generator::GeneratorConfig& config) -> void {
     NodeVector updated_tile;
@@ -87,22 +65,14 @@ auto tail_transformations(NodeVector& tail, const size_t tail_size, const ngraph
     tail = std::move(updated_tile);
 }
 
-ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov::Model>& m,
-                                                             const GeneratorConfig& config,
-                                                             const void* compile_params) {
+code Generator::generate(std::shared_ptr<ov::Model>& m, const GeneratorConfig& config, const void* compile_params) {
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator::generate")
     if (!target->is_supported())
         throw ngraph_error("unsupported architecture for code generation");
 
-    OV_ITT_TASK_CHAIN(GENERATE, ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator", "::VectorTile")
-    // vector loop
-    std::vector<AllocatedEmitter> lowered;
-    auto lower_ops = [&lowered, this](const NodeVector& ops){
-        std::transform(ops.begin(), ops.end(), std::back_inserter(lowered),
-                       [this](const std::shared_ptr<Node>& n){
-                           return std::make_pair(target->get(n->get_type_info())(n), ngraph::snippets::getRegisters(n));
-                       });
-    };
+//    OV_ITT_TASK_CHAIN(GENERATE, ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator", "::VectorTile")
+//    const auto& ord_ops = m->get_ordered_ops();
+    auto lowered_ir = LoweredExprIR(m->get_ordered_ops(), target);
     // *1* solo vector/tail loop + empty outer loop
     //      => skip increments (both counter & ptr) : set evaluate_once flag
     // *2* solo vector/tail loop + non-empty outer loop
@@ -126,92 +96,96 @@ ngraph::snippets::code ngraph::snippets::Generator::generate(std::shared_ptr<ov:
             return false;
         }
     };
-    const auto& ops = m->get_ordered_ops();
-    for (auto op = ops.begin(); op < ops.end(); op++) {
-        const auto& loop_begin = ov::as_type_ptr<ngraph::snippets::op::LoopBegin>(*op);
-
-        // ignore outer loops and possible manual scalar loops
-        if (loop_begin && loop_begin->get_increment() != 1) {
-            OV_ITT_TASK_NEXT(GENERATE, "::VectorLoop")
-            NodeVector vector_loop, tail_loop;
-            std::shared_ptr<op::LoopEnd> vector_loop_end, tail_loop_end;
-            vector_loop_end = loop_begin->get_loop_end();
-            tail_loop_end = nullptr;
-            while (*op != vector_loop_end)
-                vector_loop.push_back(*op++);
-            vector_loop.push_back(*op);
-            const auto work_amount = vector_loop_end->get_work_amount();
-            const auto increment = vector_loop_end->get_increment();
-            const auto tail_size = work_amount % increment;
-            const auto need_tail = tail_size != 0;
-            const auto need_vector_loop = work_amount >= increment;
-            // Note, that finalization_offsets could be modified inside optimize_single_evaluation,
-            // so need to save them here to cover (evaluate_once vector with non-zero finalization_offsets + tail)
-            std::vector<int64_t> tail_finalization_offsets = need_tail ? vector_loop_end->get_finalization_offsets() : std::vector<int64_t> {};
-            // vector loops are required => Just copy the body, original loop is already a vector one
-            if (need_vector_loop) {
-                // Note that finalization offsets should be applied after the last iteration.
-                // So if there is a tail, then we should apply offsets after it, but not now.
-                if (need_tail)
-                    vector_loop_end->set_finalization_offsets(std::vector<int64_t>(tail_finalization_offsets.size(), 0));
-
-                if (config.m_optimize_single_evaluation) {
-                    // force ptr increments if there is tail
-                    optimize_single_evaluation(vector_loop_end, need_tail);
-                }
-
-                lower_ops(vector_loop);
-            }
-            OV_ITT_TASK_NEXT(GENERATE, "::TailLoop")
-            // tail is required => transform the body into a tail representation
-            // tail loop is fake loop because for tail we should calculate only
-            // finalization offsets which are supported by LoopEnd.
-            if (need_tail) {
-                NodeMap vector_to_tail_node_map;
-                tail_loop = ngraph::clone_nodes(vector_loop,  vector_to_tail_node_map);
-                tail_transformations(tail_loop, tail_size, config);
-                tail_loop_end = ov::as_type_ptr<op::LoopEnd>(*tail_loop.rbegin());
-                tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
-                tail_loop_end->set_increment(tail_size);
-                // ptr increments were set to the old increment, need to update them in accordance with the new one
-                tail_loop_end->update_ptr_increments(static_cast<int64_t>(tail_size));
-                tail_loop_end->set_work_amount(tail_size);
-                tail_loop_end->has_outer_loop = vector_loop_end->has_outer_loop;
-
-                if (config.m_optimize_single_evaluation) {
-                    // tail loop is always executed once
-                    optimize_single_evaluation(tail_loop_end);
-                }
-
-                lower_ops(tail_loop);
-            }
-        } else {
-            lower_ops({*op});
-        }
+    for (auto lowered_expr = lowered_ir.get_ops().begin(); lowered_expr != lowered_ir.get_ops().end(); lowered_expr++) {
+        auto op{lowered_expr->get_node()};
+        std::cerr << op->get_friendly_name() << "\n";
     }
 
+
+//        const auto& loop_begin = ov::as_type_ptr<ngraph::snippets::op::LoopBegin>(op);
+//
+//        // ignore outer loops and possible manual scalar loops
+//        if (loop_begin && loop_begin->get_increment() != 1) {
+//            OV_ITT_TASK_NEXT(GENERATE, "::VectorLoop")
+//            NodeVector vector_loop, tail_loop;
+//            std::shared_ptr<op::LoopEnd> vector_loop_end, tail_loop_end;
+//            vector_loop_end = loop_begin->get_loop_end();
+//            tail_loop_end = nullptr;
+//            while (*op != vector_loop_end)
+//                vector_loop.push_back(*op++);
+//            vector_loop.push_back(*op);
+//            const auto work_amount = vector_loop_end->get_work_amount();
+//            const auto increment = vector_loop_end->get_increment();
+//            const auto tail_size = work_amount % increment;
+//            const auto need_tail = tail_size != 0;
+//            const auto need_vector_loop = work_amount >= increment;
+//            // Note, that finalization_offsets could be modified inside optimize_single_evaluation,
+//            // so need to save them here to cover (evaluate_once vector with non-zero finalization_offsets + tail)
+//            std::vector<int64_t> tail_finalization_offsets = need_tail ? vector_loop_end->get_finalization_offsets() : std::vector<int64_t> {};
+//            // vector loops are required => Just copy the body, original loop is already a vector one
+//            if (need_vector_loop) {
+//                // Note that finalization offsets should be applied after the last iteration.
+//                // So if there is a tail, then we should apply offsets after it, but not now.
+//                if (need_tail)
+//                    vector_loop_end->set_finalization_offsets(std::vector<int64_t>(tail_finalization_offsets.size(), 0));
+//
+//                if (config.m_optimize_single_evaluation) {
+//                    // force ptr increments if there is tail
+//                    optimize_single_evaluation(vector_loop_end, need_tail);
+//                }
+//
+//                lower_ops(vector_loop);
+//            }
+//            OV_ITT_TASK_NEXT(GENERATE, "::TailLoop")
+//            // tail is required => transform the body into a tail representation
+//            // tail loop is fake loop because for tail we should calculate only
+//            // finalization offsets which are supported by LoopEnd.
+//            if (need_tail) {
+//                NodeMap vector_to_tail_node_map;
+//                tail_loop = ngraph::clone_nodes(vector_loop,  vector_to_tail_node_map);
+//                tail_transformations(tail_loop, tail_size, config);
+//                tail_loop_end = ov::as_type_ptr<op::LoopEnd>(*tail_loop.rbegin());
+//                tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
+//                tail_loop_end->set_increment(tail_size);
+//                // ptr increments were set to the old increment, need to update them in accordance with the new one
+//                tail_loop_end->update_ptr_increments(static_cast<int64_t>(tail_size));
+//                tail_loop_end->set_work_amount(tail_size);
+//                tail_loop_end->has_outer_loop = vector_loop_end->has_outer_loop;
+//
+//                if (config.m_optimize_single_evaluation) {
+//                    // tail loop is always executed once
+//                    optimize_single_evaluation(tail_loop_end);
+//                }
+//
+//                lower_ops(tail_loop);
+//            }
+//        } else {
+//            lower_ops({*op});
+//        }
+//    }
+//
     OV_ITT_TASK_NEXT(GENERATE, "::EmitCode")
     //todo: Kernel need info on i/o data access pattern and data shapes to calculate data offsets
     // pass Params and Results
     // todo: it's probably better to move AllocaledEmitter creation inside Kernel constructor
     //  So Kernel accepts only model ptr and target, and creates AllocatedEmitter inside
     //emission
-    auto loops2DKernel = std::make_shared<op::Kernel>(lowered, m);
+    auto loops2DKernel = std::make_shared<op::Kernel>(lowered_ir, m);
     loops2DKernel->compile_params = compile_params;
     std::shared_ptr<Emitter> kernel = target->get(op::Kernel::get_type_info_static())(loops2DKernel);
 
     kernel->emit_code({}, {});
 
     OV_ITT_TASK_NEXT(GENERATE, "::EmitData")
-    for (auto& op : lowered) {
-        op.first->emit_data();
+    for (const auto& l : lowered_ir.get_ops()) {
+        l.get_emitter()->emit_data();
     }
     OV_ITT_TASK_NEXT(GENERATE, "::GetSnippet")
 
     // todo: we save lowered to access compiled brgemm kernels on execution time (normally lowered is destructed by then)
     //  remove this when kernel caching is implemented. Don't forget to make generate const method.
     if (config.m_save_lowered_code)
-        lowered_saved = lowered;
+        lowered_saved = lowered_ir;
 
     return target->get_snippet();
 }

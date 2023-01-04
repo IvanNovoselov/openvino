@@ -4,8 +4,7 @@
 
 #pragma once
 
-#include <vector>
-#include <cstdint>
+#include <openvino/core/node.hpp>
 
 namespace ngraph {
 namespace snippets {
