@@ -34,15 +34,20 @@
 #include "ngraph/pass/constant_folding.hpp"
 #include "ov_ops/type_relaxed.hpp"
 #include <openvino/pass/serialize.hpp>
-#include "snippets/pass/lowered_ir_transformations.hpp"
 
 #include <algorithm>
 #include <memory>
 #include <array>
 
 using namespace std;
+<<<<<<< HEAD
 using namespace ngraph;
 using namespace ov::op::util;
+=======
+
+namespace ngraph {
+namespace snippets {
+>>>>>>> insertTailLoop back in generator
 
 void snippets::op::Subgraph::set_generator(std::shared_ptr<ngraph::snippets::Generator> generator) {
     m_generator = generator;
@@ -751,3 +756,6 @@ void snippets::op::Subgraph::serialize() const {
     auto m_model = xmlFile.str();
     std::cout << m_model << std::endl;
 }
+
+} // namespace snippets
+} // namespace ngraph

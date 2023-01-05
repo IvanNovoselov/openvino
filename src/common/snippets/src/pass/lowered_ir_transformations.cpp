@@ -11,7 +11,7 @@ namespace snippets {
 namespace pass {
 
 namespace {
-auto tail_transformations(LoweredExprIR::container& tail, const size_t tail_size, const LoweredExprIR::LoweringConfig& config) -> void {
+auto tail_transformations(LoweredExprIR::container& tail, const size_t tail_size, const LoweringConfig& config) -> void {
     auto insertFill = [tail_size](const ov::Input<ov::Node>& input) -> std::shared_ptr<ov::Node> {
         auto copyRegInfo = [](const ov::descriptor::Tensor& from, ov::descriptor::Tensor& to) -> void {
             auto rt = from.get_rt_info();
@@ -139,7 +139,9 @@ void insertTailLoop(LoweredExprIR& linear_ir) {
                 if (need_vector_loop) {
                     NodeMap vector_to_tail_node_map;
                     // todo: we have to clone nodes here since tail transformations can change the same nodes
-                    //  (e.g. reset Load&Store count). this is a bit costy
+                    //  (e.g. reset Load&Store count). this is a bit costy.
+                    //  an alternative is no pass target machine and create emitters for vector loop here
+                    //  (then we don't care if the nodes are updated)
                     tail_loop = LoweredExprIR(ngraph::clone_nodes(loop_ops,  vector_to_tail_node_map)).get_ops();
                 } else {
                     tail_loop = std::move(vector_loop);

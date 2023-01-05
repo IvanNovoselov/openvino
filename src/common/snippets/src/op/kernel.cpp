@@ -3,7 +3,6 @@
 //
 
 #include "snippets/op/kernel.hpp"
-#include "snippets/generator.hpp"
 
 namespace ngraph {
 namespace snippets {

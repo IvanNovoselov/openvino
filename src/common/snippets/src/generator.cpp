@@ -11,7 +11,8 @@
 #include "snippets/op/subgraph.hpp"
 #include "snippets/op/kernel.hpp"
 #include <snippets/itt.hpp>
-
+#include "snippets/pass/lowered_ir_transformations.hpp"
+#include "snippets/lowered_expr.hpp"
 #include <ngraph/pass/manager.hpp>
 #include <openvino/core/type.hpp>
 
@@ -19,14 +20,15 @@ namespace ngraph {
 namespace snippets {
 
 //todo: gewnerate must take const reference to linear_IR: no additional IR modification must be made here, only code emission
-code Generator::generate(LoweredExprIR& linear_ir, std::shared_ptr<ov::Model>& m, const GeneratorConfig& config, const void* compile_params) {
+code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& config, const void* compile_params) {
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator::generate")
     if (!target->is_supported())
         throw ngraph_error("unsupported architecture for code generation");
 
 //    OV_ITT_TASK_CHAIN(GENERATE, ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator", "::VectorTile")
 //    const auto& ord_ops = m->get_ordered_ops();
-
+    auto linear_ir = LoweredExprIR(m->get_ordered_ops(), config);
+    pass::insertTailLoop(linear_ir);
     linear_ir.init_emitters(target);
 
 //    for (const auto& expr : lowered_ir.get_ops() )

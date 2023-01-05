@@ -5,6 +5,7 @@
 #pragma once
 
 #include <ngraph/pass/pass.hpp>
+#include "snippets/lowered_expr.hpp"
 
 namespace ngraph {
 namespace snippets {

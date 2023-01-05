@@ -15,6 +15,20 @@ namespace snippets {
 using code = const uint8_t *;
 using RegInfo = std::pair<std::vector<size_t>, std::vector<size_t>>;
 
+class LoweringConfig {
+public:
+    // True if the lowered Emitters need to be accessed during runtime. Normally they're destroyed after code emission.
+    bool m_save_lowered_code = false;
+    // True if we can optimize tails for single evaluation during code generation
+    // More details with optimization examples you can see in generate() method
+    // For example, tails with Buffer ops doesn't support single evaluation optimizations
+    //              because of that we should always reset memory pointer using finalization offsets
+    //              after data storing to Buffer
+    bool m_optimize_single_evaluation = true;
+    // True if we should check runtime info for nodes to call specific needed transformations
+    bool m_need_fill_tail_register = false;
+};
+
 /**
  * @interface Emitter
  * @brief Base class for all target specific code emitters used by generator.
@@ -47,18 +61,6 @@ private:
 class LoweredExprIR {
 public:
     using container = std::list<LoweredExpr>;
-    class LoweringConfig {
-    public:
-        LoweringConfig() : m_optimize_single_evaluation{true}, m_need_fill_tail_register{false} {};
-        // True if we can optimize tails for single evaluation during code generation
-        // More details with optimization examples you can see in generate() method
-        // For example, tails with Buffer ops doesn't support single evaluation optimizations
-        //              because of that we should always reset memory pointer using finalization offsets
-        //              after data storing to Buffer
-        bool m_optimize_single_evaluation = true;
-        // True if we should check runtime info for nodes to call specific needed transformations
-        bool m_need_fill_tail_register = false;
-    };
     /**
      * @brief Default constructor
      */

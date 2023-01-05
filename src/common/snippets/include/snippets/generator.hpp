@@ -45,7 +45,7 @@ public:
     bool is_flat {false};
     code ptr {nullptr};
 };
-
+class LoweredExprIR;
 /**
  * @interface Generator
  * @brief Target independent code generator interface
@@ -65,11 +65,6 @@ public:
     * @interface GeneratorConfig
     * @brief Allows to tweak the lowering process.
     */
-    class GeneratorConfig {
-    public:
-        // True if the lowered Emitters need to be accessed during runtime. Normally they're destroyed after code emission.
-        bool m_save_lowered_code = false;
-    };
     /**
      * @brief virtual method any specific implementation should implement
      * @param m model in canonical for for table-based code generation
@@ -77,7 +72,7 @@ public:
      * @param compile_params parameters for generated code
      * @return pointer to generated code
      */
-    code generate(LoweredExprIR& linearIR, std::shared_ptr<ov::Model>& m, const GeneratorConfig& config, const void* compile_params = nullptr);
+    code generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& config, const void* compile_params = nullptr);
 
     /**
      * @brief gets target machine
