@@ -40,18 +40,18 @@ auto tail_transformations(LoweredExprIR::container& tail, const size_t tail_size
         return fill;
     };
 
-    for (auto& lowered_expr : tail) {
+    for (auto expr = tail.begin(); expr != tail.end(); expr++) {
         // We should fill vector regs by float_min and zero to have
         // correct math calculations for ReduceMax and ReduceSum in scalar case.
         // Note: We find Maximum and Add ops because HorizonMax and HorizonSum are outside Loop,
         //       so they are missed in <tail>
-        auto op = lowered_expr.get_node();
+        auto op = expr->get_node();
         if (config.m_need_fill_tail_register &&
             (ov::is_type<ov::op::v1::Maximum>(op) ||
              ov::is_type<ov::op::v1::Add>(op))) {
             for (auto i = 0; i < op->inputs().size(); ++i) {
                 if (auto fill = insertFill(op->input(i))) {
-                    throw ngraph_error("You need to pass IR here in order to insert new ops inside");
+                    tail.insert(expr, LoweredExpr(fill));
                     //updated_tile.push_back(fill);
                 }
             }
