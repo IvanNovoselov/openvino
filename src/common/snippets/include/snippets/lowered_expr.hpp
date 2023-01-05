@@ -47,10 +47,22 @@ private:
 class LoweredExprIR {
 public:
     using container = std::list<LoweredExpr>;
+    class LoweringConfig {
+    public:
+        LoweringConfig() : m_optimize_single_evaluation{true}, m_need_fill_tail_register{false} {};
+        // True if we can optimize tails for single evaluation during code generation
+        // More details with optimization examples you can see in generate() method
+        // For example, tails with Buffer ops doesn't support single evaluation optimizations
+        //              because of that we should always reset memory pointer using finalization offsets
+        //              after data storing to Buffer
+        bool m_optimize_single_evaluation = true;
+        // True if we should check runtime info for nodes to call specific needed transformations
+        bool m_need_fill_tail_register = false;
+    };
     /**
      * @brief Default constructor
      */
-    LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops);
+    LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops, LoweringConfig config = {});
     LoweredExprIR() = default;
 //    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> ops, std::shared_ptr<TargetMachine> target);
 
@@ -58,8 +70,10 @@ public:
     container& get_ops() {return m_lowered_ops; }
     const container& get_ops() const {return m_lowered_ops; }
     void init_emitters(const std::shared_ptr<TargetMachine>& target);
+    LoweringConfig get_config() {return m_config; }
 
     bool empty() const noexcept {return m_lowered_ops.empty(); }
+
 //
 //    loweredContainer::iterator begin() noexcept {
 //        return m_lowered_ops.begin();
@@ -95,6 +109,7 @@ public:
 
 private:
     container m_lowered_ops{};
+    LoweringConfig m_config{};
 };
 
 using AllocatedEmitter = std::pair<std::shared_ptr<Emitter>, RegInfo>;

@@ -53,7 +53,8 @@ ngraph::snippets::RegInfo LoweredExpr::getRegisters(const std::shared_ptr<const 
     return std::make_pair(rin, rout);
 }
 
-LoweredExprIR::LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops) {
+LoweredExprIR::LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops, LoweringConfig config)
+    : m_config{std::move(config)} {
     for (const auto& n : ops)
         m_lowered_ops.emplace_back(n);
 }

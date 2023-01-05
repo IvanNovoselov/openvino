@@ -34,6 +34,7 @@
 #include "ngraph/pass/constant_folding.hpp"
 #include "ov_ops/type_relaxed.hpp"
 #include <openvino/pass/serialize.hpp>
+#include "snippets/pass/lowered_ir_transformations.hpp"
 
 #include <algorithm>
 #include <memory>
@@ -628,16 +629,31 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
     snippets::pass::AssignRegisters().run_on_model(body_ptr());
 
-    const auto ops = body_ptr()->get_ops();
-    ngraph::snippets::Generator::GeneratorConfig generatorConfig;
-    generatorConfig.m_save_lowered_code = config.m_has_domain_sensitive_ops;
-    generatorConfig.m_need_fill_tail_register = config.m_has_domain_sensitive_ops;
-    generatorConfig.m_optimize_single_evaluation = std::none_of(ops.begin(), ops.end(), [](const std::shared_ptr<ov::Node>& op) {
+    const auto ops = m_bodies[0]->get_ops();
+    // actual code emission
+    LoweredExprIR::LoweringConfig lowering_config;
+    lowering_config.m_need_fill_tail_register = config.m_has_domain_sensitive_ops;
+    lowering_config.m_optimize_single_evaluation = std::none_of(ops.begin(), ops.end(), [](const std::shared_ptr<ov::Node>& op) {
         return ov::is_type<ngraph::snippets::op::Buffer>(op);
     });
+    auto linear_ir = LoweredExprIR(m_bodies[0]->get_ordered_ops(), lowering_config);
+    pass::insertTailLoop(linear_ir);
 
-    // actual code emission
-    ngraph::snippets::code ptr = m_generator->generate(body_ptr(), generatorConfig, compile_params);
+
+    ngraph::snippets::Generator::GeneratorConfig generatorConfig;
+    generatorConfig.m_save_lowered_code = config.m_has_domain_sensitive_ops;
+    ngraph::snippets::code ptr = m_generator->generate(linear_ir, m_bodies[0], generatorConfig, compile_params);
+
+    // check that body doesn't have constants for scheduling
+    std::vector<std::shared_ptr<opset1::Constant>> constants;
+    for (auto op : m_bodies[0]->get_ordered_ops()) {
+        if (auto constant = ov::as_type_ptr<opset1::Constant>(op)) {
+            if (ngraph::shape_size(constant->get_shape()) != 1 && constant->get_shape() != Shape()) {
+                constants.push_back(constant);
+            }
+        }
+    }
+    NGRAPH_CHECK(!constants.size(), "External constants detected. Snippet is illigal for scheduling");
 
     return {master_shape, false /*canBeLinearized*/, ptr};
 }
