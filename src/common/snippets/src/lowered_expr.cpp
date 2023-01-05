@@ -17,8 +17,17 @@
 namespace ngraph {
 namespace snippets {
 
-LoweredExpr::LoweredExpr(const std::shared_ptr<Node>& n, const std::shared_ptr<const TargetMachine> &target) :
-            m_source_node{n}, m_reg_info{getRegisters(n)},  m_emitter{target->get(n->get_type_info())(n)} {
+LoweredExpr::LoweredExpr(const std::shared_ptr<Node>& n) : m_source_node{n}, m_reg_info{getRegisters(n)},  m_emitter{nullptr} {
+}
+
+std::shared_ptr<Emitter> LoweredExpr::get_emitter() const {
+//    if (!m_emitter)
+//        throw ngraph_error("An attempt to get uninitialized emitter. You need to call init_emitter() first");
+    return  m_emitter;
+}
+
+void LoweredExpr::init_emitter(const std::shared_ptr<const TargetMachine>& target) {
+    m_emitter = target->get(m_source_node->get_type_info())(m_source_node);
 }
 
 ngraph::snippets::RegInfo LoweredExpr::getRegisters(const std::shared_ptr<const Node>& n) {
@@ -44,15 +53,16 @@ ngraph::snippets::RegInfo LoweredExpr::getRegisters(const std::shared_ptr<const 
     return std::make_pair(rin, rout);
 }
 
-LoweredExprIR::LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops, const std::shared_ptr<TargetMachine>& target) {
+LoweredExprIR::LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops) {
     for (const auto& n : ops)
-        m_lowered_ops.emplace_back(n, target);
+        m_lowered_ops.emplace_back(n);
 }
-
-//LoweredExprIR::LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> ops, std::shared_ptr<TargetMachine> target) {
-//    for (const auto& n : ops)
-//        m_lowered_ops.emplace_back(n, target);
-//}
+void LoweredExprIR::init_emitters(const std::shared_ptr<TargetMachine>& target) {
+    for (auto& expr : m_lowered_ops) {
+        if (!expr.get_emitter())
+            expr.init_emitter(target);
+    }
+}
 
 }// namespace snippets
 }// namespace ngraph

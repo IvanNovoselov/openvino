@@ -25,13 +25,13 @@ public:
     /**
      * @brief Default constructor
      */
-    LoweredExpr(const std::shared_ptr<Node>& n, const std::shared_ptr<const TargetMachine>& target);
+    LoweredExpr(const std::shared_ptr<Node>& n);
     LoweredExpr() = default;
     // todo: shall we return pointers to const?
     std::shared_ptr<Node> get_node() {return  m_source_node;}
     std::shared_ptr<const Node> get_node() const {return  m_source_node;}
-    std::shared_ptr<Emitter> get_emitter() {return  m_emitter;}
-    std::shared_ptr<const Emitter> get_emitter() const {return  m_emitter;}
+    std::shared_ptr<Emitter> get_emitter() const;
+    void init_emitter(const std::shared_ptr<const TargetMachine>& target);
     RegInfo get_reg_info() const {return  m_reg_info;}
 //    void set_reg_info(const RegInfo& rinfo) {m_reg_info = rinfo;}
     void set_reg_info(RegInfo rinfo) {m_reg_info = std::move(rinfo);}
@@ -46,17 +46,18 @@ private:
 
 class LoweredExprIR {
 public:
-    using loweredContainer = std::list<LoweredExpr>;
+    using container = std::list<LoweredExpr>;
     /**
      * @brief Default constructor
      */
-    LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops, const std::shared_ptr<TargetMachine>& target);
+    LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops);
     LoweredExprIR() = default;
 //    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> ops, std::shared_ptr<TargetMachine> target);
 
 //    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> vector1, std::shared_ptr<TargetMachine> sharedPtr);
-    loweredContainer& get_ops() {return m_lowered_ops; }
-    const loweredContainer& get_ops() const {return m_lowered_ops; }
+    container& get_ops() {return m_lowered_ops; }
+    const container& get_ops() const {return m_lowered_ops; }
+    void init_emitters(const std::shared_ptr<TargetMachine>& target);
 
     bool empty() const noexcept {return m_lowered_ops.empty(); }
 //
@@ -93,10 +94,10 @@ public:
 
 
 private:
-    loweredContainer m_lowered_ops{};
+    container m_lowered_ops{};
 };
 
-using AllocatedEmitter = std::pair<std::shared_ptr<Emitter>, ngraph::snippets::RegInfo>;
+using AllocatedEmitter = std::pair<std::shared_ptr<Emitter>, RegInfo>;
 
 } // namespace snippets
 } // namespace ngraph
