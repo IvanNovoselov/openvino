@@ -320,6 +320,13 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
         const auto& emitter = lowered_code.get_emitter();
         std::vector<size_t> in_regs, out_regs;
         std::tie(in_regs, out_regs) = lowered_code.get_reg_info();
+        std::cerr << lowered_code.get_node()->get_friendly_name() << " : ";
+        for (auto i : in_regs)
+            std::cerr << i << " ";
+        std::cerr << " => ";
+        for (auto i : out_regs)
+            std::cerr << i << " ";
+        std::cerr << "\n";
         emitter->emit_code(in_regs, out_regs, vec_regs_pool, gp_regs_pool);
     }
     h->postamble();

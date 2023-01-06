@@ -12,7 +12,8 @@ namespace snippets {
 namespace pass {
 
 // todo: add description
-void insertTailLoop(LoweredExprIR& linear_ir);
+bool insertTailLoop(LoweredExprIR& linear_ir);
+bool assignRegisters(LoweredExprIR& linear_ir);
 
 } // namespace pass
 } // namespace snippets

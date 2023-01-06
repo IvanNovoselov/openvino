@@ -19,15 +19,23 @@
 namespace ngraph {
 namespace snippets {
 
-//todo: gewnerate must take const reference to linear_IR: no additional IR modification must be made here, only code emission
 code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& config, const void* compile_params) {
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator::generate")
     if (!target->is_supported())
         throw ngraph_error("unsupported architecture for code generation");
 
-//    OV_ITT_TASK_CHAIN(GENERATE, ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator", "::VectorTile")
-//    const auto& ord_ops = m->get_ordered_ops();
     auto linear_ir = LoweredExprIR(m->get_ordered_ops(), config);
+//    pass::assignRegisters(linear_ir);
+    for (auto expr : linear_ir.get_ops()) {
+        auto rinfo = expr.get_reg_info();
+        std::cerr << expr.get_node()->get_friendly_name() << " : ";
+        for (auto i : rinfo.first)
+            std::cerr << i << " ";
+        std::cerr << " => ";
+        for (auto i : rinfo.second)
+            std::cerr << i << " ";
+        std::cerr << "\n";
+    }
     pass::insertTailLoop(linear_ir);
     linear_ir.init_emitters(target);
 

@@ -17,7 +17,7 @@
 namespace ngraph {
 namespace snippets {
 
-LoweredExpr::LoweredExpr(const std::shared_ptr<Node>& n) : m_source_node{n}, m_reg_info{getRegisters(n)},  m_emitter{nullptr} {
+LoweredExpr::LoweredExpr(const std::shared_ptr<Node>& n) : m_source_node{n}, m_reg_info{},  m_emitter{nullptr} {
 }
 
 std::shared_ptr<Emitter> LoweredExpr::get_emitter() const {
@@ -58,6 +58,19 @@ LoweredExprIR::LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops, 
     for (const auto& n : ops)
         m_lowered_ops.emplace_back(n);
 }
+
+LoweredExprIR LoweredExprIR::deep_copy() const {
+    LoweredExprIR result = *this;
+    NodeVector original_nodes;
+    for (const auto& expr : m_lowered_ops)
+        original_nodes.push_back(expr.get_node());
+    NodeMap node_map;
+    const NodeVector& new_nodes = ngraph::clone_nodes(original_nodes,  node_map);
+    for (auto& expr : result.get_ops())
+        expr.m_source_node = node_map[expr.get_node().get()];
+    return result;
+}
+
 void LoweredExprIR::init_emitters(const std::shared_ptr<TargetMachine>& target) {
     for (auto& expr : m_lowered_ops) {
         if (!expr.get_emitter())

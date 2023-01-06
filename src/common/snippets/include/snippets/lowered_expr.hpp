@@ -34,7 +34,9 @@ public:
  * @brief Base class for all target specific code emitters used by generator.
  * @ingroup snippets
  */
+class LoweredExprIR;
 class LoweredExpr {
+    friend LoweredExprIR;
 public:
     /**
      * @brief Default constructor
@@ -42,8 +44,8 @@ public:
     LoweredExpr(const std::shared_ptr<Node>& n);
     LoweredExpr() = default;
     // todo: shall we return pointers to const?
-    std::shared_ptr<Node> get_node() {return  m_source_node;}
-    std::shared_ptr<const Node> get_node() const {return  m_source_node;}
+    std::shared_ptr<Node> get_node() const {return  m_source_node;}
+//    std::shared_ptr<const Node> get_node() const {return  m_source_node;}
     std::shared_ptr<Emitter> get_emitter() const;
     void init_emitter(const std::shared_ptr<const TargetMachine>& target);
     RegInfo get_reg_info() const {return  m_reg_info;}
@@ -66,6 +68,7 @@ public:
      */
     LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops, LoweringConfig config = {});
     LoweredExprIR() = default;
+    LoweredExprIR deep_copy() const;
 //    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> ops, std::shared_ptr<TargetMachine> target);
 
 //    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> vector1, std::shared_ptr<TargetMachine> sharedPtr);
