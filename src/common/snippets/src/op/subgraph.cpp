@@ -626,7 +626,7 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
     convert_to_snippet_dialect();
     opt.run_passes(body_ptr());
-//    snippets::pass::AssignRegisters().run_on_model(m_body);
+    snippets::pass::AssignRegisters().run_on_model(body_ptr());
 
     // After all passes, when all optimizations are completed and all MemoryAccess ops are inserted,
     // we can calculate common buffer scratchpad size and propagate offset from Buffer to the corresponding MemoryAccess ops

@@ -34,18 +34,18 @@ auto tail_transformations(LoweredExprIR::container& tail, const size_t tail_size
         return fill;
     };
 
-    for (auto expr = tail.begin(); expr != tail.end(); expr++) {
+    for (auto expr_it = tail.begin(); expr_it != tail.end(); expr_it++) {
         // We should fill vector regs by float_min and zero to have
         // correct math calculations for ReduceMax and ReduceSum in scalar case.
         // Note: We find Maximum and Add ops because HorizonMax and HorizonSum are outside Loop,
         //       so they are missed in <tail>
-        auto op = expr->get_node();
+        auto op = (*expr_it)->get_node();
         if (config.m_need_fill_tail_register &&
             (ov::is_type<ov::op::v1::Maximum>(op) ||
              ov::is_type<ov::op::v1::Add>(op))) {
             for (auto i = 0; i < op->inputs().size(); ++i) {
                 if (auto fill = insertFill(op->input(i))) {
-                    tail.insert(expr, LoweredExpr(fill));
+                    tail.insert(expr_it, std::make_shared<LoweredExpr>(fill));
                     //updated_tile.push_back(fill);
                 }
             }
@@ -84,27 +84,21 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
             return false;
         }
     };
-    for (auto expr = linear_ir.get_ops().begin(); expr != linear_ir.get_ops().end(); expr++) {
-        auto op{expr->get_node()};
-
-        const auto& loop_begin = ov::as_type_ptr<ngraph::snippets::op::LoopBegin>(op);
-        auto loop_begin_expr = expr;
-
+    auto& expressions = linear_ir.get_ops();
+    for (auto expr_it = expressions.begin(); expr_it != expressions.end(); expr_it++) {
+        const auto& loop_begin = ov::as_type_ptr<ngraph::snippets::op::LoopBegin>((*expr_it)->get_node());
+        auto loop_begin_expr_it = expr_it;
         // ignore outer loops and possible manual scalar loops
         if (loop_begin && loop_begin->get_increment() != 1) {
             LoweredExprIR vector_loop, tail_loop;
-            NodeVector loop_ops;
             std::shared_ptr<op::LoopEnd> vector_loop_end, tail_loop_end;
             vector_loop_end = loop_begin->get_loop_end();
             tail_loop_end = nullptr;
-            while (expr->get_node() != vector_loop_end) {
-                loop_ops.push_back(expr->get_node());
-                vector_loop.get_ops().push_back(*expr++);
-            }
-            // Note that lowered_exp points to the element AFTER loop_end
-            loop_ops.push_back(expr->get_node());
-            vector_loop.get_ops().push_back(*expr++);
-//            const auto& vector_loop_end_expr = *lowered_expr;
+            auto& loop_exprs = vector_loop.get_ops();
+            while ((*expr_it)->get_node() != vector_loop_end)
+                loop_exprs.push_back(*expr_it++);
+            // Note that exp_it points to the element AFTER loop_end
+            loop_exprs.push_back(*expr_it++);
             const auto work_amount = vector_loop_end->get_work_amount();
             const auto increment = vector_loop_end->get_increment();
             const auto tail_size = work_amount % increment;
@@ -130,7 +124,7 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                 //  If LoweredIR stores pointers to LoweredExpr, then the modifications will be visible in Original LoweredIR
                 // scalar tile can have different number of ops, so ve have to remove vector tile first,
                 // and then insert scalar one
-                linear_ir.get_ops().erase(loop_begin_expr, expr);
+                expressions.erase(loop_begin_expr_it, expr_it);
             }
 
             // tail is required => transform the body into a tail representation
@@ -150,7 +144,7 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                 }
 
                 tail_transformations(tail_loop.get_ops(), tail_size, lowering_config);
-                tail_loop_end = ov::as_type_ptr<op::LoopEnd>(tail_loop.get_ops().rbegin()->get_node());
+                tail_loop_end = ov::as_type_ptr<op::LoopEnd>(tail_loop.get_ops().back()->get_node());
                 tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
                 tail_loop_end->set_increment(tail_size);
                 // ptr increments were set to the old increment, need to update them in accordance with the new one
@@ -158,11 +152,11 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                 tail_loop_end->set_work_amount(tail_size);
                 tail_loop_end->has_outer_loop = vector_loop_end->has_outer_loop;
 
-                if (lowering_config.m_optimize_single_evaluation) {
+                if (lowering_config.m_optimize_single_evaluation && false) {
                     // tail loop is always executed once
                     optimize_single_evaluation(tail_loop_end);
                 }
-                linear_ir.get_ops().insert(expr, tail_loop.get_ops().begin(), tail_loop.get_ops().end());
+                linear_ir.get_ops().insert(expr_it, tail_loop.get_ops().begin(), tail_loop.get_ops().end());
             }
         }
     }
@@ -197,13 +191,13 @@ bool assignRegisters(LoweredExprIR& linear_ir) {
         else
             return vec2vec;
     };
-    std::vector<std::pair<op_reg_type, LoweredExpr&>> typed_ops;
+    std::vector<std::pair<op_reg_type, std::shared_ptr<LoweredExpr>>> typed_ops;
     NodeVector ops;
     Reg num_parameters = 0;
     Reg num_results = 0;
     Reg num_expressions = 0;
     for (auto& expr : expressions) {
-        auto op = expr.get_node();
+        auto op = expr->get_node();
         auto reg_type = get_op_reg_type(op);
         typed_ops.emplace_back(reg_type, expr);
         num_parameters += is_type<opset1::Parameter>(op);
@@ -221,7 +215,7 @@ bool assignRegisters(LoweredExprIR& linear_ir) {
     Reg param_index = 0;
     Reg result_index = 0;
     for (auto& expr : expressions) {
-        auto op = expr.get_node();
+        auto op = expr->get_node();
         if (const auto& param = ov::as_type_ptr<ov::op::v0::Parameter>(op)) {
             manually_assigned_gprs[op->output(0).get_tensor_ptr()] = param_index++;
         } else if (const auto& result = ov::as_type_ptr<opset1::Result>(op)) {
@@ -279,11 +273,11 @@ bool assignRegisters(LoweredExprIR& linear_ir) {
         switch (t_op.first) {
             case vec2vec:
             case gpr2vec:
-                enumerate_out_tensors(t_op.second.get_node(), regs_vec, manually_assigned_vecs, counter_vec);
+                enumerate_out_tensors(t_op.second->get_node(), regs_vec, manually_assigned_vecs, counter_vec);
                 break;
             case gpr2gpr:
             case vec2gpr:
-                enumerate_out_tensors(t_op.second.get_node(), regs_gpr, manually_assigned_gprs, counter_gpr);
+                enumerate_out_tensors(t_op.second->get_node(), regs_gpr, manually_assigned_gprs, counter_gpr);
                 break;
         }
     }
@@ -307,9 +301,9 @@ bool assignRegisters(LoweredExprIR& linear_ir) {
     for (size_t i = 0; i < typed_ops.size(); i++) {
         const auto& t_op = typed_ops[i];
         std::vector<tensor> used_tensors, defined_tensors;
-        for (const auto& in : t_op.second.get_node()->inputs())
+        for (const auto& in : t_op.second->get_node()->inputs())
             used_tensors.push_back(in.get_tensor_ptr());
-        for (const auto& out : t_op.second.get_node()->outputs())
+        for (const auto& out : t_op.second->get_node()->outputs())
             defined_tensors.push_back(out.get_tensor_ptr());
         switch (t_op.first) {
             case vec2vec:
@@ -352,7 +346,7 @@ bool assignRegisters(LoweredExprIR& linear_ir) {
                                 std::inserter(life_in_vec[n], life_in_vec[n].begin()));
         }
         for (size_t n = 0; n < typed_ops.size(); n++) {
-            auto op = typed_ops[n].second.get_node();
+            auto op = typed_ops[n].second->get_node();
             for (const auto& out : op->outputs()) {
                 for (const auto& port : out.get_target_inputs()) {
                     auto k = std::find(ops.begin(), ops.end(), port.get_node()->shared_from_this()) - ops.begin();
@@ -474,13 +468,13 @@ bool assignRegisters(LoweredExprIR& linear_ir) {
 
     for (auto& t_op : typed_ops) {
         RegInfo rinfo;
-        for (const auto& in : t_op.second.get_node()->inputs()) {
+        for (const auto& in : t_op.second->get_node()->inputs()) {
             rinfo.first.push_back(assigned_regs[in.get_tensor_ptr()]);
         }
-        for (const auto& out : t_op.second.get_node()->outputs()) {
+        for (const auto& out : t_op.second->get_node()->outputs()) {
             rinfo.second.push_back(assigned_regs[out.get_tensor_ptr()]);
         }
-        t_op.second.set_reg_info(rinfo);
+        t_op.second->set_reg_info(rinfo);
     }
     return false;
 }

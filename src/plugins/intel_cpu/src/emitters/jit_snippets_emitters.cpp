@@ -53,9 +53,9 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
     };
 
     for (auto& lowered_code : allocated_emitters.get_ops()) {
-        const auto& emitter = lowered_code.get_emitter();
+        const auto& emitter = lowered_code->get_emitter();
         std::vector<size_t> in_abstract_regs, out_abstract_regs;
-        std::tie(in_abstract_regs, out_abstract_regs) = lowered_code.get_reg_info();
+        std::tie(in_abstract_regs, out_abstract_regs) = lowered_code->get_reg_info();
         std::vector<size_t> in_physical_regs, out_physical_regs;
         switch (std::dynamic_pointer_cast<jit_emitter>(emitter)->get_in_out_type()) {
             case gpr_to_gpr:
@@ -90,8 +90,8 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
             default:
                 IE_THROW() << "Unhandled in_out type";
         }
-        lowered_code.set_reg_info({in_physical_regs, out_physical_regs});
-        if (auto container = std::dynamic_pointer_cast<jit_container_emitter>(lowered_code.get_emitter()))
+        lowered_code->set_reg_info({in_physical_regs, out_physical_regs});
+        if (auto container = std::dynamic_pointer_cast<jit_container_emitter>(lowered_code->get_emitter()))
             container->map_abstract_registers(gpr_map_pool,  vec_map_pool, allocated_emitters);
     }
 }
@@ -172,8 +172,8 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     ngraph::snippets::LoweredExprIR data_io_emitters;
     const auto& lowered_ops = body.get_ops();
     std::copy_if(lowered_ops.begin(), lowered_ops.end(), std::back_inserter(data_io_emitters.get_ops()),
-                           [](const LoweredExpr& le){
-                                   const auto& emitter = le.get_emitter();
+                           [](const std::shared_ptr<LoweredExpr>& le){
+                                   const auto& emitter = le->get_emitter();
                                    const auto emitter_type = std::dynamic_pointer_cast<const jit_emitter>(emitter)->get_in_out_type();
                                    // todo: how this will be handled if Brgemm in & out are op::Buffer
                                    // Brgemm is a special case since it incorporates input and output (we use onednn kernel)
@@ -317,16 +317,9 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
 
     init_data_pointers(num_inputs, num_inputs + num_outputs, is_buffer_needed, reg_indexes, reg_const_params, data_ptr_regs);
     for (const auto& lowered_code : body.get_ops()) {
-        const auto& emitter = lowered_code.get_emitter();
+        const auto& emitter = lowered_code->get_emitter();
         std::vector<size_t> in_regs, out_regs;
-        std::tie(in_regs, out_regs) = lowered_code.get_reg_info();
-        std::cerr << lowered_code.get_node()->get_friendly_name() << " : ";
-        for (auto i : in_regs)
-            std::cerr << i << " ";
-        std::cerr << " => ";
-        for (auto i : out_regs)
-            std::cerr << i << " ";
-        std::cerr << "\n";
+        std::tie(in_regs, out_regs) = lowered_code->get_reg_info();
         emitter->emit_code(in_regs, out_regs, vec_regs_pool, gp_regs_pool);
     }
     h->postamble();

@@ -45,28 +45,38 @@ public:
     LoweredExpr() = default;
     // todo: shall we return pointers to const?
     std::shared_ptr<Node> get_node() const {return  m_source_node;}
-//    std::shared_ptr<const Node> get_node() const {return  m_source_node;}
     std::shared_ptr<Emitter> get_emitter() const;
     void init_emitter(const std::shared_ptr<const TargetMachine>& target);
     RegInfo get_reg_info() const {return  m_reg_info;}
-//    void set_reg_info(const RegInfo& rinfo) {m_reg_info = rinfo;}
     void set_reg_info(RegInfo rinfo) {m_reg_info = std::move(rinfo);}
+    static ngraph::snippets::RegInfo getRegisters(const std::shared_ptr<const Node>& n);
 
-private:
+protected:
     // todo: const pointer to const node?
     std::shared_ptr<Node> m_source_node{nullptr};
     std::shared_ptr<Emitter> m_emitter{nullptr};
-    static ngraph::snippets::RegInfo getRegisters(const std::shared_ptr<const Node>& n);
     RegInfo m_reg_info{{}, {}};
+};
+
+class IOLoweredExpr : public LoweredExpr {
+public:
+    enum class io_type {INPUT, OUTPUT, UNDEFINED};
+    IOLoweredExpr(const std::shared_ptr<Node>& n, int64_t index);
+    IOLoweredExpr(const std::shared_ptr<Node>& n, int64_t index, io_type type);
+    int64_t get_index() const  {return m_index;}
+    io_type get_type() const {return m_type; }
+private:
+    int64_t m_index = -1;
+    io_type m_type = io_type::UNDEFINED;
 };
 
 class LoweredExprIR {
 public:
-    using container = std::list<LoweredExpr>;
+    using container = std::list<std::shared_ptr<LoweredExpr>>;
     /**
      * @brief Default constructor
      */
-    LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops, LoweringConfig config = {});
+    LoweredExprIR(const std::shared_ptr<ov::Model>& m, LoweringConfig config = {});
     LoweredExprIR() = default;
     LoweredExprIR deep_copy() const;
 //    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> ops, std::shared_ptr<TargetMachine> target);

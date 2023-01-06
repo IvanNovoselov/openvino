@@ -52,29 +52,53 @@ ngraph::snippets::RegInfo LoweredExpr::getRegisters(const std::shared_ptr<const 
 
     return std::make_pair(rin, rout);
 }
+IOLoweredExpr::IOLoweredExpr(const std::shared_ptr<Node>& n, int64_t index) : LoweredExpr(n), m_index(index) {
+    if (ov::is_type<opset1::Parameter>(n))
+        m_type = io_type::INPUT;
+    else if (ov::is_type<opset1::Result>(n))
+        m_type = io_type::OUTPUT;
+    else
+        throw ngraph_error("Can't derive io_type automatically for node " + n->get_friendly_name());
+}
 
-LoweredExprIR::LoweredExprIR(const std::vector<std::shared_ptr<ov::Node>>& ops, const LoweringConfig config)
+IOLoweredExpr::IOLoweredExpr(const std::shared_ptr<Node>& n, int64_t index, io_type type)
+    : LoweredExpr(n), m_index(index), m_type(type) {
+}
+
+LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, const LoweringConfig config)
     : m_config{config} {
-    for (const auto& n : ops)
-        m_lowered_ops.emplace_back(n);
+    for (const auto& n : model->get_ordered_ops()) {
+        std::shared_ptr<LoweredExpr> expr;
+        if (const auto& par = as_type_ptr<opset1::Parameter>(n))
+            expr = std::make_shared<IOLoweredExpr>(n, model->get_parameter_index(par), IOLoweredExpr::io_type::INPUT);
+        else if (const auto& res = as_type_ptr<opset1::Result>(n))
+            expr = std::make_shared<IOLoweredExpr>(n, model->get_result_index(res), IOLoweredExpr::io_type::OUTPUT);
+        else
+            expr = std::make_shared<LoweredExpr>(n);
+        m_lowered_ops.emplace_back(expr);
+    }
 }
 
 LoweredExprIR LoweredExprIR::deep_copy() const {
-    LoweredExprIR result = *this;
+    LoweredExprIR result;
     NodeVector original_nodes;
     for (const auto& expr : m_lowered_ops)
-        original_nodes.push_back(expr.get_node());
+        original_nodes.push_back(expr->get_node());
     NodeMap node_map;
     const NodeVector& new_nodes = ngraph::clone_nodes(original_nodes,  node_map);
-    for (auto& expr : result.get_ops())
-        expr.m_source_node = node_map[expr.get_node().get()];
+    auto& new_ops = result.get_ops();
+    for (const auto& expr : m_lowered_ops) {
+        LoweredExpr new_expr = *expr;
+        new_expr.m_source_node = node_map[expr->get_node().get()];
+        new_ops.emplace_back(std::make_shared<LoweredExpr>(new_expr));
+    }
     return result;
 }
 
 void LoweredExprIR::init_emitters(const std::shared_ptr<TargetMachine>& target) {
     for (auto& expr : m_lowered_ops) {
-        if (!expr.get_emitter())
-            expr.init_emitter(target);
+        if (!expr->get_emitter())
+            expr->init_emitter(target);
     }
 }
 

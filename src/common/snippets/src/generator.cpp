@@ -24,19 +24,46 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
     if (!target->is_supported())
         throw ngraph_error("unsupported architecture for code generation");
 
-    auto linear_ir = LoweredExprIR(m->get_ordered_ops(), config);
-//    pass::assignRegisters(linear_ir);
-    for (auto expr : linear_ir.get_ops()) {
-        auto rinfo = expr.get_reg_info();
-        std::cerr << expr.get_node()->get_friendly_name() << " : ";
+    auto linear_ir = LoweredExprIR(m, config);
+    for (const auto& expr : linear_ir.get_ops()) {
+        std::cerr << expr->get_node()->get_friendly_name() << " ";
+//        if (auto io = std::dynamic_cast<IOLoweredExpr>(exp))
+        std::cerr << "\n";
+    }
+    std::cerr << "\n\n======================================\n";
+
+
+    pass::assignRegisters(linear_ir);
+    auto print_rinfo = [](RegInfo rinfo) {
         for (auto i : rinfo.first)
             std::cerr << i << " ";
         std::cerr << " => ";
         for (auto i : rinfo.second)
             std::cerr << i << " ";
         std::cerr << "\n";
+    };
+    for (auto expr : linear_ir.get_ops()) {
+        auto rinfo = expr->get_reg_info();
+        auto rinfo_expected = LoweredExpr::getRegisters(expr->get_node());
+        expr->set_reg_info(rinfo_expected);
+        if (rinfo != rinfo_expected) {
+            expr->set_reg_info(rinfo_expected);
+            std::cerr << expr->get_node()->get_friendly_name() << " :\n";
+            std::cerr << "      Exp: ";
+            print_rinfo(rinfo_expected);
+            std::cerr << "      Got: ";
+            print_rinfo(rinfo);
+        }
     }
     pass::insertTailLoop(linear_ir);
+
+    std::cerr << "\n\n======================================\n";
+    for (const auto& expr : linear_ir.get_ops()) {
+        std::cerr << expr->get_node()->get_friendly_name() << " ";
+//        if (auto io = std::dynamic_cast<IOLoweredExpr>(exp))
+        std::cerr << "\n";
+    }
+
     linear_ir.init_emitters(target);
 
 //    for (const auto& expr : lowered_ir.get_ops() )
@@ -55,7 +82,7 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
 
     OV_ITT_TASK_NEXT(GENERATE, "::EmitData")
     for (const auto& l : linear_ir.get_ops()) {
-        l.get_emitter()->emit_data();
+        l->get_emitter()->emit_data();
     }
     OV_ITT_TASK_NEXT(GENERATE, "::GetSnippet")
 
