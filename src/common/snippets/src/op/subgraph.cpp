@@ -622,7 +622,6 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
     convert_to_snippet_dialect();
     opt.run_passes(body_ptr());
-    snippets::pass::AssignRegisters().run_on_model(body_ptr());
 
     // After all passes, when all optimizations are completed and all MemoryAccess ops are inserted,
     // we can calculate common buffer scratchpad size and propagate offset from Buffer to the corresponding MemoryAccess ops
@@ -631,7 +630,7 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
     snippets::pass::AssignRegisters().run_on_model(body_ptr());
 
-    const auto ops = m_bodies[0]->get_ops();
+    const auto ops = body_ptr()->get_ops();
     // actual code emission
     LoweringConfig lowering_config;
     lowering_config.m_save_lowered_code = config.m_has_domain_sensitive_ops;
@@ -640,17 +639,6 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
         return ov::is_type<ngraph::snippets::op::Buffer>(op);
     });
     ngraph::snippets::code ptr = m_generator->generate(body_ptr(), lowering_config, compile_params);
-
-    // check that body doesn't have constants for scheduling
-    std::vector<std::shared_ptr<opset1::Constant>> constants;
-    for (auto op : m_bodies[0]->get_ordered_ops()) {
-        if (auto constant = ov::as_type_ptr<opset1::Constant>(op)) {
-            if (ngraph::shape_size(constant->get_shape()) != 1 && constant->get_shape() != Shape()) {
-                constants.push_back(constant);
-            }
-        }
-    }
-    NGRAPH_CHECK(!constants.size(), "External constants detected. Snippet is illigal for scheduling");
 
     return {master_shape, false /*canBeLinearized*/, ptr};
 }

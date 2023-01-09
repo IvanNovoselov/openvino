@@ -52,7 +52,7 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
         return physical_regs;
     };
 
-    for (auto& lowered_code : allocated_emitters.get_ops()) {
+    for (auto lowered_code : allocated_emitters.get_ops()) {
         const auto& emitter = lowered_code->get_emitter();
         std::vector<size_t> in_abstract_regs, out_abstract_regs;
         std::tie(in_abstract_regs, out_abstract_regs) = lowered_code->get_reg_info();
@@ -170,15 +170,15 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     mapping_info gpr_map_pool({}, gp_regs_pool);
     mapping_info vec_map_pool({}, vec_regs_pool);
     ngraph::snippets::LoweredExprIR data_io_emitters;
-    const auto& lowered_ops = body.get_ops();
+    auto lowered_ops = body.get_ops();
     std::copy_if(lowered_ops.begin(), lowered_ops.end(), std::back_inserter(data_io_emitters.get_ops()),
                            [](const std::shared_ptr<LoweredExpr>& le){
                                    const auto& emitter = le->get_emitter();
-                                   const auto emitter_type = std::dynamic_pointer_cast<const jit_emitter>(emitter)->get_in_out_type();
+                                   const auto emitter_type = std::dynamic_pointer_cast<jit_emitter>(emitter)->get_in_out_type();
                                    // todo: how this will be handled if Brgemm in & out are op::Buffer
                                    // Brgemm is a special case since it incorporates input and output (we use onednn kernel)
                                    // Just like Load & Store it requires offsets calculation
-                                   const auto is_brgemm = std::dynamic_pointer_cast<const BrgemmEmitter>(emitter) != nullptr;
+                                   const auto is_brgemm = std::dynamic_pointer_cast<BrgemmEmitter>(emitter) != nullptr;
                                    return emitter_type == gpr_to_vec || emitter_type == vec_to_gpr || is_brgemm;
                            });
     // Note that we can't use reg_indexes_idx or reg_const_params_idx to store data pointers because these two
