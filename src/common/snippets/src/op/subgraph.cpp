@@ -40,14 +40,10 @@
 #include <array>
 
 using namespace std;
-<<<<<<< HEAD
-using namespace ngraph;
 using namespace ov::op::util;
-=======
 
 namespace ngraph {
 namespace snippets {
->>>>>>> insertTailLoop back in generator
 
 void snippets::op::Subgraph::set_generator(std::shared_ptr<ngraph::snippets::Generator> generator) {
     m_generator = generator;
@@ -637,18 +633,13 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
 
     const auto ops = m_bodies[0]->get_ops();
     // actual code emission
-    LoweredExprIR::LoweringConfig lowering_config;
+    LoweringConfig lowering_config;
+    lowering_config.m_save_lowered_code = config.m_has_domain_sensitive_ops;
     lowering_config.m_need_fill_tail_register = config.m_has_domain_sensitive_ops;
     lowering_config.m_optimize_single_evaluation = std::none_of(ops.begin(), ops.end(), [](const std::shared_ptr<ov::Node>& op) {
         return ov::is_type<ngraph::snippets::op::Buffer>(op);
     });
-    auto linear_ir = LoweredExprIR(m_bodies[0]->get_ordered_ops(), lowering_config);
-    pass::insertTailLoop(linear_ir);
-
-
-    ngraph::snippets::Generator::GeneratorConfig generatorConfig;
-    generatorConfig.m_save_lowered_code = config.m_has_domain_sensitive_ops;
-    ngraph::snippets::code ptr = m_generator->generate(linear_ir, m_bodies[0], generatorConfig, compile_params);
+    ngraph::snippets::code ptr = m_generator->generate(body_ptr(), lowering_config, compile_params);
 
     // check that body doesn't have constants for scheduling
     std::vector<std::shared_ptr<opset1::Constant>> constants;

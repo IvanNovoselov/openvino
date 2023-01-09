@@ -212,15 +212,11 @@ bool assignRegisters(LoweredExprIR& linear_ir) {
     std::map<tensor, Reg> manually_assigned_gprs, manually_assigned_vecs;
     const auto IS_MANUALLY_ALLOCATED_REG = SIZE_MAX;
     auto accumulator_reg = 0lu;
-    Reg param_index = 0;
-    Reg result_index = 0;
     for (auto& expr : expressions) {
         auto op = expr->get_node();
-        if (const auto& param = ov::as_type_ptr<ov::op::v0::Parameter>(op)) {
-            manually_assigned_gprs[op->output(0).get_tensor_ptr()] = param_index++;
-        } else if (const auto& result = ov::as_type_ptr<opset1::Result>(op)) {
-            // here we use the fact that Result input & output tensors are identical by construction
-            manually_assigned_gprs[op->output(0).get_tensor_ptr()] = num_parameters + result_index++;
+        if (const auto io_expr = std::dynamic_pointer_cast<IOLoweredExpr>(expr)) {
+            const auto results_offset =  io_expr->get_type() == IOLoweredExpr::io_type::OUTPUT ? num_parameters : 0;
+            manually_assigned_gprs[op->output(0).get_tensor_ptr()] = results_offset + io_expr->get_index();
         } else if (const auto& buffer = ov::as_type_ptr<op::Buffer>(op)) {
             // All buffers have one common data pointer
             manually_assigned_gprs[op->input(0).get_tensor_ptr()] =

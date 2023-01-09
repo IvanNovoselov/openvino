@@ -30,7 +30,7 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
 //        if (auto io = std::dynamic_cast<IOLoweredExpr>(exp))
         std::cerr << "\n";
     }
-    std::cerr << "\n\n======================================\n";
+    std::cerr << "\n\n================ " << __PRETTY_FUNCTION__ << "  :  " <<  __LINE__ << "\n";
 
 
     pass::assignRegisters(linear_ir);
@@ -42,27 +42,32 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
             std::cerr << i << " ";
         std::cerr << "\n";
     };
-    for (auto expr : linear_ir.get_ops()) {
-        auto rinfo = expr->get_reg_info();
-        auto rinfo_expected = LoweredExpr::getRegisters(expr->get_node());
-        expr->set_reg_info(rinfo_expected);
-        if (rinfo != rinfo_expected) {
-            expr->set_reg_info(rinfo_expected);
-            std::cerr << expr->get_node()->get_friendly_name() << " :\n";
-            std::cerr << "      Exp: ";
-            print_rinfo(rinfo_expected);
-            std::cerr << "      Got: ";
-            print_rinfo(rinfo);
-        }
-    }
+//    bool terminate{false};
+//    for (auto expr : linear_ir.get_ops()) {
+//        auto rinfo = expr->get_reg_info();
+//        auto rinfo_expected = LoweredExpr::getRegisters(expr->get_node());
+//        expr->set_reg_info(rinfo_expected);
+//        if (rinfo != rinfo_expected) {
+//            expr->set_reg_info(rinfo_expected);
+//            std::cerr << expr->get_node()->get_friendly_name() << " :\n";
+//            std::cerr << "      Exp: ";
+//            print_rinfo(rinfo_expected);
+//            std::cerr << "      Got: ";
+//            print_rinfo(rinfo);
+//            terminate = true;
+//        }
+//    }
+//    if (terminate)
+//        throw ngraph_error("register assignment error");
     pass::insertTailLoop(linear_ir);
 
-    std::cerr << "\n\n======================================\n";
+    std::cerr << "\n\n================ " << __PRETTY_FUNCTION__ << "  :  " <<  __LINE__ << "\n";
     for (const auto& expr : linear_ir.get_ops()) {
         std::cerr << expr->get_node()->get_friendly_name() << " ";
 //        if (auto io = std::dynamic_cast<IOLoweredExpr>(exp))
         std::cerr << "\n";
     }
+    std::cerr << "\n\n---------------------------------------\n";
 
     linear_ir.init_emitters(target);
 

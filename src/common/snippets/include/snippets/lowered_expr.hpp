@@ -43,6 +43,7 @@ public:
      */
     LoweredExpr(const std::shared_ptr<Node>& n);
     LoweredExpr() = default;
+    virtual ~LoweredExpr() = default;
     // todo: shall we return pointers to const?
     std::shared_ptr<Node> get_node() const {return  m_source_node;}
     std::shared_ptr<Emitter> get_emitter() const;
