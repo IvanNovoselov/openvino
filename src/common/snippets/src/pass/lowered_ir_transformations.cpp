@@ -45,7 +45,11 @@ auto tail_transformations(LoweredExprIR::container& tail, const size_t tail_size
              ov::is_type<ov::op::v1::Add>(op))) {
             for (auto i = 0; i < op->inputs().size(); ++i) {
                 if (auto fill = insertFill(op->input(i))) {
-                    tail.insert(expr_it, std::make_shared<LoweredExpr>(fill));
+                    auto fill_expr = std::make_shared<LoweredExpr>(fill);
+                    auto reg_out = (*expr_it)->get_reg_info().first;
+                    auto reg_in = (*std::prev(expr_it))->get_reg_info().second;
+                    fill_expr->set_reg_info({reg_in, reg_out});
+                    tail.insert(expr_it, fill_expr);
                     //updated_tile.push_back(fill);
                 }
             }
@@ -114,7 +118,7 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                 if (need_tail)
                     vector_loop_end->set_finalization_offsets(std::vector<int64_t>(tail_finalization_offsets.size(), 0));
 
-                if (lowering_config.m_optimize_single_evaluation && false) {
+                if (lowering_config.m_optimize_single_evaluation) {
                     // force ptr increments if there is tail
                     optimize_single_evaluation(vector_loop_end, need_tail);
                 }
@@ -152,7 +156,7 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                 tail_loop_end->set_work_amount(tail_size);
                 tail_loop_end->has_outer_loop = vector_loop_end->has_outer_loop;
 
-                if (lowering_config.m_optimize_single_evaluation && false) {
+                if (lowering_config.m_optimize_single_evaluation) {
                     // tail loop is always executed once
                     optimize_single_evaluation(tail_loop_end);
                 }
@@ -168,7 +172,6 @@ bool assignRegisters(LoweredExprIR& linear_ir) {
     using Reg = size_t;
     using tensor = std::shared_ptr<descriptor::Tensor>;
     auto& expressions = linear_ir.get_ops();
-//    auto ops = linear_ir.get_ops();
     // Note that currently there are 3 types of ops:
     //  * gpr->gpr: (Parameter, Result, LoopBegin, LoopEnd) will also be Buffer?
     //  * gpr->vec: or vec->gpr Load/LoadConvert, Store/StoreConvert, BroadcastLoad etc.

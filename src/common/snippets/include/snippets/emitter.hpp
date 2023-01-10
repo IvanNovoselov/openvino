@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include <openvino/core/node.hpp>
 
 namespace ngraph {
 namespace snippets {

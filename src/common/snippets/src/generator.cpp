@@ -174,31 +174,24 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
             std::cerr << i << " ";
         std::cerr << "\n";
     };
-
+    /*
     auto nodes = old_lowering(m, target, config);
     auto old_linear_ir = LoweredExprIR();
     for (const auto& n : nodes) {
         auto expr = std::make_shared<LoweredExpr>(n);
         auto rinfo = LoweredExpr::getRegisters(n);
-        std::cerr << expr->get_node()->get_friendly_name() << " :\n";
-        print_rinfo(rinfo);
         expr->set_reg_info(rinfo);
         old_linear_ir.get_ops().emplace_back(expr);
     }
+    */
 
     auto linear_ir = LoweredExprIR(m, config);
-    linear_ir = std::move(old_linear_ir);
-    for (const auto& expr : linear_ir.get_ops()) {
-        std::cerr << expr->get_node()->get_friendly_name() << " ";
-//        if (auto io = std::dynamic_cast<IOLoweredExpr>(exp))
-        std::cerr << "\n";
-    }
-    std::cerr << "\n\n================ " << __PRETTY_FUNCTION__ << "  :  " <<  __LINE__ << "\n";
+//    linear_ir = std::move(old_linear_ir);
 
 
-//    pass::assignRegisters(linear_ir);
+    pass::assignRegisters(linear_ir);
     bool terminate{false};
-    for (auto expr : linear_ir.get_ops()) {
+    for (const auto&  expr : linear_ir.get_ops()) {
         auto rinfo = expr->get_reg_info();
         auto rinfo_expected = LoweredExpr::getRegisters(expr->get_node());
         expr->set_reg_info(rinfo_expected);
@@ -212,21 +205,12 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
             terminate = true;
         }
     }
-//    if (terminate)
-//        throw ngraph_error("register assignment error");
-//    pass::insertTailLoop(linear_ir);
+    if (terminate)
+        throw ngraph_error("register assignment error");
+    pass::insertTailLoop(linear_ir);
 
-    std::cerr << "\n\n================ " << __PRETTY_FUNCTION__ << "  :  " <<  __LINE__ << "\n";
-    for (const auto& expr : linear_ir.get_ops()) {
-        std::cerr << expr->get_node()->get_friendly_name() << " ";
-//        if (auto io = std::dynamic_cast<IOLoweredExpr>(exp))
-        std::cerr << "\n";
-    }
-    std::cerr << "\n\n---------------------------------------\n";
     linear_ir.init_emitters(target);
 
-//    for (const auto& expr : lowered_ir.get_ops() )
-//        std::cerr << expr.get_node()->get_friendly_name() << "\n";
     OV_ITT_TASK_NEXT(GENERATE, "::EmitCode")
     //todo: Kernel need info on i/o data access pattern and data shapes to calculate data offsets
     // pass Params and Results

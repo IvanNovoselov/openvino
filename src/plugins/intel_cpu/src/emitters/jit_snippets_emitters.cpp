@@ -29,8 +29,8 @@ jit_container_emitter::jit_container_emitter(dnnl::impl::cpu::x64::jit_generator
 }
 
 void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  mapping_info& vec_map_pool,
-                            ngraph::snippets::LoweredExprIR& allocated_emitters) const {
-    if (allocated_emitters.empty())
+                            ngraph::snippets::LoweredExprIR::container& expressions) const {
+    if (expressions.empty())
         IE_THROW() << "Cannot map registers when there is no allocated_emitters provided";
     auto map_regs = [](const std::vector<size_t>& abstract_regs, mapping_info& mapping) {
         auto& abstract_to_physical = mapping.first;
@@ -52,7 +52,7 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
         return physical_regs;
     };
 
-    for (auto lowered_code : allocated_emitters.get_ops()) {
+    for (const auto& lowered_code : expressions) {
         const auto& emitter = lowered_code->get_emitter();
         std::vector<size_t> in_abstract_regs, out_abstract_regs;
         std::tie(in_abstract_regs, out_abstract_regs) = lowered_code->get_reg_info();
@@ -92,7 +92,7 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
         }
         lowered_code->set_reg_info({in_physical_regs, out_physical_regs});
         if (auto container = std::dynamic_pointer_cast<jit_container_emitter>(lowered_code->get_emitter()))
-            container->map_abstract_registers(gpr_map_pool,  vec_map_pool, allocated_emitters);
+            container->map_abstract_registers(gpr_map_pool,  vec_map_pool, expressions);
     }
 }
 
@@ -169,28 +169,30 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
 
     mapping_info gpr_map_pool({}, gp_regs_pool);
     mapping_info vec_map_pool({}, vec_regs_pool);
-    ngraph::snippets::LoweredExprIR data_io_emitters;
-    auto lowered_ops = body.get_ops();
-    std::copy_if(lowered_ops.begin(), lowered_ops.end(), std::back_inserter(data_io_emitters.get_ops()),
-                           [](const std::shared_ptr<LoweredExpr>& le){
-                                   const auto& emitter = le->get_emitter();
-                                   const auto emitter_type = std::dynamic_pointer_cast<jit_emitter>(emitter)->get_in_out_type();
-                                   // todo: how this will be handled if Brgemm in & out are op::Buffer
-                                   // Brgemm is a special case since it incorporates input and output (we use onednn kernel)
-                                   // Just like Load & Store it requires offsets calculation
-                                   const auto is_brgemm = std::dynamic_pointer_cast<BrgemmEmitter>(emitter) != nullptr;
-                                   return emitter_type == gpr_to_vec || emitter_type == vec_to_gpr || is_brgemm;
-                           });
+    ngraph::snippets::LoweredExprIR::container io_exprs;
+    ngraph::snippets::LoweredExprIR::container general_exprs;
+    for (const auto& expr : body.get_ops()) {
+        const auto& emitter = expr->get_emitter();
+        const auto emitter_type = std::dynamic_pointer_cast<jit_emitter>(emitter)->get_in_out_type();
+        // todo: how this will be handled if Brgemm in & out are op::Buffer
+        // Brgemm is a special case since it incorporates input and output (we use onednn kernel)
+        // Just like Load & Store it requires offsets calculation
+        const auto is_brgemm = std::dynamic_pointer_cast<BrgemmEmitter>(emitter) != nullptr;
+        if (emitter_type == gpr_to_vec || emitter_type == vec_to_gpr || is_brgemm)
+            io_exprs.emplace_back(expr);
+        else
+            general_exprs.emplace_back(expr);
+    }
     // Note that we can't use reg_indexes_idx or reg_const_params_idx to store data pointers because these two
     // regs are used to calculate offsets for the data pointers
-    map_abstract_registers(gpr_map_pool, vec_map_pool, data_io_emitters);
+    map_abstract_registers(gpr_map_pool, vec_map_pool, io_exprs);
     for (const auto& abstract_to_physical : gpr_map_pool.first)
         data_ptr_regs_idx.push_back(abstract_to_physical.second);
     // However we can use reg_indexes_idx and reg_const_params_idx for other operations since we won't need them
     // after offsets calculation
     gpr_map_pool.second.push_back(reg_indexes_idx);
     gpr_map_pool.second.push_back(reg_const_params_idx);
-    map_abstract_registers(gpr_map_pool, vec_map_pool, body);
+    map_abstract_registers(gpr_map_pool, vec_map_pool, general_exprs);
 }
 
 void KernelEmitter::emit_code(const std::vector<size_t> &in,

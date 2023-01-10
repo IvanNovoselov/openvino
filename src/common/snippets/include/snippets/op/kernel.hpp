@@ -20,7 +20,6 @@ class Kernel : public ngraph::op::Op {
 public:
     OPENVINO_OP("Kernel", "SnippetsOpset");
 
-//    Kernel(std::vector<AllocatedEmitter> region, std::shared_ptr<const ov::Model> m);
     Kernel(LoweredExprIR region, std::shared_ptr<const ov::Model> m);
     Kernel() = default;
 

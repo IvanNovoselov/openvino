@@ -41,7 +41,7 @@ public:
     /**
      * @brief Default constructor
      */
-    LoweredExpr(const std::shared_ptr<Node>& n);
+    explicit LoweredExpr(const std::shared_ptr<Node>& n);
     LoweredExpr() = default;
     virtual ~LoweredExpr() = default;
     // todo: shall we return pointers to const?
