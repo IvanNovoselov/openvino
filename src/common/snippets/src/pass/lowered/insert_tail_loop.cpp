@@ -1,28 +1,17 @@
-// Copyright (C) 2018-2023 Intel Corporation
+// Copyright (C) 2022 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "snippets/generator.hpp"
-#include "snippets/lowered_expr.hpp"
-#include "snippets/pass/assign_registers.hpp"
-#include "snippets/pass/vector_to_scalar.hpp"
-#include "snippets/pass/insert_load_store.hpp"
-#include "snippets/op/loop.hpp"
-#include "snippets/op/subgraph.hpp"
-#include "snippets/op/kernel.hpp"
-#include <snippets/itt.hpp>
-#include "snippets/pass/lowered/assign_registers.hpp"
 #include "snippets/pass/lowered/insert_tail_loop.hpp"
-#include "snippets/lowered_expr.hpp"
-#include <ngraph/pass/manager.hpp>
-#include <openvino/core/type.hpp>
+#include "snippets/snippets_isa.hpp"
+#include "snippets/itt.hpp"
 
 namespace ngraph {
 namespace snippets {
+namespace pass {
 
 namespace {
-auto tail_transformations(NodeVector& tail, const size_t tail_size, const LoweringConfig& config) -> void {
-    NodeVector updated_tile;
+auto tail_transformations(LoweredExprIR::container& tail, const size_t tail_size, const LoweringConfig& config) -> void {
     auto insertFill = [tail_size](const ov::Input<ov::Node>& input) -> std::shared_ptr<ov::Node> {
         auto copyRegInfo = [](const ov::descriptor::Tensor& from, ov::descriptor::Tensor& to) -> void {
             auto rt = from.get_rt_info();
@@ -44,17 +33,23 @@ auto tail_transformations(NodeVector& tail, const size_t tail_size, const Loweri
         return fill;
     };
 
-    for (auto& op : tail) {
+    for (auto expr_it = tail.begin(); expr_it != tail.end(); expr_it++) {
         // We should fill vector regs by float_min and zero to have
         // correct math calculations for ReduceMax and ReduceSum in scalar case.
         // Note: We find Maximum and Add ops because HorizonMax and HorizonSum are outside Loop,
         //       so they are missed in <tail>
+        auto op = (*expr_it)->get_node();
         if (config.m_need_fill_tail_register &&
             (ov::is_type<ov::op::v1::Maximum>(op) ||
              ov::is_type<ov::op::v1::Add>(op))) {
             for (auto i = 0; i < op->inputs().size(); ++i) {
                 if (auto fill = insertFill(op->input(i))) {
-                    updated_tile.push_back(fill);
+                    auto fill_expr = std::make_shared<LoweredExpr>(fill);
+                    auto reg_out = (*expr_it)->get_reg_info().first;
+                    auto reg_in = (*std::prev(expr_it))->get_reg_info().second;
+                    fill_expr->set_reg_info({reg_in, reg_out});
+                    tail.insert(expr_it, fill_expr);
+                    //updated_tile.push_back(fill);
                 }
             }
         } else if (const auto memory_access = std::dynamic_pointer_cast<ngraph::snippets::op::MemoryAccess>(op)) {
@@ -62,17 +57,13 @@ auto tail_transformations(NodeVector& tail, const size_t tail_size, const Loweri
                 memory_access->set_count(tail_size);
             }
         }
-        updated_tile.push_back(op);
     }
-
-    tail = std::move(updated_tile);
 }
+} //namespace
 
-NodeVector old_lowering(std::shared_ptr<ov::Model>& m, const std::shared_ptr<TargetMachine>& target, const LoweringConfig& config) {
-    NodeVector lowered;
-    auto lower_ops = [&lowered](const NodeVector& ops){
-        std::copy(ops.begin(), ops.end(), std::back_inserter(lowered));
-    };
+bool insertTailLoop(LoweredExprIR& linear_ir) {
+    OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::insertTailLoop")
+    const auto& lowering_config = linear_ir.get_config();
     // *1* solo vector/tail loop + empty outer loop
     //      => skip increments (both counter & ptr) : set evaluate_once flag
     // *2* solo vector/tail loop + non-empty outer loop
@@ -96,20 +87,21 @@ NodeVector old_lowering(std::shared_ptr<ov::Model>& m, const std::shared_ptr<Tar
             return false;
         }
     };
-    const auto& ops = m->get_ordered_ops();
-    for (auto op = ops.begin(); op < ops.end(); op++) {
-        const auto& loop_begin = ov::as_type_ptr<ngraph::snippets::op::LoopBegin>(*op);
-
+    auto& expressions = linear_ir.get_ops();
+    for (auto expr_it = expressions.begin(); expr_it != expressions.end(); expr_it++) {
+        const auto& loop_begin = ov::as_type_ptr<ngraph::snippets::op::LoopBegin>((*expr_it)->get_node());
+        auto loop_begin_expr_it = expr_it;
         // ignore outer loops and possible manual scalar loops
         if (loop_begin && loop_begin->get_increment() != 1) {
-            OV_ITT_TASK_NEXT(GENERATE, "::VectorLoop")
-            NodeVector vector_loop, tail_loop;
+            LoweredExprIR vector_loop, tail_loop;
             std::shared_ptr<op::LoopEnd> vector_loop_end, tail_loop_end;
             vector_loop_end = loop_begin->get_loop_end();
             tail_loop_end = nullptr;
-            while (*op != vector_loop_end)
-                vector_loop.push_back(*op++);
-            vector_loop.push_back(*op);
+            auto& loop_exprs = vector_loop.get_ops();
+            while ((*expr_it)->get_node() != vector_loop_end)
+                loop_exprs.push_back(*expr_it++);
+            // Note that exp_it points to the element AFTER loop_end
+            loop_exprs.push_back(*expr_it++);
             const auto work_amount = vector_loop_end->get_work_amount();
             const auto increment = vector_loop_end->get_increment();
             const auto tail_size = work_amount % increment;
@@ -125,22 +117,37 @@ NodeVector old_lowering(std::shared_ptr<ov::Model>& m, const std::shared_ptr<Tar
                 if (need_tail)
                     vector_loop_end->set_finalization_offsets(std::vector<int64_t>(tail_finalization_offsets.size(), 0));
 
-                if (config.m_optimize_single_evaluation) {
+                if (lowering_config.m_optimize_single_evaluation) {
                     // force ptr increments if there is tail
                     optimize_single_evaluation(vector_loop_end, need_tail);
                 }
-
-                lower_ops(vector_loop);
+            } else {
+                // todo: we might want to store shared_ptr<LoweredExpr> in linear IR to allow for direct insertion/deletion
+                //  Original LoweredIR => detect and copy vector tile (add/remove nodes)
+                //  If LoweredIR stores pointers to LoweredExpr, then the modifications will be visible in Original LoweredIR
+                // scalar tile can have different number of ops, so ve have to remove vector tile first,
+                // and then insert scalar one
+                expressions.erase(loop_begin_expr_it, expr_it);
             }
-            OV_ITT_TASK_NEXT(GENERATE, "::TailLoop")
+
             // tail is required => transform the body into a tail representation
             // tail loop is fake loop because for tail we should calculate only
             // finalization offsets which are supported by LoopEnd.
             if (need_tail) {
-                NodeMap vector_to_tail_node_map;
-                tail_loop = ngraph::clone_nodes(vector_loop,  vector_to_tail_node_map);
-                tail_transformations(tail_loop, tail_size, config);
-                tail_loop_end = ov::as_type_ptr<op::LoopEnd>(*tail_loop.rbegin());
+                if (need_vector_loop) {
+                    NodeMap vector_to_tail_node_map;
+                    // todo: we have to clone nodes here since tail transformations can change the same nodes
+                    //  (e.g. reset Load&Store count). this is a bit costy.
+                    //  an alternative is no pass target machine and create emitters for vector loop here
+                    //  (then we don't care if the nodes are updated)
+                    tail_loop = vector_loop.deep_copy();
+
+                } else {
+                    tail_loop = std::move(vector_loop);
+                }
+
+                tail_transformations(tail_loop.get_ops(), tail_size, lowering_config);
+                tail_loop_end = ov::as_type_ptr<op::LoopEnd>(tail_loop.get_ops().back()->get_node());
                 tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
                 tail_loop_end->set_increment(tail_size);
                 // ptr increments were set to the old increment, need to update them in accordance with the new one
@@ -148,87 +155,18 @@ NodeVector old_lowering(std::shared_ptr<ov::Model>& m, const std::shared_ptr<Tar
                 tail_loop_end->set_work_amount(tail_size);
                 tail_loop_end->has_outer_loop = vector_loop_end->has_outer_loop;
 
-                if (config.m_optimize_single_evaluation) {
+                if (lowering_config.m_optimize_single_evaluation) {
                     // tail loop is always executed once
                     optimize_single_evaluation(tail_loop_end);
                 }
-
-                lower_ops(tail_loop);
+                linear_ir.get_ops().insert(expr_it, tail_loop.get_ops().begin(), tail_loop.get_ops().end());
             }
-        } else {
-            lower_ops({*op});
         }
     }
-    return lowered;
-}
-} // namespace
-
-code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& config, const void* compile_params) {
-    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator::generate")
-    if (!target->is_supported())
-        throw ngraph_error("unsupported architecture for code generation");
-    /*
-    auto nodes = old_lowering(m, target, config);
-    auto old_linear_ir = LoweredExprIR();
-    for (const auto& n : nodes) {
-        auto expr = std::make_shared<LoweredExpr>(n);
-        auto rinfo = LoweredExpr::getRegisters(n);
-        expr->set_reg_info(rinfo);
-        old_linear_ir.get_ops().emplace_back(expr);
-    }
-    */
-
-    auto linear_ir = LoweredExprIR(m, config);
-//    linear_ir = std::move(old_linear_ir);
-
-
-    pass::assignRegisters(linear_ir);
-    std::string failed_ops("");
-    for (const auto&  expr : linear_ir.get_ops()) {
-        auto rinfo = expr->get_reg_info();
-        auto rinfo_expected = LoweredExpr::getRegisters(expr->get_node());
-        expr->set_reg_info(rinfo_expected);
-        if (rinfo != rinfo_expected) {
-            expr->set_reg_info(rinfo_expected);
-            failed_ops += expr->get_node()->get_friendly_name() + ", ";
-        }
-    }
-    if (!failed_ops.empty()) {
-        throw ngraph_error("register assignment error: " + failed_ops);
-    }
-    pass::insertTailLoop(linear_ir);
-
-    linear_ir.init_emitters(target);
-
-    OV_ITT_TASK_NEXT(GENERATE, "::EmitCode")
-    //todo: Kernel need info on i/o data access pattern and data shapes to calculate data offsets
-    // pass Params and Results
-    // todo: it's probably better to move AllocaledEmitter creation inside Kernel constructor
-    //  So Kernel accepts only model ptr and target, and creates AllocatedEmitter inside
-    //emission
-    auto loops2DKernel = std::make_shared<op::Kernel>(linear_ir, m);
-    loops2DKernel->compile_params = compile_params;
-    std::shared_ptr<Emitter> kernel = target->get(op::Kernel::get_type_info_static())(loops2DKernel);
-
-    kernel->emit_code({}, {});
-
-    OV_ITT_TASK_NEXT(GENERATE, "::EmitData")
-    for (auto& l : linear_ir.get_ops()) {
-        l->get_emitter()->emit_data();
-    }
-    OV_ITT_TASK_NEXT(GENERATE, "::GetSnippet")
-
-    // todo: we save lowered to access compiled brgemm kernels on execution time (normally lowered is destructed by then)
-    //  remove this when kernel caching is implemented. Don't forget to make generate const method.
-    if (config.m_save_lowered_code)
-        lowered_saved = linear_ir;
-
-    return target->get_snippet();
+    return true;
 }
 
-std::shared_ptr<const TargetMachine> Generator::get_target_machine() const {
-    return target;
-}
+} // namespace pass
+} // namespace snippets
+} // namespace ngraph
 
-}// namespace snippets
-}// namespace ngraph

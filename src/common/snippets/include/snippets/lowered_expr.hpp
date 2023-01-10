@@ -89,6 +89,7 @@ public:
     LoweringConfig get_config() {return m_config; }
 
     bool empty() const noexcept {return m_lowered_ops.empty(); }
+    void debug_print() const;
 
 //
 //    loweredContainer::iterator begin() noexcept {

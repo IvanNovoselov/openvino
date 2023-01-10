@@ -95,6 +95,22 @@ LoweredExprIR LoweredExprIR::deep_copy() const {
     return result;
 }
 
+void LoweredExprIR::debug_print() const {
+    auto print_rinfo = [](RegInfo rinfo) {
+        std::cerr << "   ";
+        for (auto i : rinfo.first)
+            std::cerr << i << " ";
+        std::cerr << " => ";
+        for (auto i : rinfo.second)
+            std::cerr << i << " ";
+        std::cerr << "\n";
+    };
+    for (const auto& expr : m_lowered_ops) {
+        std::cerr << expr->get_node()->get_friendly_name() << ": \n";
+        print_rinfo(expr->get_reg_info());
+    }
+}
+
 void LoweredExprIR::init_emitters(const std::shared_ptr<TargetMachine>& target) {
     for (auto& expr : m_lowered_ops) {
         if (!expr->get_emitter())
