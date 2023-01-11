@@ -27,6 +27,8 @@ public:
     bool m_optimize_single_evaluation = true;
     // True if we should check runtime info for nodes to call specific needed transformations
     bool m_need_fill_tail_register = false;
+    ov::PartialShape m_master_shape{};
+    size_t m_loop_depth = 1;
 };
 
 /**
@@ -87,6 +89,7 @@ public:
     const container& get_ops() const {return m_lowered_ops; }
     void init_emitters(const std::shared_ptr<TargetMachine>& target);
     LoweringConfig get_config() {return m_config; }
+    std::vector<PartialShape> get_forced_shapes() const {return m_forcedIOShapes;}
 
     bool empty() const noexcept {return m_lowered_ops.empty(); }
     void debug_print() const;
@@ -127,6 +130,7 @@ public:
 private:
     container m_lowered_ops{};
     LoweringConfig m_config{};
+    std::vector<PartialShape> m_forcedIOShapes{};
 };
 
 using AllocatedEmitter = std::pair<std::shared_ptr<Emitter>, RegInfo>;

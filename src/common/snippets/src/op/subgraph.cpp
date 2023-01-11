@@ -585,12 +585,12 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
         }
         // Note that InsertLoops requires validate_and_infer_types afterwards, so add it manually if
         // automatic validation will be disabled in the pass manager
-        manager.register_pass<snippets::pass::InsertLoops>(master_shape, tileRank,
-            m_generator->get_target_machine()->get_lanes(), !config.m_explicit_loop_insertion);
-        if (config.m_has_domain_sensitive_ops) {
-            manager.register_pass<snippets::pass::LoopFusion>();
-            manager.register_pass<snippets::pass::ResetBufferState>();
-        }
+//        manager.register_pass<snippets::pass::InsertLoops>(master_shape, tileRank,
+//            m_generator->get_target_machine()->get_lanes(), !config.m_explicit_loop_insertion);
+//        if (config.m_has_domain_sensitive_ops) {
+//            manager.register_pass<snippets::pass::LoopFusion>();
+//            manager.register_pass<snippets::pass::ResetBufferState>();
+//        }
     }
     manager.run_passes(body_ptr());
 }
@@ -638,6 +638,8 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
     lowering_config.m_optimize_single_evaluation = std::none_of(ops.begin(), ops.end(), [](const std::shared_ptr<ov::Node>& op) {
         return ov::is_type<ngraph::snippets::op::Buffer>(op);
     });
+    lowering_config.m_loop_depth = tileRank;
+    lowering_config.m_master_shape = master_shape;
     ngraph::snippets::code ptr = m_generator->generate(body_ptr(), lowering_config, compile_params);
 
     return {master_shape, false /*canBeLinearized*/, ptr};

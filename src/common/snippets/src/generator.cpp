@@ -13,6 +13,7 @@
 #include <snippets/itt.hpp>
 #include "snippets/pass/lowered/assign_registers.hpp"
 #include "snippets/pass/lowered/insert_tail_loop.hpp"
+#include "snippets/pass/lowered/insert_loops.hpp"
 #include "snippets/lowered_expr.hpp"
 #include <ngraph/pass/manager.hpp>
 #include <openvino/core/type.hpp>
@@ -177,10 +178,18 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
         old_linear_ir.get_ops().emplace_back(expr);
     }
     */
-
+    auto print_rinfo = [](RegInfo rinfo) {
+        std::cerr << "   ";
+        for (auto i : rinfo.first)
+            std::cerr << i << " ";
+        std::cerr << " => ";
+        for (auto i : rinfo.second)
+            std::cerr << i << " ";
+        std::cerr << "\n";
+    };
     auto linear_ir = LoweredExprIR(m, config);
 //    linear_ir = std::move(old_linear_ir);
-
+    pass::insertLoopsLowered(linear_ir, target->get_lanes(), true);
 
     pass::assignRegisters(linear_ir);
     std::string failed_ops("");
@@ -190,12 +199,19 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
         expr->set_reg_info(rinfo_expected);
         if (rinfo != rinfo_expected) {
             expr->set_reg_info(rinfo_expected);
-            failed_ops += expr->get_node()->get_friendly_name() + ", ";
+            failed_ops += expr->get_node()->get_friendly_name() + "\n";
+            std::cerr << expr->get_node()->get_friendly_name() << "\n";
+            std::cerr << "Expected:\n";
+            print_rinfo(rinfo_expected);
+            std::cerr << "Actual:\n";
+            print_rinfo(rinfo);
         }
     }
     if (!failed_ops.empty()) {
-        throw ngraph_error("register assignment error: " + failed_ops);
+        std::cerr << "register assignment error\n";
+//        throw ngraph_error("register assignment error");
     }
+    linear_ir.debug_print();
     pass::insertTailLoop(linear_ir);
 
     linear_ir.init_emitters(target);

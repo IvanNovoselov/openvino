@@ -69,13 +69,32 @@ LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, const Lowe
     : m_config{config} {
     for (const auto& n : model->get_ordered_ops()) {
         std::shared_ptr<LoweredExpr> expr;
-        if (const auto& par = as_type_ptr<opset1::Parameter>(n))
+        if (const auto& par = as_type_ptr<opset1::Parameter>(n)) {
             expr = std::make_shared<IOLoweredExpr>(n, model->get_parameter_index(par), IOLoweredExpr::io_type::INPUT);
-        else if (const auto& res = as_type_ptr<opset1::Result>(n))
+        } else if (const auto& res = as_type_ptr<opset1::Result>(n)) {
             expr = std::make_shared<IOLoweredExpr>(n, model->get_result_index(res), IOLoweredExpr::io_type::OUTPUT);
-        else
+        } else {
             expr = std::make_shared<LoweredExpr>(n);
+        }
         m_lowered_ops.emplace_back(expr);
+    }
+    ParameterVector commonParams = model->get_parameters();
+    // Note that topological sort parses node arguments in reversed order, but results are added  - in direct order
+    // So ve need to pass the reversed results to LoopEnd to keep the original traversal order in topological sorter
+    const auto& commonResults = model->get_results();
+    const auto& body_rt_info = model->get_rt_info();
+    const auto& plugin_shapes = body_rt_info.find("PluginShapesOverride");
+    if (plugin_shapes == body_rt_info.end()) {
+        throw ngraph_error("InsertLoops requires PluginShapesOverride rt_info field");
+    } else {
+        const auto& new_shapes = plugin_shapes->second.as<std::vector<std::vector<size_t>>>();
+        if (new_shapes.size() != commonResults.size() + commonParams.size())
+            throw ngraph_error("InsertLoops got invalid number of plugin-overriden shapes");
+        for (int i = 0; i < commonParams.size(); i++)
+            m_forcedIOShapes.emplace_back(new_shapes[i]);
+        // reverse overriden_shapes for results since commonResults are reversed with respect to model->get_parameters()
+        for (int i = 0; i < commonResults.size(); i++)
+            m_forcedIOShapes.emplace_back(new_shapes[commonParams.size() + i]);
     }
 }
 
@@ -107,7 +126,9 @@ void LoweredExprIR::debug_print() const {
     };
     for (const auto& expr : m_lowered_ops) {
         std::cerr << expr->get_node()->get_friendly_name() << ": \n";
-        print_rinfo(expr->get_reg_info());
+        const auto& rinfo = expr->get_reg_info();
+        if (!rinfo.first.empty() || !rinfo.second.empty())
+            print_rinfo(expr->get_reg_info());
     }
 }
 
