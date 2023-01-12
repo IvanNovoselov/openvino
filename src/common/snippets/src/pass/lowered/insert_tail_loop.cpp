@@ -11,15 +11,11 @@ namespace snippets {
 namespace pass {
 
 namespace {
-auto tail_transformations(LoweredExprIR::container& tail, const size_t tail_size, const LoweringConfig& config) -> void {
+auto tail_transformations(LoweredExprIR& linear_ir,
+                          LoweredExprIR::container::const_iterator tail_begin,
+                          LoweredExprIR::container::const_iterator tail_end,
+                          const size_t tail_size, const LoweringConfig& config) -> void {
     auto insertFill = [tail_size](const ov::Input<ov::Node>& input) -> std::shared_ptr<ov::Node> {
-        auto copyRegInfo = [](const ov::descriptor::Tensor& from, ov::descriptor::Tensor& to) -> void {
-            auto rt = from.get_rt_info();
-            auto reginfo = rt.find("reginfo");
-            if (reginfo != rt.end()) {
-                to.get_rt_info()["reginfo"] = reginfo->second;
-            }
-        };
         std::shared_ptr<ov::Node> fill = nullptr;
         auto& rt = input.get_rt_info();
         auto fill_rt = rt.find("set_fill");
@@ -27,13 +23,11 @@ auto tail_transformations(LoweredExprIR::container& tail, const size_t tail_size
             const auto fill_value = fill_rt->second.as<uint32_t>();
             fill = std::make_shared<ngraph::snippets::op::Fill>(input.get_source_output(), tail_size, fill_value);
             input.get_node()->set_argument(input.get_index(), fill);
-            // we should explicitly copy reg info because we insert Fill after assign register
-            copyRegInfo(fill->get_input_tensor(0), fill->get_output_tensor(0));
         }
         return fill;
     };
 
-    for (auto expr_it = tail.begin(); expr_it != tail.end(); expr_it++) {
+    for (auto expr_it = tail_begin; expr_it != tail_end; expr_it++) {
         // We should fill vector regs by float_min and zero to have
         // correct math calculations for ReduceMax and ReduceSum in scalar case.
         // Note: We find Maximum and Add ops because HorizonMax and HorizonSum are outside Loop,
@@ -48,7 +42,7 @@ auto tail_transformations(LoweredExprIR::container& tail, const size_t tail_size
                     auto reg_out = (*expr_it)->get_reg_info().first;
                     auto reg_in = (*std::prev(expr_it))->get_reg_info().second;
                     fill_expr->set_reg_info({reg_in, reg_out});
-                    tail.insert(expr_it, fill_expr);
+                    linear_ir.insert(expr_it, std::move(fill_expr));
                     //updated_tile.push_back(fill);
                 }
             }
@@ -63,6 +57,7 @@ auto tail_transformations(LoweredExprIR::container& tail, const size_t tail_size
 
 bool insertTailLoop(LoweredExprIR& linear_ir) {
     OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::insertTailLoop")
+    bool modified = false;
     const auto& lowering_config = linear_ir.get_config();
     // *1* solo vector/tail loop + empty outer loop
     //      => skip increments (both counter & ptr) : set evaluate_once flag
@@ -87,23 +82,16 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
             return false;
         }
     };
-    auto& expressions = linear_ir.get_ops();
-    for (auto expr_it = expressions.begin(); expr_it != expressions.end();) {
+    for (auto expr_it = linear_ir.begin(); expr_it != linear_ir.end();) {
         const auto& loop_begin = ov::as_type_ptr<ngraph::snippets::op::LoopBegin>((*expr_it)->get_node());
-        auto loop_begin_expr_it = expr_it;
         // ignore outer loops and possible manual scalar loops
         if (loop_begin && loop_begin->get_increment() != 1) {
-            LoweredExprIR vector_loop, tail_loop;
-            std::shared_ptr<op::LoopEnd> vector_loop_end, tail_loop_end;
-            vector_loop_end = loop_begin->get_loop_end();
-            tail_loop_end = nullptr;
-            auto& loop_exprs = vector_loop.get_ops();
+            auto loop_begin_expr_it = expr_it;
+            std::shared_ptr<op::LoopEnd> vector_loop_end = loop_begin->get_loop_end();
             while ((*expr_it)->get_node() != vector_loop_end)
-                loop_exprs.push_back(*expr_it++);
+                expr_it++;
             // Note that exp_it points to the element AFTER loop_end
-            loop_exprs.push_back(*expr_it++);
-            if (expr_it == expressions.end())
-                std::cerr << "the last expression\n";
+            expr_it++;
             const auto work_amount = vector_loop_end->get_work_amount();
             const auto increment = vector_loop_end->get_increment();
             const auto tail_size = work_amount % increment;
@@ -123,33 +111,32 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                     // force ptr increments if there is tail
                     optimize_single_evaluation(vector_loop_end, need_tail);
                 }
-            } else {
-                // todo: we might want to store shared_ptr<LoweredExpr> in linear IR to allow for direct insertion/deletion
-                //  Original LoweredIR => detect and copy vector tile (add/remove nodes)
-                //  If LoweredIR stores pointers to LoweredExpr, then the modifications will be visible in Original LoweredIR
-                // scalar tile can have different number of ops, so ve have to remove vector tile first,
-                // and then insert scalar one
-                expressions.erase(loop_begin_expr_it, expr_it);
             }
 
             // tail is required => transform the body into a tail representation
             // tail loop is fake loop because for tail we should calculate only
             // finalization offsets which are supported by LoopEnd.
             if (need_tail) {
+                LoweredExprIR::container vector_loop_deep_copy;
+                LoweredExprIR::container::const_iterator tail_begin;
+                LoweredExprIR::container::const_iterator tail_end;
                 if (need_vector_loop) {
-                    NodeMap vector_to_tail_node_map;
                     // todo: we have to clone nodes here since tail transformations can change the same nodes
                     //  (e.g. reset Load&Store count). this is a bit costy.
                     //  an alternative is no pass target machine and create emitters for vector loop here
                     //  (then we don't care if the nodes are updated)
-                    tail_loop = vector_loop.deep_copy();
+                    vector_loop_deep_copy = LoweredExprIR::deep_copy_range(loop_begin_expr_it, expr_it);
+                    tail_begin = vector_loop_deep_copy.begin();
+                    tail_end = vector_loop_deep_copy.end();
 
                 } else {
-                    tail_loop = std::move(vector_loop);
+                    tail_begin = loop_begin_expr_it;
+                    tail_end = expr_it;
                 }
 
-                tail_transformations(tail_loop.get_ops(), tail_size, lowering_config);
-                tail_loop_end = ov::as_type_ptr<op::LoopEnd>(tail_loop.get_ops().back()->get_node());
+                tail_transformations(linear_ir, tail_begin, tail_end, tail_size, lowering_config);
+                std::shared_ptr<op::LoopEnd> tail_loop_end =
+                        ov::as_type_ptr<op::LoopBegin>((*tail_begin)->get_node())->get_loop_end();
                 tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
                 tail_loop_end->set_increment(tail_size);
                 // ptr increments were set to the old increment, need to update them in accordance with the new one
@@ -161,15 +148,17 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                     // tail loop is always executed once
                     optimize_single_evaluation(tail_loop_end);
                 }
-                linear_ir.get_ops().insert(expr_it, tail_loop.get_ops().begin(), tail_loop.get_ops().end());
+                if (need_vector_loop)
+                    linear_ir.insert(expr_it, tail_begin, tail_end);
             }
+            modified = true;
         } else {
             // if there is a loop, then exprt_it already points to the next statement (after loop end)
             // so we need to increment iterator only if there was no loop
             expr_it++;
         }
     }
-    return true;
+    return modified;
 }
 
 } // namespace pass

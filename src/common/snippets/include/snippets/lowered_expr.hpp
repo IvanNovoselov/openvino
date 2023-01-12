@@ -8,6 +8,7 @@
 #include <openvino/core/node.hpp>
 #include "emitter.hpp"
 #include "target_machine.hpp"
+//#include "snippets/pass/lowered/insert_tail_loop.hpp"
 
 namespace ngraph {
 namespace snippets {
@@ -72,60 +73,63 @@ private:
     int64_t m_index = -1;
     io_type m_type = io_type::UNDEFINED;
 };
-
 class LoweredExprIR {
 public:
     using container = std::list<std::shared_ptr<LoweredExpr>>;
+    using exprIt = container::iterator;
+    using constExprIt = container::const_iterator;
     /**
      * @brief Default constructor
      */
     LoweredExprIR(const std::shared_ptr<ov::Model>& m, LoweringConfig config = {});
     LoweredExprIR() = default;
     LoweredExprIR deep_copy() const;
+    static LoweredExprIR::container deep_copy_range(LoweredExprIR::container::const_iterator begin, LoweredExprIR::container::const_iterator end);
 //    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> ops, std::shared_ptr<TargetMachine> target);
 
 //    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> vector1, std::shared_ptr<TargetMachine> sharedPtr);
-    container& get_ops() {return m_lowered_ops; }
+//    container& get_ops() {return m_lowered_ops; }
     const container& get_ops() const {return m_lowered_ops; }
     void init_emitters(const std::shared_ptr<TargetMachine>& target);
     LoweringConfig get_config() {return m_config; }
     std::vector<PartialShape> get_forced_shapes() const {return m_forcedIOShapes;}
+    exprIt insert(constExprIt pos, container::value_type&& value);
+    exprIt insert(constExprIt pos, exprIt begin, exprIt end);
+    exprIt insert(constExprIt pos, constExprIt begin, constExprIt end);
 
     bool empty() const noexcept {return m_lowered_ops.empty(); }
     void debug_print() const;
 
-//
-//    loweredContainer::iterator begin() noexcept {
-//        return m_lowered_ops.begin();
-//    }
-//    loweredContainer::iterator end() noexcept {
-//        return m_lowered_ops.end();
-//    }
-//    loweredContainer::const_iterator begin() const noexcept {
-//        return cbegin();
-//    }
-//    loweredContainer::const_iterator end() const noexcept {
-//        return cend();
-//    }
-//    loweredContainer::const_iterator cbegin() const noexcept {
-//        return m_lowered_ops.cbegin();
-//    }
-//    loweredContainer::const_iterator cend() const noexcept {
-//        return m_lowered_ops.cend();
-//    }
-//    loweredContainer::reverse_iterator rbegin() noexcept {
-//        return m_lowered_ops.rbegin();
-//    }
-//    loweredContainer::reverse_iterator rend() noexcept {
-//        return m_lowered_ops.rend();
-//    }
-//    loweredContainer::const_reverse_iterator crbegin() const noexcept {
-//        return m_lowered_ops.crbegin();
-//    }
-//    loweredContainer::const_reverse_iterator crend() const noexcept {
-//        return m_lowered_ops.crend();
-//    }
-
+    exprIt begin() noexcept {
+        return m_lowered_ops.begin();
+    }
+    exprIt end() noexcept {
+        return m_lowered_ops.end();
+    }
+    constExprIt begin() const noexcept {
+        return cbegin();
+    }
+    constExprIt end() const noexcept {
+        return cend();
+    }
+    constExprIt cbegin() const noexcept {
+        return m_lowered_ops.cbegin();
+    }
+    constExprIt cend() const noexcept {
+        return m_lowered_ops.cend();
+    }
+    container ::reverse_iterator rbegin() noexcept {
+        return m_lowered_ops.rbegin();
+    }
+    container::reverse_iterator rend() noexcept {
+        return m_lowered_ops.rend();
+    }
+    container::const_reverse_iterator crbegin() const noexcept {
+        return m_lowered_ops.crbegin();
+    }
+    container::const_reverse_iterator crend() const noexcept {
+        return m_lowered_ops.crend();
+    }
 
 private:
     container m_lowered_ops{};

@@ -171,7 +171,7 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     mapping_info vec_map_pool({}, vec_regs_pool);
     ngraph::snippets::LoweredExprIR::container io_exprs;
     ngraph::snippets::LoweredExprIR::container general_exprs;
-    for (const auto& expr : body.get_ops()) {
+    for (const auto& expr : body) {
         const auto& emitter = expr->get_emitter();
         const auto emitter_type = std::dynamic_pointer_cast<jit_emitter>(emitter)->get_in_out_type();
         // todo: how this will be handled if Brgemm in & out are op::Buffer
@@ -318,7 +318,7 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
     transform_idxs_to_regs(data_ptr_regs_idx, data_ptr_regs);
 
     init_data_pointers(num_inputs, num_inputs + num_outputs, is_buffer_needed, reg_indexes, reg_const_params, data_ptr_regs);
-    for (const auto& lowered_code : body.get_ops()) {
+    for (const auto& lowered_code : body) {
         const auto& emitter = lowered_code->get_emitter();
         std::vector<size_t> in_regs, out_regs;
         std::tie(in_regs, out_regs) = lowered_code->get_reg_info();

@@ -216,6 +216,7 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
 //        std::cerr << i << " : " <<(*it++)->get_node()->get_friendly_name() << "\n";
 //    }
 //    throw ngraph_error("FINITA!");
+    // todo: modify this pass so if no vector loop is needed, then the appropriate work_amounts are set at insertion time
     pass::insertTailLoop(linear_ir);
 
     linear_ir.init_emitters(target);

@@ -227,7 +227,6 @@ bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool singl
     const auto& lowering_config = linear_ir.get_config();
     auto master_shape = lowering_config.m_master_shape;
     auto loop_depth = lowering_config.m_loop_depth;
-    auto& expressions = linear_ir.get_ops();
 
     if (master_shape.is_dynamic())
         throw ngraph_error("InsertLoops doesn't support dynamic shapes yet");
@@ -237,7 +236,7 @@ bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool singl
 
 
     LoweredExprIR::container io_expressions;
-    std::copy_if(expressions.begin(), expressions.end(), std::back_inserter(io_expressions),
+    std::copy_if(linear_ir.begin(), linear_ir.end(), std::back_inserter(io_expressions),
                  [](const std::shared_ptr<LoweredExpr>& le) {return std::dynamic_pointer_cast<IOLoweredExpr>(le); });
     std::vector<PartialShape> ioShapes = linear_ir.get_forced_shapes();
     OutputVector io_outputs;
@@ -269,8 +268,8 @@ bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool singl
                                                                        finalization_offsets);
             // set internal flag to enable scalar vs vector loop optimizations
             inner_loop_end->has_outer_loop = outer_work_amount > 1;
-            expressions.insert(expressions.begin(), std::make_shared<LoweredExpr>(inner_loop_begin));
-            expressions.insert(expressions.end(), std::make_shared<LoweredExpr>(inner_loop_end));
+            linear_ir.insert(linear_ir.begin(), std::make_shared<LoweredExpr>(inner_loop_begin));
+            linear_ir.insert(linear_ir.end(), std::make_shared<LoweredExpr>(inner_loop_end));
 
             if (outer_work_amount > 1) {
                 std::vector<bool> apply_increments = calculate_outer_apply_increments(ioShapes);
@@ -283,8 +282,8 @@ bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool singl
                                                                            1lu,
                                                                            apply_increments,
                                                                            finalization_offsets);
-                expressions.insert(expressions.begin(), std::make_shared<LoweredExpr>(outer_loop_begin));
-                expressions.insert(expressions.end(), std::make_shared<LoweredExpr>(outer_loop_end));
+                linear_ir.insert(linear_ir.begin(), std::make_shared<LoweredExpr>(outer_loop_begin));
+                linear_ir.insert(linear_ir.end(), std::make_shared<LoweredExpr>(outer_loop_end));
             }
         } else {
             throw ngraph_error("Explicit loop insertion is not yet supported");

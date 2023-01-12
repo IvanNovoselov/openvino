@@ -110,19 +110,29 @@ LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, const Lowe
     }
 }
 
-LoweredExprIR LoweredExprIR::deep_copy() const {
-    LoweredExprIR result;
+LoweredExprIR::container LoweredExprIR::deep_copy_range(LoweredExprIR::container::const_iterator begin, LoweredExprIR::container::const_iterator end) {
+    LoweredExprIR::container result;
     NodeVector original_nodes;
-    for (const auto& expr : m_lowered_ops)
-        original_nodes.push_back(expr->get_node());
+    for (auto it = begin; it != end; it++)
+        original_nodes.push_back((*it)->get_node());
     NodeMap node_map;
     const NodeVector& new_nodes = ngraph::clone_nodes(original_nodes,  node_map);
-    auto& new_ops = result.get_ops();
-    for (const auto& expr : m_lowered_ops) {
-        LoweredExpr new_expr = *expr;
-        new_expr.m_source_node = node_map[expr->get_node().get()];
-        new_ops.emplace_back(std::make_shared<LoweredExpr>(new_expr));
+    for (auto it = begin; it != end; it++) {
+        // copy by value, so result shared_pointer point to new objects
+        LoweredExpr new_expr = **it;
+        new_expr.m_source_node = node_map[(*it)->get_node().get()];
+        result.emplace_back(std::make_shared<LoweredExpr>(new_expr));
     }
+    return result;
+}
+
+LoweredExprIR LoweredExprIR::deep_copy() const {
+    LoweredExprIR result;
+    auto& result_ops = result.m_lowered_ops;
+    for (const auto& expr : deep_copy_range(m_lowered_ops.begin(), m_lowered_ops.end()))
+        result_ops.emplace_back(expr);
+    result.m_config = m_config;
+    result.m_forcedIOShapes = m_forcedIOShapes;
     return result;
 }
 
@@ -151,5 +161,16 @@ void LoweredExprIR::init_emitters(const std::shared_ptr<TargetMachine>& target) 
     }
 }
 
+LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, container::value_type&& value) {
+    return m_lowered_ops.insert(pos, value);
+}
+
+LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, exprIt begin, exprIt end) {
+    return m_lowered_ops.insert(pos, begin, end);
+}
+
+LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, constExprIt begin, constExprIt end) {
+    return m_lowered_ops.insert(pos, begin, end);
+}
 }// namespace snippets
 }// namespace ngraph
