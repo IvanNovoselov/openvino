@@ -66,14 +66,13 @@ IOLoweredExpr::IOLoweredExpr(const std::shared_ptr<Node>& n, int64_t index, io_t
 }
 
 LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, const LoweringConfig config)
-    : m_config{config} {
+    : m_config{config}, m_io_lowered_ops{} {
     for (const auto& n : model->get_ordered_ops()) {
         if ( !is_type<opset1::Parameter>(n) && !is_type<opset1::Result>(n))
             m_lowered_ops.emplace_back(std::make_shared<LoweredExpr>(n));
     }
     const auto&  commonParams = model->get_parameters();
     const auto& commonResults = model->get_results();
-    container inputs;
     // todo:
     //  Current default topological sorter visits Parameters and Results in reversed order
     //  compared to what's returned by get_parameters() or get_results()
@@ -88,12 +87,14 @@ LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, const Lowe
 
     // todo: this could be optimized using emplace_front for lists (on reversed parameters)
     for (const auto& par : commonParams) {
-        inputs.emplace_back(std::make_shared<IOLoweredExpr>(par, model->get_parameter_index(par), IOLoweredExpr::io_type::INPUT));
+        m_io_lowered_ops.emplace_back(std::make_shared<IOLoweredExpr>(par, model->get_parameter_index(par), IOLoweredExpr::io_type::INPUT));
     }
-    m_lowered_ops.insert(m_lowered_ops.begin(), inputs.begin(), inputs.end());
     for (const auto& res : model->get_results()) {
-        m_lowered_ops.emplace_back(std::make_shared<IOLoweredExpr>(res, model->get_result_index(res), IOLoweredExpr::io_type::OUTPUT));
+        m_io_lowered_ops.emplace_back(std::make_shared<IOLoweredExpr>(res, model->get_result_index(res), IOLoweredExpr::io_type::OUTPUT));
     }
+    auto params_end_it = std::next(m_io_lowered_ops.begin(), commonParams.size());
+    m_lowered_ops.insert(m_lowered_ops.begin(), m_io_lowered_ops.begin(), params_end_it);
+    m_lowered_ops.insert(m_lowered_ops.end(), params_end_it, m_io_lowered_ops.end());
     const auto& body_rt_info = model->get_rt_info();
     const auto& plugin_shapes = body_rt_info.find("PluginShapesOverride");
     if (plugin_shapes == body_rt_info.end()) {

@@ -235,21 +235,12 @@ bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool singl
     const auto outer_work_amount = loop_depth == 2 ? utils::get_outer_dim(master_shape).get_length() : 1;
 
 
-    LoweredExprIR::container io_expressions;
-    std::copy_if(linear_ir.begin(), linear_ir.end(), std::back_inserter(io_expressions),
-                 [](const std::shared_ptr<LoweredExpr>& le) {return std::dynamic_pointer_cast<IOLoweredExpr>(le); });
     std::vector<PartialShape> ioShapes = linear_ir.get_forced_shapes();
+    const auto& io_exprs = linear_ir.get_IO_ops();
     OutputVector io_outputs;
-    for (const auto& expr : io_expressions) {
-        if (auto io_expr = std::dynamic_pointer_cast<IOLoweredExpr>(expr)) {
-            // For example Parameter
-            if (io_expr->get_type() == IOLoweredExpr::io_type::INPUT)
-                io_outputs.push_back(expr->get_node()->output(0));
-            // For example Result
-            else if (io_expr->get_type() == IOLoweredExpr::io_type::OUTPUT)
-                io_outputs.push_back(expr->get_node()->get_input_source_output(0));
-        }
-    }
+    // Here we employ the fact that Result has one output that duplicates input
+    std::transform(io_exprs.begin(), io_exprs.end(), std::back_inserter(io_outputs),
+                   [](const std::shared_ptr<IOLoweredExpr>& expr){ return expr->get_node()->output(0);});
     if (inner_work_amount > 0) {
         if (single_loop_body) {
             const auto apply_increments = calculate_inner_apply_increments(master_shape, ioShapes);

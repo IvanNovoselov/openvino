@@ -76,12 +76,13 @@ private:
 class LoweredExprIR {
 public:
     using container = std::list<std::shared_ptr<LoweredExpr>>;
+    using io_container = std::list<std::shared_ptr<IOLoweredExpr>>;
     using exprIt = container::iterator;
     using constExprIt = container::const_iterator;
     /**
      * @brief Default constructor
      */
-    LoweredExprIR(const std::shared_ptr<ov::Model>& m, LoweringConfig config = {});
+    explicit LoweredExprIR(const std::shared_ptr<ov::Model>& m, LoweringConfig config = {});
     LoweredExprIR() = default;
     LoweredExprIR deep_copy() const;
     static LoweredExprIR::container deep_copy_range(LoweredExprIR::container::const_iterator begin, LoweredExprIR::container::const_iterator end);
@@ -90,9 +91,11 @@ public:
 //    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> vector1, std::shared_ptr<TargetMachine> sharedPtr);
 //    container& get_ops() {return m_lowered_ops; }
     const container& get_ops() const {return m_lowered_ops; }
+    const io_container& get_IO_ops() const {return m_io_lowered_ops; }
     void init_emitters(const std::shared_ptr<TargetMachine>& target);
     LoweringConfig get_config() {return m_config; }
     std::vector<PartialShape> get_forced_shapes() const {return m_forcedIOShapes;}
+    // todo: We need to check if Result or Parameter is inserted and update m_io_lowered_ops accordingly
     exprIt insert(constExprIt pos, container::value_type&& value);
     exprIt insert(constExprIt pos, exprIt begin, exprIt end);
     exprIt insert(constExprIt pos, constExprIt begin, constExprIt end);
@@ -133,6 +136,7 @@ public:
 
 private:
     container m_lowered_ops{};
+    io_container m_io_lowered_ops;
     LoweringConfig m_config{};
     std::vector<PartialShape> m_forcedIOShapes{};
 };
