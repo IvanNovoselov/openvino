@@ -10,7 +10,8 @@ set(TARGET_NAME ov_cpu_func_tests)
 set(DEBUG_TARGET_NAME cpuDebugFuncTests)
 #set(DEBUG_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/subgraph_tests/src/conv_sum_broadcast.cpp)
 set(DEBUG_SRC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/shared_tests_instances/snippets/add.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/shared_tests_instances/snippets/eltwise_two_results.cpp)
+        ${CMAKE_CURRENT_SOURCE_DIR}/shared_tests_instances/snippets/eltwise_two_results.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/shared_tests_instances/snippets/matmul.cpp)
 
 add_library(cpuSpecificRtInfo STATIC $<TARGET_PROPERTY:openvino_intel_cpu_plugin,SOURCE_DIR>/src/utils/rt_info/memory_formats_attribute.hpp
                                      $<TARGET_PROPERTY:openvino_intel_cpu_plugin,SOURCE_DIR>/src/utils/rt_info/memory_formats_attribute.cpp)

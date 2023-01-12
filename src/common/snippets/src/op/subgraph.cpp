@@ -640,6 +640,8 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
     });
     lowering_config.m_loop_depth = tileRank;
     lowering_config.m_master_shape = master_shape;
+    lowering_config.m_explicit_loop_insertion = config.m_explicit_loop_insertion;
+    ov::pass::Serialize("snsdebug_lowered.xml", "snsdebug_lowered.bin").run_on_model(body_ptr());
     ngraph::snippets::code ptr = m_generator->generate(body_ptr(), lowering_config, compile_params);
 
     return {master_shape, false /*canBeLinearized*/, ptr};

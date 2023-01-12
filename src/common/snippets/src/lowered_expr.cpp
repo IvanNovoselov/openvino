@@ -166,6 +166,10 @@ LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, container::value_ty
     return m_lowered_ops.insert(pos, value);
 }
 
+LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, const container::value_type& value) {
+    return m_lowered_ops.insert(pos, value);
+}
+
 LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, exprIt begin, exprIt end) {
     return m_lowered_ops.insert(pos, begin, end);
 }

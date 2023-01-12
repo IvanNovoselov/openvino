@@ -189,7 +189,7 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
     };
     auto linear_ir = LoweredExprIR(m, config);
 //    linear_ir = std::move(old_linear_ir);
-    pass::insertLoopsLowered(linear_ir, target->get_lanes(), true);
+    pass::insertLoopsLowered(linear_ir, target->get_lanes(), config.m_explicit_loop_insertion);
 
     pass::assignRegisters(linear_ir);
     std::string failed_ops("");

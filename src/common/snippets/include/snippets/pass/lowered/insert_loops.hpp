@@ -11,7 +11,7 @@ namespace snippets {
 namespace pass {
 
 // todo: add description
-bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t m_vector_size, bool m_single_loop_body);
+bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool explicit_loop_insertion);
 
 } // namespace pass
 } // namespace snippets

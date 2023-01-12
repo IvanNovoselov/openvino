@@ -28,6 +28,7 @@ public:
     bool m_optimize_single_evaluation = true;
     // True if we should check runtime info for nodes to call specific needed transformations
     bool m_need_fill_tail_register = false;
+    bool m_explicit_loop_insertion = false;
     ov::PartialShape m_master_shape{};
     size_t m_loop_depth = 1;
 };
@@ -97,11 +98,17 @@ public:
     std::vector<PartialShape> get_forced_shapes() const {return m_forcedIOShapes;}
     // todo: We need to check if Result or Parameter is inserted and update m_io_lowered_ops accordingly
     exprIt insert(constExprIt pos, container::value_type&& value);
+    exprIt insert(constExprIt pos, const container::value_type& value);
     exprIt insert(constExprIt pos, exprIt begin, exprIt end);
     exprIt insert(constExprIt pos, constExprIt begin, constExprIt end);
 
     bool empty() const noexcept {return m_lowered_ops.empty(); }
     void debug_print() const;
+
+    container::reference back() noexcept {return m_lowered_ops.back();}
+    container::const_reference back() const noexcept {return m_lowered_ops.back();}
+    container::reference front() noexcept {return m_lowered_ops.front();}
+    container::const_reference front() const noexcept {return m_lowered_ops.front();}
 
     exprIt begin() noexcept {
         return m_lowered_ops.begin();
