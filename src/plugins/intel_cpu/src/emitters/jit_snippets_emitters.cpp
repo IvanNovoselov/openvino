@@ -340,9 +340,8 @@ LoopBeginEmitter::LoopBeginEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl:
     const auto loop_end = ov::as_type_ptr<ngraph::snippets::op::LoopEnd>(target_inputs.begin()->get_node()->shared_from_this());
     if (!loop_end)
         IE_THROW() << "LoopBeginEmitter invoked with invalid configuration: the last output must be LoopEnd";
-    work_amount = loop_begin->get_work_amount();
-    evaluate_once = loop_begin->get_evaluate_once();
-    num_inputs = loop_begin->get_input_size();
+    work_amount = loop_end->get_work_amount();
+    evaluate_once = loop_end->get_evaluate_once();
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
 }
 
@@ -358,10 +357,10 @@ void LoopBeginEmitter::validate_arguments(const std::vector<size_t> &in,
                                         const std::vector<size_t> &out,
                                         const std::vector<size_t> &pool,
                                         const std::vector<size_t> &gpr) const {
-    if (in.size() != num_inputs)
-        IE_THROW() << "Invalid inputs size: expected " << num_inputs << " got " << in.size();
-    if (out.size() != num_inputs + 1)
-        IE_THROW() << "Invalid outputs size: expected " << num_inputs + 1 << " got " << out.size();
+    if (in.size() != 0)
+        IE_THROW() << "Invalid inputs size: expected 0 got " << in.size();
+    if (out.size() != 1)
+        IE_THROW() << "Invalid outputs size: expected 1 got " << out.size();
 }
 
 void LoopBeginEmitter::emit_impl(const std::vector<size_t>& in,

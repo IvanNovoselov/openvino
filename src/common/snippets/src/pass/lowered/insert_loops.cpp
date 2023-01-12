@@ -39,11 +39,17 @@ std::vector<bool> calculate_outer_apply_increments(const std::vector<ov::Partial
 std::vector<int64_t> calculate_finalization_offsets(const ov::PartialShape& master,
                                                                  const std::vector<ov::PartialShape>& shapes) {
     const auto inner_work_amount = utils::get_inner_dim(master).get_length();
-    std::vector<int64_t> inner_finalization_offsets(shapes.size(), 0);
-    std::transform(shapes.begin(), shapes.end(), inner_finalization_offsets.begin(),
-                   [=](const ov::PartialShape& ps) {
-                       return utils::get_outer_dim(ps) == 1 && utils::get_inner_dim(ps) != 1 ? -inner_work_amount : 0;
-                   });
+    std::vector<int64_t> inner_finalization_offsets;//(shapes.size(), 0);
+//    std::transform(shapes.begin(), shapes.end(), inner_finalization_offsets.begin(),
+//                   [=](const ov::PartialShape& ps) {
+//                       return utils::get_outer_dim(ps) == 1 && utils::get_inner_dim(ps) != 1 ? -inner_work_amount : 0;
+//                   });
+    for (const auto& ps : shapes) {
+        int64_t offset = 0;
+        if (utils::get_outer_dim(ps) == 1 && utils::get_inner_dim(ps) != 1)
+            offset = -inner_work_amount;
+        inner_finalization_offsets.push_back(offset);
+    }
     return inner_finalization_offsets;
 }
 
@@ -216,19 +222,18 @@ void insert_loops_explicitly(const ov::NodeVector& ops, const size_t vector_size
 } // namespace
 
 
-bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t m_vector_size, bool m_single_loop_body) {
+bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool single_loop_body) {
     OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::insertLoops")
     const auto& lowering_config = linear_ir.get_config();
-    //todo: remove m_prefix
-    auto m_master_shape = lowering_config.m_master_shape;
-    auto m_loop_depth = lowering_config.m_loop_depth;
+    auto master_shape = lowering_config.m_master_shape;
+    auto loop_depth = lowering_config.m_loop_depth;
     auto& expressions = linear_ir.get_ops();
 
-    if (m_master_shape.is_dynamic())
+    if (master_shape.is_dynamic())
         throw ngraph_error("InsertLoops doesn't support dynamic shapes yet");
 
-    const auto inner_work_amount = utils::get_inner_dim(m_master_shape).get_length();
-    const auto outer_work_amount = m_loop_depth == 2 ? utils::get_outer_dim(m_master_shape).get_length() : 1;
+    const auto inner_work_amount = utils::get_inner_dim(master_shape).get_length();
+    const auto outer_work_amount = loop_depth == 2 ? utils::get_outer_dim(master_shape).get_length() : 1;
 
 
     LoweredExprIR::container io_expressions;
@@ -247,19 +252,19 @@ bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t m_vector_size, bool m_s
         }
     }
     if (inner_work_amount > 0) {
-        if (m_single_loop_body) {
-            const auto apply_increments = calculate_inner_apply_increments(m_master_shape, ioShapes);
+        if (single_loop_body) {
+            const auto apply_increments = calculate_inner_apply_increments(master_shape, ioShapes);
             std::vector<int64_t> finalization_offsets(ioShapes.size(), 0);
             if (outer_work_amount > 1) {
                 // Return pointer in case of outer dim broadcasting.
-                finalization_offsets = calculate_finalization_offsets(m_master_shape, ioShapes);
+                finalization_offsets = calculate_finalization_offsets(master_shape, ioShapes);
             }
             const auto& inner_loop_begin = std::make_shared<op::LoopBegin>();
             OutputVector managed_outputs = io_outputs;
             managed_outputs.push_back(inner_loop_begin->output(0));
             const auto& inner_loop_end = std::make_shared<op::LoopEnd>(managed_outputs,
                                                                        inner_work_amount,
-                                                                       m_vector_size,
+                                                                       vector_size,
                                                                        apply_increments,
                                                                        finalization_offsets);
             // set internal flag to enable scalar vs vector loop optimizations
@@ -273,7 +278,7 @@ bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t m_vector_size, bool m_s
                 const auto& outer_loop_begin = std::make_shared<op::LoopBegin>();
                 OutputVector managed_outputs = io_outputs;
                 managed_outputs.push_back(outer_loop_begin->output(0));
-                const auto& outer_loop_end = std::make_shared<op::LoopEnd>(OutputVector {outer_loop_begin->output(0)},
+                const auto& outer_loop_end = std::make_shared<op::LoopEnd>(managed_outputs,
                                                                            outer_work_amount,
                                                                            1lu,
                                                                            apply_increments,

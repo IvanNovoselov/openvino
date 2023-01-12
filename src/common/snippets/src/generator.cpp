@@ -196,9 +196,8 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
     for (const auto&  expr : linear_ir.get_ops()) {
         auto rinfo = expr->get_reg_info();
         auto rinfo_expected = LoweredExpr::getRegisters(expr->get_node());
-        expr->set_reg_info(rinfo_expected);
         if (rinfo != rinfo_expected) {
-            expr->set_reg_info(rinfo_expected);
+//            expr->set_reg_info(rinfo_expected);
             failed_ops += expr->get_node()->get_friendly_name() + "\n";
             std::cerr << expr->get_node()->get_friendly_name() << "\n";
             std::cerr << "Expected:\n";
@@ -212,6 +211,11 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
 //        throw ngraph_error("register assignment error");
     }
     linear_ir.debug_print();
+//    int i = 0;
+//    for (auto it = linear_ir.get_ops().begin(); i < 64; i++) {
+//        std::cerr << i << " : " <<(*it++)->get_node()->get_friendly_name() << "\n";
+//    }
+//    throw ngraph_error("FINITA!");
     pass::insertTailLoop(linear_ir);
 
     linear_ir.init_emitters(target);

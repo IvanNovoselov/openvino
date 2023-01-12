@@ -88,7 +88,7 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
         }
     };
     auto& expressions = linear_ir.get_ops();
-    for (auto expr_it = expressions.begin(); expr_it != expressions.end(); expr_it++) {
+    for (auto expr_it = expressions.begin(); expr_it != expressions.end();) {
         const auto& loop_begin = ov::as_type_ptr<ngraph::snippets::op::LoopBegin>((*expr_it)->get_node());
         auto loop_begin_expr_it = expr_it;
         // ignore outer loops and possible manual scalar loops
@@ -102,6 +102,8 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                 loop_exprs.push_back(*expr_it++);
             // Note that exp_it points to the element AFTER loop_end
             loop_exprs.push_back(*expr_it++);
+            if (expr_it == expressions.end())
+                std::cerr << "the last expression\n";
             const auto work_amount = vector_loop_end->get_work_amount();
             const auto increment = vector_loop_end->get_increment();
             const auto tail_size = work_amount % increment;
@@ -161,6 +163,10 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                 }
                 linear_ir.get_ops().insert(expr_it, tail_loop.get_ops().begin(), tail_loop.get_ops().end());
             }
+        } else {
+            // if there is a loop, then exprt_it already points to the next statement (after loop end)
+            // so we need to increment iterator only if there was no loop
+            expr_it++;
         }
     }
     return true;

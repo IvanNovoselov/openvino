@@ -68,20 +68,32 @@ IOLoweredExpr::IOLoweredExpr(const std::shared_ptr<Node>& n, int64_t index, io_t
 LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, const LoweringConfig config)
     : m_config{config} {
     for (const auto& n : model->get_ordered_ops()) {
-        std::shared_ptr<LoweredExpr> expr;
-        if (const auto& par = as_type_ptr<opset1::Parameter>(n)) {
-            expr = std::make_shared<IOLoweredExpr>(n, model->get_parameter_index(par), IOLoweredExpr::io_type::INPUT);
-        } else if (const auto& res = as_type_ptr<opset1::Result>(n)) {
-            expr = std::make_shared<IOLoweredExpr>(n, model->get_result_index(res), IOLoweredExpr::io_type::OUTPUT);
-        } else {
-            expr = std::make_shared<LoweredExpr>(n);
-        }
-        m_lowered_ops.emplace_back(expr);
+        if ( !is_type<opset1::Parameter>(n) && !is_type<opset1::Result>(n))
+            m_lowered_ops.emplace_back(std::make_shared<LoweredExpr>(n));
     }
-    ParameterVector commonParams = model->get_parameters();
-    // Note that topological sort parses node arguments in reversed order, but results are added  - in direct order
-    // So ve need to pass the reversed results to LoopEnd to keep the original traversal order in topological sorter
+    const auto&  commonParams = model->get_parameters();
     const auto& commonResults = model->get_results();
+    container inputs;
+    // todo:
+    //  Current default topological sorter visits Parameters and Results in reversed order
+    //  compared to what's returned by get_parameters() or get_results()
+    //  This causes additional problems during code generation because we generally expect that
+    //  Parameters and Results appear in the lowered code in the same order as corresponding memory
+    //  pointers (passed at runtime, this is get_parameters() or get_results() order).
+    //  To resolve the conflict, we force the desired order of Parameters and Results in the lowered code.
+    //  This approach works because registers for Parameters and Results are assigned manually, and
+    //  from reg assignment standpoint it's not important in what order they were visited.
+    //  But if we ever want to handle them as all the other nodes, we'll have to use custom topo sorter
+    //  (even the same sorter, but with different starting node list)
+
+    // todo: this could be optimized using emplace_front for lists (on reversed parameters)
+    for (const auto& par : commonParams) {
+        inputs.emplace_back(std::make_shared<IOLoweredExpr>(par, model->get_parameter_index(par), IOLoweredExpr::io_type::INPUT));
+    }
+    m_lowered_ops.insert(m_lowered_ops.begin(), inputs.begin(), inputs.end());
+    for (const auto& res : model->get_results()) {
+        m_lowered_ops.emplace_back(std::make_shared<IOLoweredExpr>(res, model->get_result_index(res), IOLoweredExpr::io_type::OUTPUT));
+    }
     const auto& body_rt_info = model->get_rt_info();
     const auto& plugin_shapes = body_rt_info.find("PluginShapesOverride");
     if (plugin_shapes == body_rt_info.end()) {

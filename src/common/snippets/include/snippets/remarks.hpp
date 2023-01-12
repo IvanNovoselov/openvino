@@ -8,7 +8,7 @@
 // Todo: Replace remarks with DEBUG_CAPS
 class logstreambuf: public std::streambuf {
 public:
-    static const int threshold {50};
+    static const int threshold {1};
 };
 
 template <typename T>
