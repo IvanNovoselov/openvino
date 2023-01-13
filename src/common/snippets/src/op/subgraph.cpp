@@ -545,7 +545,7 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
         manager.register_pass<snippets::pass::FuseTransposeBrgemm>();
         manager.register_pass<snippets::pass::InsertBuffer>(allocationRank);
         manager.register_pass<snippets::pass::SoftmaxDecomposition>(count, allocationRank);
-        manager.register_pass<snippets::pass::TransposeDecomposition>();
+//        manager.register_pass<snippets::pass::TransposeDecomposition>();
     }
     manager.register_pass<snippets::pass::BroadcastToMoveBroadcast>();
     manager.register_pass<snippets::pass::ConvertConstantsToScalars>();
@@ -627,8 +627,8 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
     // we can calculate common buffer scratchpad size and propagate offset from Buffer to the corresponding MemoryAccess ops
     if (config.m_has_domain_sensitive_ops)
         initialize_buffer_scratchpad_size();
-
-    snippets::pass::AssignRegisters().run_on_model(body_ptr());
+// todo: remove the original pass before merge
+//    snippets::pass::AssignRegisters().run_on_model(body_ptr());
 
     const auto ops = body_ptr()->get_ops();
     // actual code emission

@@ -97,6 +97,7 @@ public:
     LoweringConfig get_config() {return m_config; }
     std::vector<PartialShape> get_forced_shapes() const {return m_forcedIOShapes;}
     // todo: We need to check if Result or Parameter is inserted and update m_io_lowered_ops accordingly
+    exprIt insert(constExprIt pos, const ov::NodeVector& nodes);
     exprIt insert(constExprIt pos, container::value_type&& value);
     exprIt insert(constExprIt pos, const container::value_type& value);
     exprIt insert(constExprIt pos, exprIt begin, exprIt end);
@@ -109,37 +110,18 @@ public:
     container::const_reference back() const noexcept {return m_lowered_ops.back();}
     container::reference front() noexcept {return m_lowered_ops.front();}
     container::const_reference front() const noexcept {return m_lowered_ops.front();}
-
-    exprIt begin() noexcept {
-        return m_lowered_ops.begin();
-    }
-    exprIt end() noexcept {
-        return m_lowered_ops.end();
-    }
-    constExprIt begin() const noexcept {
-        return cbegin();
-    }
-    constExprIt end() const noexcept {
-        return cend();
-    }
-    constExprIt cbegin() const noexcept {
-        return m_lowered_ops.cbegin();
-    }
-    constExprIt cend() const noexcept {
-        return m_lowered_ops.cend();
-    }
-    container ::reverse_iterator rbegin() noexcept {
-        return m_lowered_ops.rbegin();
-    }
-    container::reverse_iterator rend() noexcept {
-        return m_lowered_ops.rend();
-    }
-    container::const_reverse_iterator crbegin() const noexcept {
-        return m_lowered_ops.crbegin();
-    }
-    container::const_reverse_iterator crend() const noexcept {
-        return m_lowered_ops.crend();
-    }
+    exprIt erase(exprIt pos);
+    exprIt erase(constExprIt pos);
+    exprIt begin() noexcept {return m_lowered_ops.begin();}
+    exprIt end() noexcept {return m_lowered_ops.end();}
+    constExprIt begin() const noexcept {return cbegin();}
+    constExprIt end() const noexcept {return cend();}
+    constExprIt cbegin() const noexcept {return m_lowered_ops.cbegin();}
+    constExprIt cend() const noexcept {return m_lowered_ops.cend();}
+    container ::reverse_iterator rbegin() noexcept {return m_lowered_ops.rbegin();}
+    container::reverse_iterator rend() noexcept {return m_lowered_ops.rend();}
+    container::const_reverse_iterator crbegin() const noexcept {return m_lowered_ops.crbegin();}
+    container::const_reverse_iterator crend() const noexcept {return m_lowered_ops.crend();}
     static ov::NodeVector get_ordered_ops(const std::shared_ptr<ov::Model>& model);
 
 private:

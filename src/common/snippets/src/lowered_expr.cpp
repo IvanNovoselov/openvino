@@ -203,5 +203,21 @@ LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, exprIt begin, exprI
 LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, constExprIt begin, constExprIt end) {
     return m_lowered_ops.insert(pos, begin, end);
 }
+
+LoweredExprIR::exprIt LoweredExprIR::insert(LoweredExprIR::constExprIt pos, const NodeVector& nodes) {
+    container new_exprs;
+    std::transform(nodes.begin(), nodes.end(), std::back_inserter(new_exprs),
+                   [](const std::shared_ptr<Node>& n) {return std::make_shared<LoweredExpr>(n);});
+    return m_lowered_ops.insert(pos, new_exprs.begin(), new_exprs.end());
+}
+
+LoweredExprIR::exprIt LoweredExprIR::erase(LoweredExprIR::exprIt pos) {
+    return m_lowered_ops.erase(pos);
+}
+
+LoweredExprIR::exprIt LoweredExprIR::erase(LoweredExprIR::constExprIt pos) {
+    return m_lowered_ops.erase(pos);
+}
+
 }// namespace snippets
 }// namespace ngraph
