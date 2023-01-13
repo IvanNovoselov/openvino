@@ -11,7 +11,7 @@
 #include "snippets/op/kernel.hpp"
 #include <snippets/itt.hpp>
 
-#include <ngraph/pass/manager.hpp>
+#include <openvino/core/graph_util.hpp>
 #include <openvino/core/type.hpp>
 
 namespace ngraph {
@@ -65,11 +65,22 @@ IOLoweredExpr::IOLoweredExpr(const std::shared_ptr<Node>& n, int64_t index, io_t
     : LoweredExpr(n), m_index(index), m_type(type) {
 }
 
-LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, const LoweringConfig config)
-    : m_config{config}, m_io_lowered_ops{} {
-    for (const auto& n : model->get_ordered_ops()) {
-        if ( !is_type<opset1::Parameter>(n) && !is_type<opset1::Result>(n))
-            m_lowered_ops.emplace_back(std::make_shared<LoweredExpr>(n));
+LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, LoweringConfig config)
+    : m_config{std::move(config)}, m_io_lowered_ops{} {
+    for (const auto& n : get_ordered_ops(model)) {
+        std::shared_ptr<LoweredExpr> expr;
+        if (const auto& par = as_type_ptr<opset1::Parameter>(n)) {
+            auto io_expr = std::make_shared<IOLoweredExpr>(n, model->get_parameter_index(par), IOLoweredExpr::io_type::INPUT);
+            m_io_lowered_ops.push_back(io_expr);
+            expr = io_expr;
+        } else if (const auto& res = as_type_ptr<opset1::Result>(n)) {
+            auto io_expr = std::make_shared<IOLoweredExpr>(n, model->get_result_index(res), IOLoweredExpr::io_type::OUTPUT);
+            m_io_lowered_ops.push_back(io_expr);
+            expr = io_expr;
+        } else {
+            expr = std::make_shared<LoweredExpr>(n);
+        }
+        m_lowered_ops.emplace_back(expr);
     }
     const auto&  commonParams = model->get_parameters();
     const auto& commonResults = model->get_results();
@@ -86,15 +97,15 @@ LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, const Lowe
     //  (even the same sorter, but with different starting node list)
 
     // todo: this could be optimized using emplace_front for lists (on reversed parameters)
-    for (const auto& par : commonParams) {
-        m_io_lowered_ops.emplace_back(std::make_shared<IOLoweredExpr>(par, model->get_parameter_index(par), IOLoweredExpr::io_type::INPUT));
-    }
-    for (const auto& res : model->get_results()) {
-        m_io_lowered_ops.emplace_back(std::make_shared<IOLoweredExpr>(res, model->get_result_index(res), IOLoweredExpr::io_type::OUTPUT));
-    }
-    auto params_end_it = std::next(m_io_lowered_ops.begin(), commonParams.size());
-    m_lowered_ops.insert(m_lowered_ops.begin(), m_io_lowered_ops.begin(), params_end_it);
-    m_lowered_ops.insert(m_lowered_ops.end(), params_end_it, m_io_lowered_ops.end());
+//    for (const auto& par : commonParams) {
+//        m_io_lowered_ops.emplace_back(std::make_shared<IOLoweredExpr>(par, model->get_parameter_index(par), IOLoweredExpr::io_type::INPUT));
+//    }
+//    for (const auto& res : model->get_results()) {
+//        m_io_lowered_ops.emplace_back(std::make_shared<IOLoweredExpr>(res, model->get_result_index(res), IOLoweredExpr::io_type::OUTPUT));
+//    }
+//    auto params_end_it = std::next(m_io_lowered_ops.begin(), commonParams.size());
+//    m_lowered_ops.insert(m_lowered_ops.begin(), m_io_lowered_ops.begin(), params_end_it);
+//    m_lowered_ops.insert(m_lowered_ops.end(), params_end_it, m_io_lowered_ops.end());
     const auto& body_rt_info = model->get_rt_info();
     const auto& plugin_shapes = body_rt_info.find("PluginShapesOverride");
     if (plugin_shapes == body_rt_info.end()) {
@@ -109,6 +120,21 @@ LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, const Lowe
         for (int i = 0; i < commonResults.size(); i++)
             m_forcedIOShapes.emplace_back(new_shapes[commonParams.size() + i]);
     }
+}
+
+ov::NodeVector LoweredExprIR::get_ordered_ops(const std::shared_ptr<ov::Model>& m) {
+    if (!m->get_sinks().empty())
+        throw ngraph_error("Linear IR is not supposed to work for model with sinks. Check your transformation pipeline.");
+
+    // Note that an important difference between this impl and Model::get_ordered_ops is that Results and Parameters
+    // are added in REVERSE order, so they will be visited in DIRECT order compared to get_parameters() and get_results()
+    NodeVector nodes;
+    const auto& results = m->get_results();
+    std::copy(results.rbegin(), results.rend(), std::back_inserter(nodes));
+    const auto& params = m->get_parameters();
+    std::copy(params.rbegin(), params.rend(), std::back_inserter(nodes));
+
+    return ov::topological_sort(nodes);
 }
 
 LoweredExprIR::container LoweredExprIR::deep_copy_range(LoweredExprIR::container::const_iterator begin, LoweredExprIR::container::const_iterator end) {
