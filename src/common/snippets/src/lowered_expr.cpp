@@ -10,6 +10,7 @@
 #include "snippets/op/subgraph.hpp"
 #include "snippets/op/kernel.hpp"
 #include <snippets/itt.hpp>
+#include <snippets/op/serialization_node.hpp>
 
 #include <openvino/core/graph_util.hpp>
 #include <openvino/core/type.hpp>
@@ -135,6 +136,22 @@ ov::NodeVector LoweredExprIR::get_ordered_ops(const std::shared_ptr<ov::Model>& 
     std::copy(params.rbegin(), params.rend(), std::back_inserter(nodes));
 
     return ov::topological_sort(nodes);
+}
+
+void LoweredExprIR::serialize(const std::string& xml, const std::string& bin) {
+    auto first_node = std::make_shared<opset1::Parameter>(element::f32, Shape{});
+    first_node->set_friendly_name("Start");
+    first_node->get_rt_info()["execTimeMcs"] = 0;
+    std::shared_ptr<Node> body_node = first_node;
+    for (const auto& expr : m_lowered_ops) {
+        body_node = std::make_shared<op::SerializationNode>(body_node, expr->get_node());
+    }
+    auto last_node = std::make_shared<opset1::Result>(body_node);
+    last_node->set_friendly_name("End");
+    const auto tmp_model = std::make_shared<ov::Model>(ResultVector {last_node},
+                                                       ParameterVector {first_node},
+                                                       "Lowered_IR_Serialization");
+    ov::pass::Serialize(xml, bin).run_on_model(tmp_model);
 }
 
 LoweredExprIR::container LoweredExprIR::deep_copy_range(LoweredExprIR::container::const_iterator begin, LoweredExprIR::container::const_iterator end) {

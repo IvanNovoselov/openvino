@@ -123,6 +123,7 @@ public:
     container::const_reverse_iterator crbegin() const noexcept {return m_lowered_ops.crbegin();}
     container::const_reverse_iterator crend() const noexcept {return m_lowered_ops.crend();}
     static ov::NodeVector get_ordered_ops(const std::shared_ptr<ov::Model>& model);
+    void serialize(const std::string& xml, const std::string& bin);
 
 private:
     container m_lowered_ops{};
