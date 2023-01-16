@@ -34,7 +34,6 @@ bool transposeDecomposition(LoweredExprIR& linear_ir) {
             const auto size_C = static_cast<int64_t>(data_shape[data_shape.size() - 3]);
             const auto size_W = static_cast<int64_t>(data_shape[data_shape.size() - 1]);
             const auto size_H = static_cast<int64_t>(data_shape[data_shape.size() - 2]);
-
             auto load = std::make_shared<snippets::op::LoadReshape>(parameter->output(0), 1, 0, access_pattern);
             auto store = std::make_shared<snippets::op::Store>(load, 1);
             NodeVector nodes2exprs {
@@ -66,6 +65,7 @@ bool transposeDecomposition(LoweredExprIR& linear_ir) {
             for (auto& input : op->output(0).get_target_inputs()) {
                 input.replace_source_output(store->output(0));
             }
+            parameter->output(0).remove_target_input(op->input(0));
             modified = true;
         }
     }

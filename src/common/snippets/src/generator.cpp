@@ -54,7 +54,8 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
 //    pass::insertLoopsLowered(linear_ir, target->get_lanes(), config.m_explicit_loop_insertion);
     std::cerr << "AFTER LOOP INS: =====================\n";
     linear_ir.debug_print();
-
+    std::cerr << "=====================\n";
+    m->validate_nodes_and_infer_types();
     pass::assignRegisters(linear_ir);
     std::string failed_ops("");
     for (const auto&  expr : linear_ir.get_ops()) {
