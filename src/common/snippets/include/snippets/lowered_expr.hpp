@@ -76,7 +76,8 @@ private:
 };
 class LoweredExprIR {
 public:
-    using container = std::list<std::shared_ptr<LoweredExpr>>;
+    using exprtPtr = std::shared_ptr<LoweredExpr>;
+    using container = std::list<exprtPtr>;
     using io_container = std::list<std::shared_ptr<IOLoweredExpr>>;
     using exprIt = container::iterator;
     using constExprIt = container::const_iterator;
@@ -96,6 +97,7 @@ public:
     void init_emitters(const std::shared_ptr<TargetMachine>& target);
     LoweringConfig get_config() {return m_config; }
     std::vector<PartialShape> get_forced_shapes() const {return m_forcedIOShapes;}
+    exprtPtr get_expr_by_node(const std::shared_ptr<Node>& n);
     // todo: We need to check if Result or Parameter is inserted and update m_io_lowered_ops accordingly
     exprIt insert(constExprIt pos, const ov::NodeVector& nodes);
     exprIt insert(constExprIt pos, container::value_type&& value);
@@ -126,7 +128,10 @@ public:
     void serialize(const std::string& xml, const std::string& bin);
 
 private:
+    void register_expression(const exprtPtr& expr);
+    void unregister_expression(const exprtPtr& expr);
     container m_lowered_ops{};
+    std::unordered_map<std::shared_ptr<Node>, std::shared_ptr<LoweredExpr>> m_node2expression_map;
     io_container m_io_lowered_ops;
     LoweringConfig m_config{};
     std::vector<PartialShape> m_forcedIOShapes{};

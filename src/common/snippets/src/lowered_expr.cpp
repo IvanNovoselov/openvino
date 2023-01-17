@@ -205,19 +205,44 @@ void LoweredExprIR::init_emitters(const std::shared_ptr<TargetMachine>& target) 
     }
 }
 
+LoweredExprIR::exprtPtr LoweredExprIR::get_expr_by_node(const std::shared_ptr<Node>& n) {
+    auto found = m_node2expression_map.find(n);
+    return found == m_node2expression_map.end() ? nullptr : found->second;
+}
+
+void LoweredExprIR::register_expression(const exprtPtr& expr) {
+    const auto& node = expr->get_node();
+    if (m_node2expression_map.count(node) != 0)
+        throw ngraph_error("Duplicate node is detected in linear IR: " + std::string(node->get_friendly_name()));
+    m_node2expression_map.insert({node, expr});
+}
+
+void LoweredExprIR::unregister_expression(const exprtPtr& expr) {
+    const auto& node = expr->get_node();
+    if (m_node2expression_map.count(node) != 1)
+        throw ngraph_error("Attempt to erase non-existing expression from linear IR: " + std::string(node->get_friendly_name()));
+    m_node2expression_map.erase(node);
+}
+
 LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, container::value_type&& value) {
+    register_expression(value);
     return m_lowered_ops.insert(pos, value);
 }
 
 LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, const container::value_type& value) {
+    register_expression(value);
     return m_lowered_ops.insert(pos, value);
 }
 
 LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, exprIt begin, exprIt end) {
+    for (auto b = begin; b != end; b++)
+        register_expression(*b);
     return m_lowered_ops.insert(pos, begin, end);
 }
 
 LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, constExprIt begin, constExprIt end) {
+    for (auto b = begin; b != end; b++)
+        register_expression(*b);
     return m_lowered_ops.insert(pos, begin, end);
 }
 
@@ -225,14 +250,16 @@ LoweredExprIR::exprIt LoweredExprIR::insert(LoweredExprIR::constExprIt pos, cons
     container new_exprs;
     std::transform(nodes.begin(), nodes.end(), std::back_inserter(new_exprs),
                    [](const std::shared_ptr<Node>& n) {return std::make_shared<LoweredExpr>(n);});
-    return m_lowered_ops.insert(pos, new_exprs.begin(), new_exprs.end());
+    return insert(pos, new_exprs.begin(), new_exprs.end());
 }
 
 LoweredExprIR::exprIt LoweredExprIR::erase(LoweredExprIR::exprIt pos) {
+    unregister_expression(*pos);
     return m_lowered_ops.erase(pos);
 }
 
 LoweredExprIR::exprIt LoweredExprIR::erase(LoweredExprIR::constExprIt pos) {
+    unregister_expression(*pos);
     return m_lowered_ops.erase(pos);
 }
 
