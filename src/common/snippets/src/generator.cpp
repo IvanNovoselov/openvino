@@ -15,6 +15,7 @@
 #include "snippets/pass/lowered/insert_tail_loop.hpp"
 #include "snippets/pass/lowered/insert_loops.hpp"
 #include "snippets/pass/lowered/transpose_decomposition.hpp"
+#include "snippets/pass/lowered/buffer_propagate_offset_and_reset.hpp"
 #include "snippets/lowered_expr.hpp"
 #include <ngraph/pass/manager.hpp>
 #include <openvino/core/type.hpp>
@@ -47,34 +48,37 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
     };
     auto linear_ir = LoweredExprIR(m, config);
 //    linear_ir = std::move(old_linear_ir);
-    linear_ir.debug_print();
+//    linear_ir.debug_print();
     pass::transposeDecomposition(linear_ir);
+    pass::buffer_propagate_offset_and_reset(linear_ir);
+    linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
+    ov::pass::Serialize("snsdebug_lowered2.xml", "snsdebug_lowered2.bin").run_on_model(m);
     std::cerr << "AFTER Transpose Decomp: =====================\n";
     linear_ir.debug_print();
-//    pass::insertLoopsLowered(linear_ir, target->get_lanes(), config.m_explicit_loop_insertion);
+    pass::insertLoopsLowered(linear_ir, target->get_lanes(), config.m_explicit_loop_insertion);
     std::cerr << "AFTER LOOP INS: =====================\n";
     linear_ir.debug_print();
     std::cerr << "=====================\n";
     m->validate_nodes_and_infer_types();
     pass::assignRegisters(linear_ir);
-    std::string failed_ops("");
-    for (const auto&  expr : linear_ir.get_ops()) {
-        auto rinfo = expr->get_reg_info();
-        auto rinfo_expected = LoweredExpr::getRegisters(expr->get_node());
-        if (rinfo != rinfo_expected) {
-//            expr->set_reg_info(rinfo_expected);
-            failed_ops += expr->get_node()->get_friendly_name() + "\n";
-            std::cerr << expr->get_node()->get_friendly_name() << "\n";
-            std::cerr << "Expected:\n";
-            print_rinfo(rinfo_expected);
-            std::cerr << "Actual:\n";
-            print_rinfo(rinfo);
-        }
-    }
-    if (!failed_ops.empty()) {
-        std::cerr << "register assignment error\n";
+//    std::string failed_ops("");
+//    for (const auto&  expr : linear_ir.get_ops()) {
+//        auto rinfo = expr->get_reg_info();
+//        auto rinfo_expected = LoweredExpr::getRegisters(expr->get_node());
+//        if (rinfo != rinfo_expected) {
+////            expr->set_reg_info(rinfo_expected);
+//            failed_ops += expr->get_node()->get_friendly_name() + "\n";
+//            std::cerr << expr->get_node()->get_friendly_name() << "\n";
+//            std::cerr << "Expected:\n";
+//            print_rinfo(rinfo_expected);
+//            std::cerr << "Actual:\n";
+//            print_rinfo(rinfo);
+//        }
+//    }
+//    if (!failed_ops.empty()) {
+//        std::cerr << "register assignment error\n";
 //        throw ngraph_error("register assignment error");
-    }
+//    }
     linear_ir.debug_print();
 //    int i = 0;
 //    for (auto it = linear_ir.get_ops().begin(); i < 64; i++) {

@@ -499,8 +499,10 @@ void snippets::op::Subgraph::initialize_buffer_scratchpad_size() {
             // Transpose and MatMul ops should have different memories on inputs and outputs to avoid data corruption,
             // so after them, we should allocate new memory. Other operations (Eltwises, Convert) can be executed inplace.
             const auto parent = buffer->get_input_node_shared_ptr(0);
-            if (ov::is_type<op::Brgemm>(parent) || is_transpose_loop(parent)) {
+//            if (ov::is_type<op::Brgemm>(parent) || is_transpose_loop(parent)) {
+            if (ov::is_type<op::Brgemm>(parent) || ov::is_type<opset1::Transpose>(parent)) {
                 offset = m_buffer_scratchpad;
+                buffer->set_offset(offset);
                 propagate_offset(buffer, offset);
                 m_buffer_scratchpad += buffer_size;
                 continue;
@@ -589,7 +591,7 @@ void snippets::op::Subgraph::convert_to_snippet_dialect() {
 //            m_generator->get_target_machine()->get_lanes(), !config.m_explicit_loop_insertion);
 //        if (config.m_has_domain_sensitive_ops) {
 //            manager.register_pass<snippets::pass::LoopFusion>();
-//            manager.register_pass<snippets::pass::ResetBufferState>();
+            manager.register_pass<snippets::pass::ResetBufferState>();
 //        }
     }
     manager.run_passes(body_ptr());

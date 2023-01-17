@@ -81,6 +81,7 @@ LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, LoweringCo
         } else {
             expr = std::make_shared<LoweredExpr>(n);
         }
+        register_expression(expr);
         m_lowered_ops.emplace_back(expr);
     }
     const auto&  commonParams = model->get_parameters();

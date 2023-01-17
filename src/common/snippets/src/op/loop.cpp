@@ -169,6 +169,8 @@ void LoopEnd::validate_and_infer_types() {
 bool LoopEnd::visit_attributes(AttributeVisitor &visitor) {
     visitor.on_attribute("work_amount", work_amount);
     visitor.on_attribute("increment", work_amount_increment);
+    visitor.on_attribute("ptr_incr", ptr_increments);
+    visitor.on_attribute("fin_offset", finalization_offsets);
     return true;
 }
 

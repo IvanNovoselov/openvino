@@ -178,6 +178,14 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
     for (auto expr_it = linear_ir.begin(); expr_it != linear_ir.end(); expr_it++) {
         const auto& expr = *expr_it;
         const auto& node = expr->get_node();
+        // skip explicitly inserted loop
+        if (auto loop_begin = as_type_ptr<op::LoopBegin>(node)) {
+            auto loop_end = loop_begin->get_loop_end();
+            while ((*expr_it)->get_node() != loop_end)
+                expr_it++;
+            // expr_it now points to loop_end, so we need to jump to the next iterations
+            continue;
+        }
         // insert Loops from the last syncronization point till here
         if (expr_requires_loop(expr) && !loop_is_active) {
             loop_begin_pos = expr_it;
