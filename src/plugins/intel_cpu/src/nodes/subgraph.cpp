@@ -556,6 +556,12 @@ void Snippet::schedule_6d() {
             update_ptrs(call_args);
 
             schedule.get_callable<kernel>()(indexes, &call_args);
+            schedule.get_callable<kernel>()(indexes, &call_args);
+            std::cerr << static_cast<const void*>(call_args.src_ptrs[0]) << "\n";
+            std::cerr << static_cast<const void*>(call_args.src_ptrs[1]) << "\n";
+            std::cerr << static_cast<void*>(call_args.dst_ptrs[0]) << "\n";
+            std::cerr << static_cast<void*>(call_args.buffer_scratchpad_ptr) << "\n";
+            std::cerr << "\n";
         });
 }
 
