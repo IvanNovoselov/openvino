@@ -50,12 +50,12 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
 //    linear_ir = std::move(old_linear_ir);
 //    linear_ir.debug_print();
     pass::transposeDecomposition(linear_ir);
-    pass::buffer_propagate_offset_and_reset(linear_ir);
-    linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
     ov::pass::Serialize("snsdebug_lowered2.xml", "snsdebug_lowered2.bin").run_on_model(m);
     std::cerr << "AFTER Transpose Decomp: =====================\n";
     linear_ir.debug_print();
     pass::insertLoopsLowered(linear_ir, target->get_lanes(), config.m_explicit_loop_insertion);
+    pass::buffer_propagate_offset_and_reset(linear_ir);
+    linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
     std::cerr << "AFTER LOOP INS: =====================\n";
     linear_ir.debug_print();
     std::cerr << "=====================\n";

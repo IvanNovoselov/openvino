@@ -193,10 +193,10 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
         }
         if (loop_is_active) {
             // Load or Store
-            if (auto op = as_type_ptr<op::Load>(node))
-                loop_managed_outputs.push_back(op->get_input_source_output(0));
-            else if (auto op = as_type_ptr<op::Store>(node))
-                loop_managed_outputs.push_back(op->output(0));
+            if (is_type<op::Load>(node) || is_type<op::BroadcastLoad>(node))
+                loop_managed_outputs.push_back(node->get_input_source_output(0));
+            else if (is_type<op::Store>(node))
+                loop_managed_outputs.push_back(node->output(0));
 
             if ((is_syncronization_point(expr) || expr == linear_ir.back())) {
                 if (loop_managed_outputs.empty()) {
@@ -212,6 +212,9 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
                                [](const ov::Output<ov::Node>& out) { return out.get_partial_shape(); });
                 auto body_master_shape = body_shapes.front();
                 for (const auto& shape : body_shapes) {
+                    if (!PartialShape::broadcast_merge_into(body_master_shape, shape,
+                                                            ::ngraph::op::AutoBroadcastType::NUMPY))
+                        std::cerr << "The problem\n";
                     NGRAPH_CHECK(PartialShape::broadcast_merge_into(body_master_shape, shape,
                                                                     ::ngraph::op::AutoBroadcastType::NUMPY),
                                  "Loop managed shapes must be numpy broadcastable");
@@ -255,6 +258,7 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
                     linear_ir.insert(loop_end_pos, std::make_shared<LoweredExpr>(outer_loop_end));
                 }
                 loop_is_active = false;
+                loop_managed_outputs.clear();
             }
         }
     }
