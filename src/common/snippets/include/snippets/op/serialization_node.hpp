@@ -37,6 +37,19 @@ public:
         return std::make_shared<SerializationNode>(new_args.at(0), m_node);
     }
     bool visit_attributes(AttributeVisitor &visitor) override {
+        std::vector<std::pair<std::string, ov::PartialShape>> shapes;
+        for (int i = 0; i < m_node->get_input_size(); i++) {
+            const auto& pshape =  m_node->get_input_partial_shape(i);
+            if (pshape.begin() != pshape.end())
+                shapes.emplace_back("in_shape_" + std::to_string(i), m_node->get_input_partial_shape(i));
+        }
+        for (int i = 0; i < m_node->get_output_size(); i++) {
+            const auto& pshape =  m_node->get_output_partial_shape(i);
+            if (pshape.begin() != pshape.end())
+            shapes.emplace_back("out_shape_" + std::to_string(i), pshape);
+        }
+        for (auto& s : shapes )
+            visitor.on_attribute(s.first, s.second);
         m_node->visit_attributes(visitor);
         return true;
     }
