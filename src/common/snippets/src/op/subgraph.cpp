@@ -500,7 +500,7 @@ void snippets::op::Subgraph::initialize_buffer_scratchpad_size() {
             // so after them, we should allocate new memory. Other operations (Eltwises, Convert) can be executed inplace.
             const auto parent = buffer->get_input_node_shared_ptr(0);
 //            if (ov::is_type<op::Brgemm>(parent) || is_transpose_loop(parent)) {
-            if (ov::is_type<op::Brgemm>(parent) || ov::is_type<opset1::Transpose>(parent)) {
+            if (true || ov::is_type<op::Brgemm>(parent) || ov::is_type<opset1::Transpose>(parent)) {
                 offset = m_buffer_scratchpad;
                 buffer->set_offset(offset);
                 propagate_offset(buffer, offset);

@@ -78,8 +78,8 @@ LoopEnd::LoopEnd(const std::vector<Output<Node>> &args, size_t work_amount, size
         work_amount(work_amount), work_amount_increment(work_amount_increment) {
         ptr_increments.resize(apply_increments.size());
         std::transform(apply_increments.begin(), apply_increments.end(), ptr_increments.begin(),
-                       [work_amount_increment](bool apply) {
-                           return apply ? work_amount_increment : 0;
+                       [](bool apply) {
+                           return apply ? 1 : 0;
                        });
     constructor_validate_and_infer_types();
 }
@@ -156,7 +156,7 @@ void LoopEnd::validate_and_infer_types() {
                           "finalization_offsets must be either empty or defined per every input & output of joined Loop. Expected size: ",
                           loop_io_size, " got ", finalization_offsets.size());
     if (ptr_increments.empty())
-        ptr_increments.resize(loop_io_size, static_cast<int64_t>(work_amount_increment));
+        ptr_increments.resize(loop_io_size, 1);
     if (finalization_offsets.empty())
         finalization_offsets.resize(loop_io_size, 0);
     set_output_size(num_inputs - 1);

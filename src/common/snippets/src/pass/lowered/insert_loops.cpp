@@ -171,6 +171,8 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
     };
 
     OutputVector loop_managed_outputs;
+    std::vector<bool> connected_to_buffer;
+    bool buffer_is_managed = false;
     // All IR are supposed to start with LoopBegin
 //    auto loop_begin_pos = std::make_shared<LoweredExpr>(std::make_shared<op::LoopBegin>());
     auto loop_begin_pos = linear_ir.begin();
@@ -193,18 +195,21 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
         }
         if (loop_is_active) {
             // Load or Store
-            if (is_type<op::Load>(node) || is_type<op::BroadcastLoad>(node))
-                loop_managed_outputs.push_back(node->get_input_source_output(0));
-            else if (is_type<op::Store>(node))
-                loop_managed_outputs.push_back(node->output(0));
+            if (is_type<op::Load>(node) || is_type<op::BroadcastLoad>(node)) {
+                const auto& source = node->get_input_source_output(0);
+                loop_managed_outputs.push_back(source);
+                connected_to_buffer.push_back(is_type<op::Buffer>(source.get_node_shared_ptr()));
+            } else if (is_type<op::Store>(node)) {
+                const auto& dest = node->output(0);
+                loop_managed_outputs.push_back(dest);
+                connected_to_buffer.push_back(is_type<op::Buffer>(dest.get_target_inputs().begin()->get_node()->shared_from_this()));
+            }
 
             if ((is_syncronization_point(expr) || expr == linear_ir.back())) {
                 if (loop_managed_outputs.empty()) {
                     loop_is_active = false;
                     continue;
                 }
-                // end of the list is a special kind os synchronization point => we include it in the loop
-//            auto loop_end_pos = expr == linear_ir.back() ? ++expr_it : expr_it;
                 auto loop_end_pos = expr_it;
                 std::vector<ov::PartialShape> body_shapes;
                 std::transform(loop_managed_outputs.begin(), loop_managed_outputs.end(),
@@ -212,9 +217,6 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
                                [](const ov::Output<ov::Node>& out) { return out.get_partial_shape(); });
                 auto body_master_shape = body_shapes.front();
                 for (const auto& shape : body_shapes) {
-                    if (!PartialShape::broadcast_merge_into(body_master_shape, shape,
-                                                            ::ngraph::op::AutoBroadcastType::NUMPY))
-                        std::cerr << "The problem\n";
                     NGRAPH_CHECK(PartialShape::broadcast_merge_into(body_master_shape, shape,
                                                                     ::ngraph::op::AutoBroadcastType::NUMPY),
                                  "Loop managed shapes must be numpy broadcastable");
@@ -224,11 +226,22 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
                                                utils::get_outer_dim(body_master_shape).get_length() :
                                                1;
                 //
-                const auto apply_increments = calculate_inner_apply_increments(body_master_shape, body_shapes);
                 std::vector<int64_t> finalization_offsets(body_shapes.size(), 0);
                 if (outer_work_amount > 1) {
                     // Return pointer in case of outer dim broadcasting.
                     finalization_offsets = calculate_finalization_offsets(body_master_shape, body_shapes);
+                }
+                auto apply_increments = calculate_inner_apply_increments(body_master_shape, body_shapes);
+                bool last_connected = false;
+                for (int i = static_cast<int>(loop_managed_outputs.size()) - 1; i >=0; i--) {
+                    if (connected_to_buffer[i]) {
+                        if (!last_connected) {
+                            last_connected = true;
+                        } else {
+                            apply_increments[i] = false;
+                            finalization_offsets[i] = 0;
+                        }
+                    }
                 }
                 const auto& inner_loop_begin = std::make_shared<op::LoopBegin>();
                 OutputVector managed_outputs = loop_managed_outputs;
@@ -259,6 +272,7 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
                 }
                 loop_is_active = false;
                 loop_managed_outputs.clear();
+                buffer_is_managed = false;
             }
         }
     }

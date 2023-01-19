@@ -58,6 +58,10 @@ bool buffer_propagate_offset_and_reset(LoweredExprIR& linear_ir) {
                 if (!loop_ends.empty()) {
                     auto fin_offsets = loop_ends.front().first->get_finalization_offsets();
                     const auto index = loop_ends.front().second;
+                    if (loop_ends.front().first->get_friendly_name() == "LoopEnd_2254") {
+                        store_integral_offset /= 16;
+                        std::cerr << "\n\n\n\n\nHIT!!!!!!!!!!\n\n\n\n\n\n";
+                    }
                     fin_offsets[index] -= store_integral_offset;
                     loop_ends.front().first->set_finalization_offsets(fin_offsets);
                 }

@@ -72,8 +72,9 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
             if (force_ptr_increment || loop->has_outer_loop) {
                 std::vector<int64_t> new_finalization_offsets(loop->get_finalization_offsets());
                 const auto& ptr_increments = loop->get_ptr_increments();
+                const auto work_amount_incr = static_cast<int64_t>(loop->get_increment());
                 for (auto i = 0; i < new_finalization_offsets.size(); i++) {
-                    new_finalization_offsets[i] += ptr_increments[i];
+                    new_finalization_offsets[i] += ptr_increments[i] * work_amount_incr;
                 }
                 loop->set_finalization_offsets(new_finalization_offsets);
             }
@@ -140,7 +141,7 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                 tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
                 tail_loop_end->set_increment(tail_size);
                 // ptr increments were set to the old increment, need to update them in accordance with the new one
-                tail_loop_end->update_ptr_increments(static_cast<int64_t>(tail_size));
+//                tail_loop_end->update_ptr_increments(static_cast<int64_t>(tail_size));
                 tail_loop_end->set_work_amount(tail_size);
                 tail_loop_end->has_outer_loop = vector_loop_end->has_outer_loop;
 
