@@ -107,7 +107,6 @@ public:
 private:
     std::vector<int64_t> ptr_increments;
     std::vector<int64_t> finalization_offsets;
-    size_t loop_io_size;
     size_t work_amount;
     size_t work_amount_increment;
     bool evaluate_once; // true if the Loop is executed only once, used to skip setting and testing the loop counter

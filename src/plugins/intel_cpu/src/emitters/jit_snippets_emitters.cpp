@@ -392,17 +392,16 @@ LoopEndEmitter::LoopEndEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::imp
     if (!loop_begin)
         IE_THROW() << "LoopEndEmitter invoked with invalid configuration: the last arg must be LoopBegin";
     // Note that 1 edge connects LoopBegin and LoopEnd
-    num_inputs = loop_begin->get_input_size();
+    num_inputs = loop_end->get_input_size();
     num_outputs = loop_end->get_output_size();
-    wa_increment = loop_end->get_increment();
-    work_amount = loop_end->get_work_amount();
+    wa_increment = static_cast<int64_t>(loop_end->get_increment());
+    work_amount = static_cast<int64_t>(loop_end->get_work_amount());
     ptr_increments = loop_end->get_ptr_increments();
     finalization_offsets = loop_end->get_finalization_offsets();
     evaluate_once = loop_end->get_evaluate_once();
-    for (int i = 0; i < num_inputs; i++)
-        io_data_size.push_back(static_cast<int64_t>(loop_begin->get_input_element_type(i).size()));
-    for (int i = 0; i < num_outputs; i++)
-        io_data_size.push_back(static_cast<int64_t>(loop_end->get_output_element_type(i).size()));
+    // the last input is for work_amount
+    for (int i = 0; i < num_inputs - 1; i++)
+        io_data_size.push_back(static_cast<int64_t>(loop_end->get_input_element_type(i).size()));
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
 }
 
@@ -419,15 +418,15 @@ void LoopEndEmitter::validate_arguments(const std::vector<size_t> &in,
                                        const std::vector<size_t> &out,
                                        const std::vector<size_t> &pool,
                                        const std::vector<size_t> &gpr) const {
-    if (loop_begin->input_regs.size() != num_inputs)
-        IE_THROW() << "Invalid loop_begin->input_regs size: expected " << num_inputs << " got " << loop_begin->input_regs.size();
+    if (loop_begin->input_regs.size() != 0)
+        IE_THROW() << "Invalid loop_begin->input_regs size: expected " << 0 << " got " << loop_begin->input_regs.size();
     if (out.size() != num_outputs)
         IE_THROW() << "Invalid number of out arguments: expected " << num_outputs << " got " << out.size();
-    if (in.size() != num_outputs + 1)
-        IE_THROW() << "Invalid number of in arguments: expected " << num_inputs + 1 << " got " << in.size();
-    const auto io_size = num_inputs + num_outputs;
+    if (in.size() != num_inputs)
+        IE_THROW() << "Invalid number of in arguments: expected " << num_inputs  << " got " << in.size();
+    const auto io_size = num_inputs - 1;
     if (ptr_increments.size() != io_size)
-        IE_THROW() << "Invalid apply_increments size: expected " << io_size << " got " << ptr_increments.size();
+        IE_THROW() << "Invalid ptr_increments size: expected " << io_size << " got " << ptr_increments.size();
     if (finalization_offsets.size() != io_size)
         IE_THROW() << "Invalid finalization_offsets size: expected: " << io_size << " got " << finalization_offsets.size();
 }
@@ -437,9 +436,10 @@ void LoopEndEmitter::emit_impl(const std::vector<size_t>& in,
                                  const std::vector<size_t>& pool,
                                  const std::vector<size_t>& gpr,
                                  const ov::intel_cpu::emitter_context *emit_context) const {
-    std::vector<size_t> data_ptr_reg_idxs(loop_begin->input_regs);
-    data_ptr_reg_idxs.reserve(num_inputs + num_outputs);
-    std::copy(out.begin(), out.end(), std::back_inserter(data_ptr_reg_idxs));
+    std::vector<size_t> data_ptr_reg_idxs;
+    // the last input is actually a work_amount reg
+    data_ptr_reg_idxs.reserve(num_inputs - 1);
+    std::copy(in.begin(), in.end() - 1, std::back_inserter(data_ptr_reg_idxs));
     std::vector<Reg64> data_ptr_regs;
     transform_idxs_to_regs(data_ptr_reg_idxs, data_ptr_regs);
     Reg64 reg_work_amount = Reg64(in.back());

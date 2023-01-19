@@ -74,7 +74,7 @@ LoopEnd::LoopEnd(const std::vector<Output<Node>> &args, size_t work_amount, size
                  std::vector<bool> apply_increments, std::vector<int64_t> finalization_offsets)
         : LoopBase(args),
         finalization_offsets(std::move(finalization_offsets)),
-        has_outer_loop(true), loop_io_size(0),
+        has_outer_loop(true), evaluate_once(false),
         work_amount(work_amount), work_amount_increment(work_amount_increment) {
         ptr_increments.resize(apply_increments.size());
         std::transform(apply_increments.begin(), apply_increments.end(), ptr_increments.begin(),
@@ -88,7 +88,7 @@ LoopEnd::LoopEnd(const std::vector<Output<Node>> &args, size_t work_amount, size
                  std::vector<int64_t> ptr_increments, std::vector<int64_t> finalization_offsets)
         : LoopBase(args), ptr_increments(std::move(ptr_increments)),
           finalization_offsets(std::move(finalization_offsets)),
-          has_outer_loop(true), loop_io_size(0),
+          has_outer_loop(true), evaluate_once(false),
           work_amount(work_amount), work_amount_increment(work_amount_increment) {
     constructor_validate_and_infer_types();
 }
@@ -113,13 +113,13 @@ const std::vector<int64_t>& LoopEnd::get_ptr_increments()const {
 }
 
 void LoopEnd::set_finalization_offsets(std::vector<int64_t> offsets) {
-    if (offsets.size() != loop_io_size)
+    if (offsets.size() != get_input_size() - 1)
         throw std::invalid_argument("LoopEnd set_finalization_offsets is called with inconsistent offsets.size()");
     finalization_offsets = std::move(offsets);
 }
 
 void LoopEnd::set_ptr_increments(std::vector<int64_t> new_ptr_increments) {
-    if (new_ptr_increments.size() != loop_io_size)
+    if (new_ptr_increments.size() != get_input_size() - 1)
         throw std::invalid_argument("LoopEnd set_ptr_increments is called with inconsistent new_ptr_increments.size()");
     ptr_increments = std::move(new_ptr_increments);
 }
@@ -144,11 +144,10 @@ void LoopEnd::set_evaluate_once(bool once) {
 }
 
 void LoopEnd::validate_and_infer_types() {
-    const size_t num_inputs = get_input_size();
-    const auto loop_begin = ov::as_type_ptr<LoopBegin>(input(get_input_size() - 1).get_source_output().get_node_shared_ptr());
+    NODE_VALIDATION_CHECK(this, get_input_size() >= 1, "LoopEnd must have at least one input");
+    const int loop_io_size = get_input_size() - 1;
+    const auto loop_begin = ov::as_type_ptr<LoopBegin>(input(loop_io_size).get_source_output().get_node_shared_ptr());
     NODE_VALIDATION_CHECK(this, loop_begin != nullptr, "LoopEnd must have LoopBegin as the last argument");
-    // Note: have to -2 because the LoopBegin->LoopEnd edge is counted twice
-    loop_io_size = get_input_size() + loop_begin->get_output_size() - 2;
     NODE_VALIDATION_CHECK(this, ptr_increments.empty() || ptr_increments.size() == loop_io_size,
                           "ptr_increments must be either empty or defined per every input & output of joined Loop. Expected size: ",
                           loop_io_size, " got ", ptr_increments.size());
@@ -159,11 +158,7 @@ void LoopEnd::validate_and_infer_types() {
         ptr_increments.resize(loop_io_size, 1);
     if (finalization_offsets.empty())
         finalization_offsets.resize(loop_io_size, 0);
-    set_output_size(num_inputs - 1);
-    // All outputs are by-passed from inputs, except for the last one - it connects LoopBegin and LoopEnd
-    // todo: remove this forwarding after migration to linear IR
-    for (int i = 0; i < num_inputs - 1; i++)
-        get_output_descriptor(i).set_tensor_ptr(get_input_descriptor(i).get_output().get_tensor_ptr());
+    set_output_type(0, element::f32, ov::PartialShape{ov::Shape{}});
 }
 
 bool LoopEnd::visit_attributes(AttributeVisitor &visitor) {

@@ -272,6 +272,7 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
                 }
                 loop_is_active = false;
                 loop_managed_outputs.clear();
+                connected_to_buffer.clear();
                 buffer_is_managed = false;
             }
         }

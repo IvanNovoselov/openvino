@@ -172,8 +172,8 @@ private:
     size_t num_outputs = 0;
     // keep data_size int64_t to avoid conversion to size_t (and overflow) when multiplied by negative increments or offsets
     std::vector<int64_t> io_data_size {};
-    size_t wa_increment = 0;
-    size_t work_amount = 0;
+    int64_t wa_increment = 0;
+    int64_t work_amount = 0;
     bool evaluate_once = false;
     std::vector<int64_t> ptr_increments;
     std::vector<int64_t> finalization_offsets;

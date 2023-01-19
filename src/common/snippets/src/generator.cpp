@@ -55,7 +55,6 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
     linear_ir.debug_print();
     pass::insertLoopsLowered(linear_ir, target->get_lanes(), config.m_explicit_loop_insertion);
     pass::buffer_propagate_offset_and_reset(linear_ir);
-    linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
     std::cerr << "AFTER LOOP INS: =====================\n";
     linear_ir.debug_print();
     std::cerr << "=====================\n";
@@ -87,6 +86,7 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
 //    throw ngraph_error("FINITA!");
     // todo: modify this pass so if no vector loop is needed, then the appropriate work_amounts are set at insertion time
     pass::insertTailLoop(linear_ir);
+    linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
 
     linear_ir.init_emitters(target);
 
