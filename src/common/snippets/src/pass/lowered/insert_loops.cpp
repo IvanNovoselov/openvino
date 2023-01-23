@@ -11,10 +11,11 @@
 namespace ngraph {
 namespace snippets {
 namespace pass {
+namespace lowered {
 
 namespace {
 std::vector<bool> calculate_inner_apply_increments(const ov::PartialShape& master,
-                                                                const std::vector<ov::PartialShape>& shapes) {
+                                                   const std::vector<ov::PartialShape>& shapes) {
     // Inner Loop applies increments if a dimension is not broadcasted
     std::vector<bool> apply_increments;
     apply_increments.reserve(shapes.size());
@@ -37,7 +38,7 @@ std::vector<bool> calculate_outer_apply_increments(const std::vector<ov::Partial
 }
 
 std::vector<int64_t> calculate_finalization_offsets(const ov::PartialShape& master,
-                                                                 const std::vector<ov::PartialShape>& shapes) {
+                                                    const std::vector<ov::PartialShape>& shapes) {
     const auto inner_work_amount = utils::get_inner_dim(master).get_length();
     std::vector<int64_t> inner_finalization_offsets;//(shapes.size(), 0);
 //    std::transform(shapes.begin(), shapes.end(), inner_finalization_offsets.begin(),
@@ -165,9 +166,9 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
     auto expr_requires_loop = [](const std::shared_ptr<LoweredExpr>& expr) -> bool {
         const auto& n = expr->get_node();
         return !(is_type<op::Brgemm>(n) ||
-                is_type<opset1::Parameter>(n) ||
-                is_type<opset1::Result>(n) ||
-                is_type<op::Buffer>(n));
+                 is_type<opset1::Parameter>(n) ||
+                 is_type<opset1::Result>(n) ||
+                 is_type<op::Buffer>(n));
     };
 
     OutputVector loop_managed_outputs;
@@ -202,7 +203,8 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
             } else if (is_type<op::Store>(node)) {
                 const auto& dest = node->output(0);
                 loop_managed_outputs.push_back(dest);
-                connected_to_buffer.push_back(is_type<op::Buffer>(dest.get_target_inputs().begin()->get_node()->shared_from_this()));
+                connected_to_buffer.push_back(
+                        is_type<op::Buffer>(dest.get_target_inputs().begin()->get_node()->shared_from_this()));
             }
 
             if ((is_syncronization_point(expr) || expr == linear_ir.back())) {
@@ -233,7 +235,7 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
                 }
                 auto apply_increments = calculate_inner_apply_increments(body_master_shape, body_shapes);
                 bool last_connected = false;
-                for (int i = static_cast<int>(loop_managed_outputs.size()) - 1; i >=0; i--) {
+                for (int i = static_cast<int>(loop_managed_outputs.size()) - 1; i >= 0; i--) {
                     if (connected_to_buffer[i]) {
                         if (!last_connected) {
                             last_connected = true;
@@ -283,9 +285,11 @@ void insert_loops_explicitly(LoweredExprIR& linear_ir, const size_t vector_size)
     }
 }
 } // namespace
+InsertLoops::InsertLoops(size_t vector_size, bool explicit_loop_insertion)
+    : LinearIRTransformation(), m_vector_size(vector_size), m_explicit_loop_insertion(explicit_loop_insertion) {
+}
 
-
-bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool explicit_loop_insertion) {
+bool InsertLoops::run(LoweredExprIR& linear_ir) {
     OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::insertLoops")
     const auto& lowering_config = linear_ir.get_config();
     auto master_shape = lowering_config.m_master_shape;
@@ -303,9 +307,9 @@ bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool expli
     OutputVector io_outputs;
     // Here we employ the fact that Result has one output that duplicates input
     std::transform(io_exprs.begin(), io_exprs.end(), std::back_inserter(io_outputs),
-                   [](const std::shared_ptr<IOLoweredExpr>& expr){ return expr->get_node()->output(0);});
+                   [](const std::shared_ptr<IOLoweredExpr>& expr) { return expr->get_node()->output(0); });
     if (inner_work_amount > 0) {
-        if (!explicit_loop_insertion) {
+        if (!m_explicit_loop_insertion) {
             const auto apply_increments = calculate_inner_apply_increments(master_shape, ioShapes);
             std::vector<int64_t> finalization_offsets(ioShapes.size(), 0);
             if (outer_work_amount > 1) {
@@ -317,7 +321,7 @@ bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool expli
             managed_outputs.push_back(inner_loop_begin->output(0));
             const auto& inner_loop_end = std::make_shared<op::LoopEnd>(managed_outputs,
                                                                        inner_work_amount,
-                                                                       vector_size,
+                                                                       m_vector_size,
                                                                        apply_increments,
                                                                        finalization_offsets);
             // set internal flag to enable scalar vs vector loop optimizations
@@ -340,18 +344,15 @@ bool insertLoopsLowered(LoweredExprIR& linear_ir, size_t vector_size, bool expli
                 linear_ir.insert(linear_ir.end(), std::make_shared<LoweredExpr>(outer_loop_end));
             }
         } else {
-//            throw ngraph_error("Explicit loop insertion is not yet supported");
-            std::cerr << "Explicit loop insertion is not yet supported\n";
-            insert_loops_explicitly(linear_ir, vector_size);
+//            std::cerr << "Explicit loop insertion is not yet supported\n";
+            insert_loops_explicitly(linear_ir, m_vector_size);
         }
     }
-    std::cerr << __PRETTY_FUNCTION__ << "\n";
-    linear_ir.debug_print();
-    std::cerr << "\n\n";
 
     return true;
 }
 
+} // namespace lowered
 } // namespace pass
 } // namespace snippets
 } // namespace ngraph

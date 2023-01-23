@@ -4,15 +4,28 @@
 
 #pragma once
 
-#include "snippets/lowered_expr.hpp"
+#include "linear_IR_transformation.hpp"
 
 namespace ngraph {
 namespace snippets {
 namespace pass {
+namespace lowered {
 
-// todo: add description
-bool buffer_propagate_offset_and_reset(LoweredExprIR& linear_ir);
+/**
+ * @interface PropagateOffsetAndResetBuffer
+ * @brief Propagates Buffer offsets to connected Load/Store (and other MemoryAccess) operations.
+ *        Also, calculates the amount of data stored to the Buffer (via Store inside one or more Loops),
+ *        and resets the corresponding pointer (sets negative finalization offset to the outermost LoopEnd).
+ * @ingroup snippets
+ */
 
+class PropagateOffsetAndResetBuffer : public LinearIRTransformation {
+public:
+    OPENVINO_RTTI("PropagateOffsetAndResetBuffer", "LinearIRTransformation")
+    bool run(LoweredExprIR& linear_ir) override;
+};
+
+} // namespace lowered
 } // namespace pass
 } // namespace snippets
 } // namespace ngraph

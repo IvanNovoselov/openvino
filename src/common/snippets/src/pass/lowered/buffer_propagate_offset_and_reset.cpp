@@ -9,7 +9,9 @@
 namespace ngraph {
 namespace snippets {
 namespace pass {
-bool buffer_propagate_offset_and_reset(LoweredExprIR& linear_ir) {
+namespace lowered {
+
+bool PropagateOffsetAndResetBuffer::run(LoweredExprIR& linear_ir) {
     OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::buffer_propagate_offset_and_reset")
     std::vector<LoweredExprIR::container::iterator> exprs_to_del;
     bool modified = false;
@@ -71,7 +73,7 @@ bool buffer_propagate_offset_and_reset(LoweredExprIR& linear_ir) {
     return modified;
 }
 
+} // namespace lowered
 } // namespace pass
 } // namespace snippets
 } // namespace ngraph
-

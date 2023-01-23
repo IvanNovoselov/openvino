@@ -4,15 +4,27 @@
 
 #pragma once
 
-#include "snippets/lowered_expr.hpp"
+#include "linear_IR_transformation.hpp"
 
 namespace ngraph {
 namespace snippets {
 namespace pass {
+namespace lowered {
 
-// todo: add description
-bool assignRegisters(LoweredExprIR& linear_ir);
+/**
+ * @interface AssignRegisters
+ * @brief Assigns in/out abstract registers indexes to every operation.
+ * Note that changing of the IR is likely to invalidate register assignment.
+ * @ingroup snippets
+ */
+class AssignRegisters : public LinearIRTransformation {
+public:
+    OPENVINO_RTTI("AssignRegisters", "LinearIRTransformation")
+    bool run(LoweredExprIR& linear_ir) override;
+    static constexpr size_t reg_count = 16lu;
+};
 
+} // namespace lowered
 } // namespace pass
 } // namespace snippets
 } // namespace ngraph

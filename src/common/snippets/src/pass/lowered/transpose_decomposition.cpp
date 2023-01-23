@@ -9,8 +9,11 @@
 namespace ngraph {
 namespace snippets {
 namespace pass {
-const std::set<std::vector<int>> supported_cases = {{0, 2, 3, 1}};
-bool transposeDecomposition(LoweredExprIR& linear_ir) {
+namespace lowered {
+
+const std::set<std::vector<int>> TransposeDecomposition::supported_cases = {{0, 2, 3, 1}};
+
+bool TransposeDecomposition::run(LoweredExprIR& linear_ir) {
     OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::insertTransposeDecomposition")
     std::vector<LoweredExprIR::container::iterator> exprs_to_del;
     bool modified = false;
@@ -24,7 +27,7 @@ bool transposeDecomposition(LoweredExprIR& linear_ir) {
             auto order_value = order->cast_vector<int>();
             if (supported_cases.count(order_value) == 0)
                 continue;
-            auto &param_rt = parameter->get_rt_info();
+            auto& param_rt = parameter->get_rt_info();
             // Note: store and usage inside emitters as size_t is more convenient, so static_cast here
             const auto& access_pattern = order->cast_vector<size_t>();
             param_rt["Layout"] = access_pattern;
@@ -52,12 +55,16 @@ bool transposeDecomposition(LoweredExprIR& linear_ir) {
             auto loop_W_managed = loop_managed_outputs;
             loop_W_managed.emplace_back(nodes2exprs[0]->output(0));
             nodes2exprs.emplace_back(std::make_shared<op::LoopEnd>(loop_C_managed,
-                                                                   size_C, 1, ptr_increments_C, finalization_offsets_C));
+                                                                   size_C, 1, ptr_increments_C,
+                                                                   finalization_offsets_C));
             nodes2exprs.emplace_back(std::make_shared<op::LoopEnd>(loop_W_managed,
-                                                                   size_W, 1, std::vector<int64_t>{0, 0}, std::vector<int64_t>{0, 0}));
+                                                                   size_W, 1, std::vector<int64_t> {0, 0},
+                                                                   std::vector<int64_t> {0, 0}));
 
             auto order_it = std::find_if(linear_ir.begin(), expr_it,
-                                      [&](const std::shared_ptr<LoweredExpr>& expr){return expr->get_node() == order;});
+                                         [&](const std::shared_ptr<LoweredExpr>& expr) {
+                                             return expr->get_node() == order;
+                                         });
             // Transpose and order Constant should be deleted afterwards
             exprs_to_del.push_back(order_it);
             exprs_to_del.push_back(expr_it);
@@ -74,6 +81,7 @@ bool transposeDecomposition(LoweredExprIR& linear_ir) {
     return modified;
 }
 
+} // namespace lowered
 } // namespace pass
 } // namespace snippets
 } // namespace ngraph

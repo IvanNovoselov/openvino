@@ -6,12 +6,12 @@
 #include "snippets/snippets_isa.hpp"
 #include "snippets/itt.hpp"
 
-constexpr size_t reg_count = 16lu;
 namespace ngraph {
 namespace snippets {
 namespace pass {
+namespace lowered {
 
-bool assignRegisters(LoweredExprIR& linear_ir) {
+bool AssignRegisters::run(LoweredExprIR& linear_ir) {
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::op::AssignRegisters")
     using Reg = size_t;
     using tensor = std::shared_ptr<descriptor::Tensor>;
@@ -322,6 +322,7 @@ bool assignRegisters(LoweredExprIR& linear_ir) {
     return false;
 }
 
+} // namespace lowered
 } // namespace pass
 } // namespace snippets
 } // namespace ngraph

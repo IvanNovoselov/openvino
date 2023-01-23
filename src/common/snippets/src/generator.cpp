@@ -27,66 +27,23 @@ code Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& co
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator::generate")
     if (!target->is_supported())
         throw ngraph_error("unsupported architecture for code generation");
-    /*
-    auto nodes = old_lowering(m, target, config);
-    auto old_linear_ir = LoweredExprIR();
-    for (const auto& n : nodes) {
-        auto expr = std::make_shared<LoweredExpr>(n);
-        auto rinfo = LoweredExpr::getRegisters(n);
-        expr->set_reg_info(rinfo);
-        old_linear_ir.get_ops().emplace_back(expr);
-    }
-    */
-    auto print_rinfo = [](RegInfo rinfo) {
-        std::cerr << "   ";
-        for (auto i : rinfo.first)
-            std::cerr << i << " ";
-        std::cerr << " => ";
-        for (auto i : rinfo.second)
-            std::cerr << i << " ";
-        std::cerr << "\n";
-    };
     auto linear_ir = LoweredExprIR(m, config);
-//    linear_ir = std::move(old_linear_ir);
-//    linear_ir.debug_print();
-    pass::transposeDecomposition(linear_ir);
-    ov::pass::Serialize("snsdebug_lowered2.xml", "snsdebug_lowered2.bin").run_on_model(m);
-    std::cerr << "AFTER Transpose Decomp: =====================\n";
-    linear_ir.debug_print();
-    pass::insertLoopsLowered(linear_ir, target->get_lanes(), config.m_explicit_loop_insertion);
-    pass::buffer_propagate_offset_and_reset(linear_ir);
-    std::cerr << "AFTER LOOP INS: =====================\n";
-    linear_ir.debug_print();
-    std::cerr << "=====================\n";
-    m->validate_nodes_and_infer_types();
-    pass::assignRegisters(linear_ir);
-//    std::string failed_ops("");
-//    for (const auto&  expr : linear_ir.get_ops()) {
-//        auto rinfo = expr->get_reg_info();
-//        auto rinfo_expected = LoweredExpr::getRegisters(expr->get_node());
-//        if (rinfo != rinfo_expected) {
-////            expr->set_reg_info(rinfo_expected);
-//            failed_ops += expr->get_node()->get_friendly_name() + "\n";
-//            std::cerr << expr->get_node()->get_friendly_name() << "\n";
-//            std::cerr << "Expected:\n";
-//            print_rinfo(rinfo_expected);
-//            std::cerr << "Actual:\n";
-//            print_rinfo(rinfo);
+    std::vector<std::shared_ptr<pass::lowered::LinearIRTransformation>> transformation_pipeline {
+            std::make_shared<pass::lowered::TransposeDecomposition>(),
+            std::make_shared<pass::lowered::InsertLoops>(target->get_lanes(), config.m_explicit_loop_insertion),
+            std::make_shared<pass::lowered::PropagateOffsetAndResetBuffer>(),
+            std::make_shared<pass::lowered::AssignRegisters>(),
+            // todo: modify this pass so if no vector loop is needed, then the appropriate work_amounts are set at insertion time
+            std::make_shared<pass::lowered::InsertTailLoop>()
+    };
+    for (const auto& transform : transformation_pipeline) {
+//        std::string name (transform->get_type_name());
+//        if (name == "InsertLoops") {
+//            linear_ir.debug_print();
+//            linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
 //        }
-//    }
-//    if (!failed_ops.empty()) {
-//        std::cerr << "register assignment error\n";
-//        throw ngraph_error("register assignment error");
-//    }
-    linear_ir.debug_print();
-//    int i = 0;
-//    for (auto it = linear_ir.get_ops().begin(); i < 64; i++) {
-//        std::cerr << i << " : " <<(*it++)->get_node()->get_friendly_name() << "\n";
-//    }
-//    throw ngraph_error("FINITA!");
-    // todo: modify this pass so if no vector loop is needed, then the appropriate work_amounts are set at insertion time
-    pass::insertTailLoop(linear_ir);
-    linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
+        transform->run(linear_ir);
+    }
 
     linear_ir.init_emitters(target);
 

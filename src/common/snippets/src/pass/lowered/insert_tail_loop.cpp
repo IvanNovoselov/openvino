@@ -9,12 +9,13 @@
 namespace ngraph {
 namespace snippets {
 namespace pass {
+namespace lowered {
 
-namespace {
-auto tail_transformations(LoweredExprIR& linear_ir,
-                          LoweredExprIR::container::const_iterator tail_begin,
-                          LoweredExprIR::container::const_iterator tail_end,
-                          const size_t tail_size, const LoweringConfig& config) -> void {
+void InsertTailLoop::tail_transformations(LoweredExprIR& linear_ir,
+                                          LoweredExprIR::container::const_iterator tail_begin,
+                                          LoweredExprIR::container::const_iterator tail_end,
+                                          const size_t tail_size) {
+    const auto& config = linear_ir.get_config();
     auto insertFill = [tail_size](const ov::Input<ov::Node>& input) -> std::shared_ptr<ov::Node> {
         std::shared_ptr<ov::Node> fill = nullptr;
         auto& rt = input.get_rt_info();
@@ -53,9 +54,8 @@ auto tail_transformations(LoweredExprIR& linear_ir,
         }
     }
 }
-} //namespace
 
-bool insertTailLoop(LoweredExprIR& linear_ir) {
+bool InsertTailLoop::run(LoweredExprIR& linear_ir) {
     OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::insertTailLoop")
     bool modified = false;
     const auto& lowering_config = linear_ir.get_config();
@@ -100,13 +100,15 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
             const auto need_vector_loop = work_amount >= increment;
             // Note, that finalization_offsets could be modified inside optimize_single_evaluation,
             // so need to save them here to cover (evaluate_once vector with non-zero finalization_offsets + tail)
-            std::vector<int64_t> tail_finalization_offsets = need_tail ? vector_loop_end->get_finalization_offsets() : std::vector<int64_t> {};
+            std::vector<int64_t> tail_finalization_offsets = need_tail ? vector_loop_end->get_finalization_offsets()
+                                                                       : std::vector<int64_t> {};
             // vector loops are required => Just copy the body, original loop is already a vector one
             if (need_vector_loop) {
                 // Note that finalization offsets should be applied after the last iteration.
                 // So if there is a tail, then we should apply offsets after it, but not now.
                 if (need_tail)
-                    vector_loop_end->set_finalization_offsets(std::vector<int64_t>(tail_finalization_offsets.size(), 0));
+                    vector_loop_end->set_finalization_offsets(
+                            std::vector<int64_t>(tail_finalization_offsets.size(), 0));
 
                 if (lowering_config.m_optimize_single_evaluation) {
                     // force ptr increments if there is tail
@@ -135,7 +137,7 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
                     tail_end = expr_it;
                 }
 
-                tail_transformations(linear_ir, tail_begin, tail_end, tail_size, lowering_config);
+                tail_transformations(linear_ir, tail_begin, tail_end, tail_size);
                 std::shared_ptr<op::LoopEnd> tail_loop_end =
                         ov::as_type_ptr<op::LoopBegin>((*tail_begin)->get_node())->get_loop_end();
                 tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
@@ -162,6 +164,7 @@ bool insertTailLoop(LoweredExprIR& linear_ir) {
     return modified;
 }
 
+} // namespace lowered
 } // namespace pass
 } // namespace snippets
 } // namespace ngraph
