@@ -5,8 +5,8 @@
 #pragma once
 
 #include <ngraph/op/op.hpp>
-#include <ngraph/op/power.hpp>
 #include <snippets/snippets_isa.hpp>
+#include <snippets/lowered_expr.hpp>
 
 namespace ngraph {
 namespace snippets {
@@ -18,10 +18,11 @@ public:
     OPENVINO_OP("SerializationNode", "SnippetsOpset");
 
     SerializationNode() = default;
-    SerializationNode(const Output <Node> &arg, const std::shared_ptr<Node>& node)
-    : Op({arg}), m_node(node) {
-        if (!node)
-            throw ngraph_error("SerializationNode requires non-null node pointer");
+    SerializationNode(const Output <Node> &arg, const std::shared_ptr<LoweredExpr>& expr)
+    : Op({arg}), m_expr(expr) {
+        if (!m_expr || !m_expr->get_node())
+            throw ngraph_error("SerializationNode requires a valid expression with non-null node pointer");
+        const auto& node = expr->get_node();
         std::string type = node->get_type_name();
         std::string name = node->get_friendly_name();
         // If node is a parameter, show another type name, so the node will be displayed correctly
@@ -34,28 +35,34 @@ public:
     }
     std::shared_ptr<Node> clone_with_new_inputs(const OutputVector &new_args) const override {
         check_new_args_count(this, new_args);
-        return std::make_shared<SerializationNode>(new_args.at(0), m_node);
+        return std::make_shared<SerializationNode>(new_args.at(0), m_expr);
     }
     bool visit_attributes(AttributeVisitor &visitor) override {
         std::vector<std::pair<std::string, ov::PartialShape>> shapes;
-        for (int i = 0; i < m_node->get_input_size(); i++) {
-            const auto& pshape =  m_node->get_input_partial_shape(i);
+        const auto& node = m_expr->get_node();
+        for (int i = 0; i < node->get_input_size(); i++) {
+            const auto& pshape =  node->get_input_partial_shape(i);
             if (pshape.begin() != pshape.end())
-                shapes.emplace_back("in_shape_" + std::to_string(i), m_node->get_input_partial_shape(i));
+                shapes.emplace_back("in_shape_" + std::to_string(i), node->get_input_partial_shape(i));
         }
-        for (int i = 0; i < m_node->get_output_size(); i++) {
-            const auto& pshape =  m_node->get_output_partial_shape(i);
+        for (int i = 0; i < node->get_output_size(); i++) {
+            const auto& pshape =  node->get_output_partial_shape(i);
             if (pshape.begin() != pshape.end())
             shapes.emplace_back("out_shape_" + std::to_string(i), pshape);
         }
+        auto rinfo = m_expr->get_reg_info();
+        if (!rinfo.first.empty())
+            visitor.on_attribute("in_regs", rinfo.first);
+        if (!rinfo.second.empty())
+            visitor.on_attribute("out_regs", rinfo.second);
         for (auto& s : shapes )
             visitor.on_attribute(s.first, s.second);
-        m_node->visit_attributes(visitor);
+        node->visit_attributes(visitor);
         return true;
     }
 
 private:
-    std::shared_ptr<Node> m_node;
+    std::shared_ptr<LoweredExpr> m_expr;
 };
 
 } // namespace op

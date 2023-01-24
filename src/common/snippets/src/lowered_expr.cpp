@@ -145,7 +145,7 @@ void LoweredExprIR::serialize(const std::string& xml, const std::string& bin) {
     first_node->get_rt_info()["execTimeMcs"] = 0;
     std::shared_ptr<Node> body_node = first_node;
     for (const auto& expr : m_lowered_ops) {
-        body_node = std::make_shared<op::SerializationNode>(body_node, expr->get_node());
+        body_node = std::make_shared<op::SerializationNode>(body_node, expr);
     }
     auto last_node = std::make_shared<opset1::Result>(body_node);
     last_node->set_friendly_name("End");
