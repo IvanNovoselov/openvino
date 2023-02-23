@@ -40,8 +40,6 @@ class LoopBegin : public LoopBase {
 
 public:
     OPENVINO_OP("LoopBegin", "SnippetsOpset", LoopBase);
-    // todo: deprecate this constructor after migration to linear ir. we won't expect any inputs for LoopBegin - it's just a label
-    explicit LoopBegin(const OutputVector& args);
     LoopBegin();
     void validate_and_infer_types() override;
     std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& inputs)  const override;

@@ -37,7 +37,7 @@ void InsertTailLoop::tail_transformations(LoweredExprIR& linear_ir,
         if (config.m_need_fill_tail_register &&
             (ov::is_type<ov::op::v1::Maximum>(op) ||
              ov::is_type<ov::op::v1::Add>(op))) {
-            for (auto i = 0; i < op->inputs().size(); ++i) {
+            for (size_t i = 0; i < op->inputs().size(); ++i) {
                 if (auto fill = insertFill(op->input(i))) {
                     std::vector<TensorDescriptorPtr> inputs{expr_it->get()->get_inputs()[i]};
                     // Note: inputs == outputs, since we want to modify vector reg inplace
@@ -73,7 +73,7 @@ bool InsertTailLoop::run(LoweredExprIR& linear_ir) {
                 std::vector<int64_t> new_finalization_offsets(loop->get_finalization_offsets());
                 const auto& ptr_increments = loop->get_ptr_increments();
                 const auto work_amount_incr = static_cast<int64_t>(loop->get_increment());
-                for (auto i = 0; i < new_finalization_offsets.size(); i++) {
+                for (size_t i = 0; i < new_finalization_offsets.size(); i++) {
                     new_finalization_offsets[i] += ptr_increments[i] * work_amount_incr;
                 }
                 loop->set_finalization_offsets(new_finalization_offsets);
@@ -128,7 +128,15 @@ bool InsertTailLoop::run(LoweredExprIR& linear_ir) {
                     //  (e.g. reset Load&Store count). this is a bit costy.
                     //  an alternative is no pass target machine and create emitters for vector loop here
                     //  (then we don't care if the nodes are updated)
-                    const auto& vector_loop_deep_copy = LoweredExprIR::deep_copy_range(loop_begin_expr_it, expr_it);
+                    auto vector_loop_deep_copy = LoweredExprIR::deep_copy_range(loop_begin_expr_it, expr_it);
+                    auto is_par_or_res = [](const LoweredExprPtr& expr) {
+                        return is_type<opset1::Parameter>(expr->get_node()) ||
+                               is_type<opset1::Result>(expr->get_node());
+                    };
+                    // Note: It's illegal to insert Parameter or Result to the IR, but they can appear inside vector loop
+                    //  So we have to remo them before injecting tail loop into linear_ir
+                    auto to_erase = std::remove_if(vector_loop_deep_copy.begin(), vector_loop_deep_copy.end(), is_par_or_res);
+                    vector_loop_deep_copy.erase(to_erase, vector_loop_deep_copy.end());
                     tail_begin = linear_ir.insert(expr_it, vector_loop_deep_copy.begin(), vector_loop_deep_copy.end());
                     tail_end = expr_it;
                 } else {
@@ -142,7 +150,6 @@ bool InsertTailLoop::run(LoweredExprIR& linear_ir) {
                 tail_loop_end->set_finalization_offsets(tail_finalization_offsets);
                 tail_loop_end->set_increment(tail_size);
                 // ptr increments were set to the old increment, need to update them in accordance with the new one
-//                tail_loop_end->update_ptr_increments(static_cast<int64_t>(tail_size));
                 tail_loop_end->set_work_amount(tail_size);
                 tail_loop_end->has_outer_loop = vector_loop_end->has_outer_loop;
 
@@ -151,8 +158,6 @@ bool InsertTailLoop::run(LoweredExprIR& linear_ir) {
                     // to keep finalization_offsets to reset Buffer
                     optimize_single_evaluation(tail_loop_end, is_followed_by_buffer);
                 }
-//                if (need_vector_loop)
-//                    linear_ir.insert(expr_it, tail_begin, tail_end);
             }
             modified = true;
         } else {

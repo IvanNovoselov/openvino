@@ -10,7 +10,6 @@
 #include "snippets/op/kernel.hpp"
 #include <snippets/itt.hpp>
 #include "snippets/pass/lowered/assign_registers.hpp"
-#include "snippets/pass/lowered/insert_buffer.hpp"
 #include "snippets/pass/lowered/insert_tail_loop.hpp"
 #include "snippets/pass/lowered/insert_loops_layout.hpp"
 #include "snippets/pass/lowered/transpose_decomposition.hpp"
@@ -28,46 +27,24 @@ Generator::LoweringResult Generator::generate(std::shared_ptr<ov::Model>& m, con
     if (!target->is_supported())
         throw ngraph_error("unsupported architecture for code generation");
     auto linear_ir = LoweredExprIR(m, config);
+    const size_t vector_size = target->get_lanes();
+    // todo: fix buffer allocation rank
+    const size_t buffer_allocation_rank = -1;
     auto propagate_buffer_offsets = std::make_shared<pass::lowered::PropagateOffsetAndResetBuffer>();
     std::vector<std::shared_ptr<pass::lowered::LinearIRTransformation>> transformation_pipeline {
-//            std::make_shared<pass::lowered::TransposeDecomposition>(),
-            std::make_shared<pass::lowered::InsertLoopsLayout>(target->get_lanes(), config.m_explicit_loop_insertion),
-            std::make_shared<pass::lowered::SoftmaxDecomposition>(),
+            std::make_shared<pass::lowered::InsertLoopsLayout>(vector_size, buffer_allocation_rank),
+            std::make_shared<pass::lowered::SoftmaxDecomposition>(vector_size, buffer_allocation_rank),
             std::make_shared<pass::lowered::PropagateLayout>(),
             propagate_buffer_offsets,
             std::make_shared<pass::lowered::AssignRegisters>(),
-            // todo: modify this pass so if no vector loop is needed, then the appropriate work_amounts are set at insertion time
             std::make_shared<pass::lowered::InsertTailLoop>()
     };
     for (const auto& transform : transformation_pipeline) {
-        std::string name(transform->get_type_name());
-//        if (name == "InsertLoopsLayout") {
-//        if (name == "InsertBuffer") {
-//        if (name == "PropagateOffsetAndResetBuffer") {
-        if (name == "InsertLoopsLayout") {
-//            std::cerr << "Before:\n";
-            linear_ir.debug_print(1);
-            std::cerr << ".....................\n";
-
-        }
         transform->run(linear_ir);
-        if (name == "InsertLoopsLayout") {
-            linear_ir.debug_print(1);
-            linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
-//            throw ngraph_error("FINITA");
-        }
     }
     const auto buffer_scratchpad_size = propagate_buffer_offsets->get_scratchpad_size();
-//    throw ngraph_error("FINITA");
     linear_ir.init_emitters(target);
-
     OV_ITT_TASK_NEXT(GENERATE, "::EmitCode")
-    //todo: Kernel need info on i/o data access pattern and data shapes to calculate data offsets
-    // pass Params and Results
-    // todo: it's probably better to move AllocaledEmitter creation inside Kernel constructor
-    //  So Kernel accepts only model ptr and target, and creates AllocatedEmitter inside
-    //emission
-//    ov::pass::Serialize("snsdebug_linear.xml", "snsdebug_linear.bin").run_on_model(m);
     auto loops2DKernel = std::make_shared<op::Kernel>(linear_ir);
     loops2DKernel->compile_params = compile_params;
     std::shared_ptr<Emitter> kernel = target->get(op::Kernel::get_type_info_static())(loops2DKernel);

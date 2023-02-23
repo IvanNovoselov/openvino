@@ -82,12 +82,6 @@ bool AssignRegisters::run(LoweredExprIR& linear_ir) {
             const auto input_td = expr->get_inputs()[0];
             const auto& input_expr = linear_ir.get_expr_by_output(input_td);
             const auto& input_expr_input_tds = input_expr->get_inputs();
-//            for (size_t i = 0; i < input->get_input_size(); ++i) {
-//                if (ov::is_type<op::VectorBuffer>(input->get_input_node_shared_ptr(i))) {
-//                    manually_assigned_vecs[input->input(i).get_tensor_ptr()] =
-//                            static_cast<Reg>(accumulator_reg);
-//                }
-//            }
             for (const auto& td : input_expr_input_tds) {
                 if (ov::is_type<op::VectorBuffer>(linear_ir.get_expr_by_output(td)->get_node())) {
                     manually_assigned_vecs[td] = static_cast<Reg>(accumulator_reg);
@@ -96,27 +90,12 @@ bool AssignRegisters::run(LoweredExprIR& linear_ir) {
             const auto output_td = expr->get_outputs()[0];
             manually_assigned_vecs[input_td] = static_cast<Reg>(accumulator_reg);
             manually_assigned_vecs[output_td] = static_cast<Reg>(accumulator_reg);
-
-            // If there is Broadcast, it should have the same register as Horizon op
-            // because it's a result of the accumulator as well
-//            for (auto& out : op->output(0).get_target_inputs()) {
-//                const auto child = out.get_node()->shared_from_this();
-//                if (ov::is_type<op::BroadcastMove>(child)) {
-//                    manually_assigned_vecs[child->output(0).get_tensor_ptr()] =
-//                            static_cast<Reg>(accumulator_reg);
-//                }
-//            }
             for (const auto& child_expr : linear_ir.get_exprs_by_input(output_td)) {
                 if (ov::is_type<op::BroadcastMove>(child_expr->get_node())) {
                     manually_assigned_vecs[child_expr->get_outputs()[0]] =
                             static_cast<Reg>(accumulator_reg);
                 }
             }
-
-
-
-
-
             accumulator_reg++;
         }
     }

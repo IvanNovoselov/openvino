@@ -13,27 +13,17 @@ namespace op {
 LoopBase::LoopBase(const std::vector<Output<Node>> &args) : Op(args) {
 }
 
-LoopBegin::LoopBegin(const std::vector<Output<Node>> &args) : LoopBase(args), begin_address(nullptr), input_regs({}) {
-    // We can only call a reduced validate_and_infer types from the constructor, since LoopEnd might not be attached
-    // to the LoopBegin at this point (which is usually the case: create LoopBegin first => then attach LoopEnd to it)
-    validate_and_infer_types_except_LoopEnd();
-}
-
 LoopBegin::LoopBegin() : LoopBase(), begin_address(nullptr), input_regs({}) {
     validate_and_infer_types_except_LoopEnd();
 }
 
 std::shared_ptr<Node> LoopBegin::clone_with_new_inputs(const OutputVector& inputs) const {
-    return std::make_shared<LoopBegin>(inputs);
+    return std::make_shared<LoopBegin>();
 }
 
 void LoopBegin::validate_and_infer_types_except_LoopEnd() {
-    const size_t num_inputs = get_input_size();
-    set_output_size(num_inputs + 1);
-    // All outputs are by-passed from inputs, except for the last one - it connects LoopBegin and LoopEnd
-    for (size_t i = 0; i < num_inputs; i++)
-        get_output_descriptor(i).set_tensor_ptr(get_input_descriptor(i).get_output().get_tensor_ptr());
-    set_output_type(num_inputs, element::f32, ov::PartialShape{ov::Shape{}});
+    NODE_VALIDATION_CHECK(this, get_input_size() == 0, "LoopBegin doen't expect any inputs");
+    set_output_type(0, element::f32, ov::PartialShape{ov::Shape{}});
 }
 
 void LoopBegin::validate_and_infer_types() {

@@ -21,6 +21,7 @@ namespace lowered {
 class LinearIRTransformation {
 public:
     LinearIRTransformation() = default;
+    virtual ~LinearIRTransformation() = default;
     // Note that get_type_info_static and get_type_info are needed to mimic OPENVINO_RTTI interface,
     // so the standard OPENVINO_RTTI(...) macros could be used in derived classes.
     __attribute__((visibility("hidden")))static const ::ov::DiscreteTypeInfo& get_type_info_static() {

@@ -90,7 +90,7 @@ bool PropagateOffsetAndResetBuffer::run(LoweredExprIR& linear_ir) {
             // This condition should be removed when Buffers stop being inplace by default.
             const auto& ins = expr_it->get()->get_inputs();
             std::vector<int> buffer_idx{};
-            for (int i = 0; i < ins.size() - 1; i++) {
+            for (size_t i = 0; i < ins.size() - 1; i++) {
                 const auto& in = ins[i];
                 // If producer of the input expr is buffer: this covers Buffer->Load patterns
                 if (ov::is_type<op::Buffer>(linear_ir.get_expr_by_output(in)->get_node()))

@@ -12,7 +12,11 @@ namespace ngraph {
 namespace snippets {
 namespace op {
 
-// todo: add description
+/**
+ * @interface SerializationNode
+ * @brief Fake node needed to serialize LoweredExpressionIR
+ * @ingroup snippets
+ */
 class SerializationNode : public ngraph::op::Op {
 public:
     OPENVINO_OP("SerializationNode", "SnippetsOpset");
@@ -40,12 +44,12 @@ public:
     bool visit_attributes(AttributeVisitor &visitor) override {
         std::vector<std::pair<std::string, ov::PartialShape>> shapes;
         const auto& node = m_expr->get_node();
-        for (int i = 0; i < node->get_input_size(); i++) {
+        for (size_t i = 0; i < node->get_input_size(); i++) {
             const auto& pshape =  node->get_input_partial_shape(i);
             if (pshape.begin() != pshape.end())
                 shapes.emplace_back("in_shape_" + std::to_string(i), node->get_input_partial_shape(i));
         }
-        for (int i = 0; i < node->get_output_size(); i++) {
+        for (size_t i = 0; i < node->get_output_size(); i++) {
             const auto& pshape =  node->get_output_partial_shape(i);
             if (pshape.begin() != pshape.end())
             shapes.emplace_back("out_shape_" + std::to_string(i), pshape);

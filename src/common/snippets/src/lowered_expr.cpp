@@ -17,7 +17,7 @@
 namespace ngraph {
 namespace snippets {
 
-LoweredExpr::LoweredExpr(const std::shared_ptr<Node>& n) : m_source_node{n}, m_reg_info{},  m_emitter{nullptr} {
+LoweredExpr::LoweredExpr(const std::shared_ptr<Node>& n) : m_source_node{n}, m_emitter{nullptr}, m_reg_info{{}, {}} {
     for (const auto& in : n->inputs())
         m_inputs.emplace_back(get_tensor_descriptor_ptr(in.get_source_output()));
     for (const auto& out : n->outputs())
@@ -25,7 +25,7 @@ LoweredExpr::LoweredExpr(const std::shared_ptr<Node>& n) : m_source_node{n}, m_r
 }
 
 LoweredExpr::LoweredExpr(const std::shared_ptr<Node>& n, std::vector<TensorDescriptorPtr> inputs, std::vector<TensorDescriptorPtr> outputs)
-    : m_source_node{n}, m_reg_info{},  m_emitter{nullptr}, m_inputs(std::move(inputs)), m_outputs(std::move(outputs)) {
+    : m_source_node{n}, m_emitter{nullptr}, m_inputs(std::move(inputs)), m_outputs(std::move(outputs)),  m_reg_info{{}, {}} {
     if (m_outputs.empty())
         for (const auto& out : n->outputs())
             m_outputs.emplace_back(get_tensor_descriptor_ptr(out));
@@ -38,8 +38,6 @@ std::shared_ptr<Node> LoweredExpr::get_node() const {
 }
 
 std::shared_ptr<Emitter> LoweredExpr::get_emitter() const {
-//    if (!m_emitter)
-//        throw ngraph_error("An attempt to get uninitialized emitter. You need to call init_emitter() first");
     return  m_emitter;
 }
 
@@ -59,30 +57,6 @@ void LoweredExpr::replace_output(const TensorDescriptorPtr& from, TensorDescript
     if (found == m_outputs.end())
         throw ngraph_error("Failed to replace: target output is not found");
     *found = std::move(to);
-}
-
-
-ngraph::snippets::RegInfo LoweredExpr::getRegisters(const std::shared_ptr<const Node>& n) {
-    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::getRegisters")
-
-    // ToDo: change to reg_t
-    std::vector<size_t> rin, rout;
-
-    for (const auto& output : n->outputs()) {
-        const auto& rt = output.get_tensor_ptr()->get_rt_info();
-        auto it_rt = rt.find("reginfo");
-        if (it_rt != rt.end())
-            rout.push_back(it_rt->second.as<size_t>());
-    }
-
-    for (const auto& input : n->inputs()) {
-        auto rt = input.get_source_output().get_tensor_ptr()->get_rt_info();
-        auto it_rt = rt.find("reginfo");
-        if (it_rt != rt.end())
-            rin.push_back(it_rt->second.as<size_t>());
-    }
-
-    return std::make_pair(rin, rout);
 }
 
 IOLoweredExpr::IOLoweredExpr(const std::shared_ptr<ov::opset1::Parameter>& par, int64_t index)
@@ -124,31 +98,6 @@ LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, LoweringCo
         m_lowered_ops.emplace_back(expr);
     }
 }
-// Todo: can we reuse insert(pos, NodeVector) in the constructor?
-//LoweredExprIR::LoweredExprIR(const std::shared_ptr<ov::Model>& model, LoweringConfig config)
-//        : m_config{std::move(config)}, m_io_lowered_ops{} {
-//    insert(m_lowered_ops.end(), get_ordered_ops(model));
-//    // Note: Parameters and Results should be converted to a special type of io_expr and require additional args
-//    for (const auto& par : model->get_parameters()) {
-//        auto found = m_node2expression_map.find(par);
-//        if (found == m_node2expression_map.end())
-//            throw ngraph_error("Failed to find Parameter in the lowered ops list");
-//        auto& expr = found->second;
-//        auto io_expr = std::make_shared<IOLoweredExpr>(par, model->get_parameter_index(par));
-//        io_expr->m_outputs = expr->m_outputs;
-//        expr = io_expr;
-//        m_io_lowered_ops.push_back(io_expr);
-//    }
-//    for (const auto& res : model->get_results()) {
-//        auto found = m_node2expression_map.find(res);
-//        if (found == m_node2expression_map.end())
-//            throw ngraph_error("Failed to find Result in the lowered ops list");
-//        auto& expr = found->second;
-//        auto io_expr = std::make_shared<IOLoweredExpr>(res, model->get_result_index(res), expr->get_inputs());
-//        expr = io_expr;
-//        m_io_lowered_ops.push_back(io_expr);
-//    }
-//}
 
 ov::NodeVector LoweredExprIR::get_ordered_ops(const std::shared_ptr<ov::Model>& m) {
     if (!m->get_sinks().empty())
@@ -300,6 +249,12 @@ void LoweredExprIR::replace_output(const LoweredExprPtr& expr, const TensorDescr
     expr->replace_output(from, to);
 }
 
+void LoweredExprIR::register_regular_expression(const LoweredExprPtr& expr) {
+    if (is_type<ov::op::v0::Result>(expr->get_node()) || is_type<ov::op::v0::Parameter>(expr->get_node()))
+        throw ngraph_error("LoweredExprIR::insert can't be used to add Parameters or Results to IR");
+    register_expression(expr);
+}
+
 void LoweredExprIR::register_expression(const LoweredExprPtr& expr) {
     const auto& node = expr->get_node();
     {
@@ -340,24 +295,24 @@ void LoweredExprIR::unregister_expression(const LoweredExprPtr& expr) {
 }
 
 LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, container::value_type&& value) {
-    register_expression(value);
+    register_regular_expression(value);
     return m_lowered_ops.insert(pos, value);
 }
 
 LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, const container::value_type& value) {
-    register_expression(value);
+    register_regular_expression(value);
     return m_lowered_ops.insert(pos, value);
 }
 
 LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, exprIt begin, exprIt end) {
-    for (auto b = begin; b != end; b++)
-        register_expression(*b);
-    return m_lowered_ops.insert(pos, begin, end);
+    constExprIt cbegin = begin;
+    constExprIt cend = end;
+    return insert(pos, cbegin, cend);
 }
 
 LoweredExprIR::exprIt LoweredExprIR::insert(constExprIt pos, constExprIt begin, constExprIt end) {
     for (auto b = begin; b != end; b++)
-        register_expression(*b);
+        register_regular_expression(*b);
     return m_lowered_ops.insert(pos, begin, end);
 }
 
@@ -372,9 +327,7 @@ LoweredExprIR::exprIt LoweredExprIR::insert(LoweredExprIR::constExprIt pos, cons
         }
         // Note that output tds must be empty since they are filled automatically from rt_info and/or tensor shapes
         const auto& expr = std::make_shared<LoweredExpr>(n, input_tds, std::vector<TensorDescriptorPtr>{});
-        if (is_type<ov::op::v0::Result>(n) || is_type<ov::op::v0::Parameter>(n))
-            throw ngraph_error("LoweredExprIR::insert can't be used to add Parameters or Results to IR");
-        register_expression(expr);
+        register_regular_expression(expr);
         ret = m_lowered_ops.insert(pos, expr);
     }
     // Need to return iterator to the first of the inserted values
@@ -390,9 +343,7 @@ LoweredExprIR::exprIt LoweredExprIR::insert(LoweredExprIR::constExprIt pos, cons
     }
     // Note that output tds must be empty since they are filled automatically from rt_info and/or tensor shapes
     const auto& expr = std::make_shared<LoweredExpr>(n, input_tds, std::vector<TensorDescriptorPtr>{});
-    if (is_type<ov::op::v0::Result>(n) || is_type<ov::op::v0::Parameter>(n))
-        throw ngraph_error("LoweredExprIR::insert can't be used to add Parameters or Results to IR");
-    register_expression(expr);
+    register_regular_expression(expr);
     return m_lowered_ops.insert(pos, expr);
 }
 

@@ -51,7 +51,6 @@ public:
     explicit LoweredExpr(const std::shared_ptr<Node>& n, std::vector<TensorDescriptorPtr> inputs, std::vector<TensorDescriptorPtr> outputs = {});
     LoweredExpr() = default;
     virtual ~LoweredExpr() = default;
-    // todo: shall we return pointers to const?
     std::shared_ptr<Node> get_node() const;
     std::shared_ptr<Emitter> get_emitter() const;
     void init_emitter(const std::shared_ptr<const TargetMachine>& target);
@@ -59,11 +58,8 @@ public:
     void set_reg_info(RegInfo rinfo) {m_reg_info = std::move(rinfo);}
     const std::vector<TensorDescriptorPtr>& get_inputs() {return m_inputs; }
     const std::vector<TensorDescriptorPtr>& get_outputs() {return m_outputs; }
-    static ngraph::snippets::RegInfo getRegisters(const std::shared_ptr<const Node>& n);
 
 protected:
-//    explicit LoweredExpr(const std::shared_ptr<Node>& n);
-    // todo: const pointer to const node?
     void replace_input(const TensorDescriptorPtr& from, TensorDescriptorPtr to);
     void replace_output(const TensorDescriptorPtr& from, TensorDescriptorPtr to);
     std::shared_ptr<Node> m_source_node{nullptr};
@@ -92,17 +88,10 @@ public:
     using io_container = std::list<std::shared_ptr<IOLoweredExpr>>;
     using exprIt = container::iterator;
     using constExprIt = container::const_iterator;
-    /**
-     * @brief Default constructor
-     */
     explicit LoweredExprIR(const std::shared_ptr<ov::Model>& m, LoweringConfig config = {});
     LoweredExprIR() = default;
     LoweredExprIR deep_copy() const;
     static LoweredExprIR::container deep_copy_range(LoweredExprIR::container::const_iterator begin, LoweredExprIR::container::const_iterator end);
-//    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> ops, std::shared_ptr<TargetMachine> target);
-
-//    LoweredExprIR(std::vector<std::shared_ptr<ov::Node>> vector1, std::shared_ptr<TargetMachine> sharedPtr);
-//    container& get_ops() {return m_lowered_ops; }
     const container& get_ops() const {return m_lowered_ops; }
     const io_container& get_IO_ops() const {return m_io_lowered_ops; }
     void init_emitters(const std::shared_ptr<TargetMachine>& target);
@@ -112,7 +101,6 @@ public:
     const std::set<LoweredExprPtr>& get_exprs_by_input(const TensorDescriptorPtr& n) const;
     void replace_input(const LoweredExprPtr& expr, const TensorDescriptorPtr& from, TensorDescriptorPtr to);
     void replace_output(const LoweredExprPtr& expr, const TensorDescriptorPtr& from, TensorDescriptorPtr to);
-    // todo: We need to check if Result or Parameter is inserted and update m_io_lowered_ops accordingly
     exprIt insert(constExprIt pos, const ov::NodeVector& nodes);
     exprIt insert(constExprIt pos, const std::shared_ptr<Node>& n);
     exprIt insert(constExprIt pos, container::value_type&& value);
@@ -144,6 +132,8 @@ public:
 
 private:
     void register_expression(const LoweredExprPtr& expr);
+    // Like register_expression, but doesn't allow Parameter or Result registration. You can do it only through constructon
+    void register_regular_expression(const LoweredExprPtr& expr);
     void unregister_expression(const LoweredExprPtr& expr);
     container m_lowered_ops{};
     std::unordered_map<std::shared_ptr<Node>, std::shared_ptr<LoweredExpr>> m_node2expression_map;

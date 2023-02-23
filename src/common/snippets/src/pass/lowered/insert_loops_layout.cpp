@@ -5,7 +5,6 @@
 #include "snippets/pass/lowered/insert_loops_layout.hpp"
 #include "snippets/snippets_isa.hpp"
 #include "snippets/itt.hpp"
-#include "snippets/pass/loop_helpers.hpp"
 
 namespace ngraph {
 namespace snippets {
@@ -65,8 +64,8 @@ int64_t get_dim_stride(const size_t dim, const std::vector<size_t>& layout, cons
     return stride;
 }
 } // namespace
-InsertLoopsLayout::InsertLoopsLayout(size_t vector_size, bool explicit_loop_insertion)
-    : LinearIRTransformation(), m_vector_size(vector_size), m_explicit_loop_insertion(explicit_loop_insertion) {
+InsertLoopsLayout::InsertLoopsLayout(size_t vector_size, size_t buffer_allocation_rank)
+    : LinearIRTransformation(), m_vector_size(vector_size), m_buffer_allocation_rank(buffer_allocation_rank) {
 }
 
 
@@ -214,7 +213,7 @@ LoweredExprIR::exprIt InsertLoopsLayout::inject_store_buffer_load(LoweredExprIR:
             last_outs = std::move(store_outs);
             last_node = store;
         }
-        auto buffer = std::make_shared<op::Buffer>(last_node->output(0));
+        auto buffer = std::make_shared<op::Buffer>(last_node->output(0), m_buffer_allocation_rank);
         const std::vector<TensorDescriptorPtr> buffer_outs{std::make_shared<TensorDescriptor>(*common_td)};
         // Note: Buffer must be outside the new Loop, so new_loop_end_pos is effectively decremented here
         new_loop_end_pos = linear_ir.insert(loop_end_pos, std::make_shared<LoweredExpr>(buffer, last_outs, buffer_outs));

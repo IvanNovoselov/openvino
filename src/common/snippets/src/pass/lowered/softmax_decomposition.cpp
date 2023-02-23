@@ -14,6 +14,10 @@ namespace snippets {
 namespace pass {
 namespace lowered {
 using std::make_shared;
+SoftmaxDecomposition::SoftmaxDecomposition(size_t vector_size, size_t buffer_allocation_rank) :
+                        m_vector_size{vector_size},
+                        m_buffer_allocation_rank(buffer_allocation_rank) {
+}
 
 bool SoftmaxDecomposition::run(LoweredExprIR& linear_ir) {
     OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::SoftmaxDecompositionLowered")
@@ -33,8 +37,7 @@ bool SoftmaxDecomposition::run(LoweredExprIR& linear_ir) {
             linear_ir.erase(std::prev(expr_it));
             linear_ir.erase(std::prev(expr_it));
             expr_it = linear_ir.erase(expr_it);
-
-            const size_t increment = 16;
+            linear_ir.get_config();
             const size_t buffer_allocation_rank = 2;
             // We need an iterator to the inserted element
             auto push_node = [&linear_ir, &expr_it](const std::shared_ptr<Node>& n) {
@@ -45,7 +48,7 @@ bool SoftmaxDecomposition::run(LoweredExprIR& linear_ir) {
             const auto& vector_buffer_max = push_node(make_shared<op::VectorBuffer>());
 
             // Max loop
-            const auto& load_max_node = std::make_shared<op::Load>(load_node->get_input_source_output(0), increment);
+            const auto& load_max_node = std::make_shared<op::Load>(load_node->get_input_source_output(0), m_vector_size);
             auto loop_begin_offset = linear_ir.insert(expr_it, make_shared<LoweredExpr>(load_max_node, input_tds));
             const auto& max = push_node(make_shared<ov::op::v1::Maximum>(load_max_node, vector_buffer_max.second));
 
@@ -59,12 +62,12 @@ bool SoftmaxDecomposition::run(LoweredExprIR& linear_ir) {
             // Note: A Parameter can currently be connected only to one memory access child (usually Load). This is needed
             // for upstream layout propagation. Here we insert op::Nop to indicate that layout from this Load should not
             // be propagated to a parent Parameter.
-            const auto& load_sub_node = std::make_shared<op::Load>(load_node->get_input_source_output(0), increment);
+            const auto& load_sub_node = std::make_shared<op::Load>(load_node->get_input_source_output(0), m_vector_size);
             loop_begin_offset = linear_ir.insert(expr_it, make_shared<LoweredExpr>(load_sub_node, input_tds));
             const auto sub = push_node(make_shared<ov::op::v1::Subtract>(load_sub_node, broadcast_horizon_max.second));
             const auto exp = push_node(make_shared<ov::op::v0::Exp>(sub.second));
             const auto sum = push_node(make_shared<ov::op::v1::Add>(exp.second, vector_buffer_sum.second));
-            const auto store_exp = push_node(make_shared<op::Store>(exp.second, increment));
+            const auto store_exp = push_node(make_shared<op::Store>(exp.second, m_vector_size));
             //const auto loop_end_sum = push_node(make_shared<op::LoopEnd>());
 
             const auto horizon_sum = push_node(make_shared<op::HorizonSum>(sum.second));
@@ -75,10 +78,10 @@ bool SoftmaxDecomposition::run(LoweredExprIR& linear_ir) {
             const auto buffer_exp = push_node(make_shared<op::Buffer>(store_exp.second, buffer_allocation_rank));
 
             //const auto loop_begin_div = push_node(make_shared<op::LoopBegin>());
-            const auto load_div = push_node(make_shared<op::Load>(buffer_exp.second, increment));
+            const auto load_div = push_node(make_shared<op::Load>(buffer_exp.second, m_vector_size));
             loop_begin_offset = load_div.first;
             const auto mul = push_node(make_shared<ov::op::v1::Multiply>(load_div.second, broadcast_pow.second));
-            const auto store_div_node = make_shared<op::Store>(mul.second, increment);
+            const auto store_div_node = make_shared<op::Store>(mul.second, m_vector_size);
             linear_ir.insert(expr_it, make_shared<LoweredExpr>(store_div_node, mul.first->get()->get_outputs(), output_tds));
             loop_begin_end_offsets.emplace_back(loop_begin_offset, expr_it);
             //const auto loop_end_div = push_node(make_shared<op::LoopEnd>());
