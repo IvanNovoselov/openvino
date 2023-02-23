@@ -625,6 +625,13 @@ snippets::Schedule snippets::op::Subgraph::generate(ngraph::pass::Manager& opt, 
     convert_to_snippet_dialect();
     opt.run_passes(body_ptr());
     ov::pass::Serialize("snsdebug_lowered.xml", "snsdebug_lowered.bin").run_on_model(body_ptr());
+    {
+        int count = 0;
+        for (const auto& op : body_ptr()->get_ordered_ops()) {
+            std::cerr << count++ << " : " << op->get_friendly_name() << "\n";
+        }
+        std::cerr << "###############################\n\n";
+    }
     // After all passes, when all optimizations are completed and all MemoryAccess ops are inserted,
     // we can calculate common buffer scratchpad size and propagate offset from Buffer to the corresponding MemoryAccess ops
     if (config.m_has_domain_sensitive_ops)

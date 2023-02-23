@@ -44,14 +44,14 @@ Generator::LoweringResult Generator::generate(std::shared_ptr<ov::Model>& m, con
 //        if (name == "InsertLoopsLayout") {
 //        if (name == "InsertBuffer") {
 //        if (name == "PropagateOffsetAndResetBuffer") {
-        if (name == "AssignRegisters") {
+        if (name == "InsertLoopsLayout") {
 //            std::cerr << "Before:\n";
-//            linear_ir.debug_print(1);
+            linear_ir.debug_print(1);
             std::cerr << ".....................\n";
 
         }
         transform->run(linear_ir);
-        if (name == "InsertTailLoop") {
+        if (name == "InsertLoopsLayout") {
             linear_ir.debug_print(1);
             linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
 //            throw ngraph_error("FINITA");
