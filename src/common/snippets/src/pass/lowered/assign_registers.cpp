@@ -99,7 +99,7 @@ bool AssignRegisters::run(LoweredExprIR& linear_ir) {
             accumulator_reg++;
         }
     }
-    auto enumerate_out_tensors = [] (const LoweredExprPtr& expr,
+    auto enumerate_out_tensors = [IS_MANUALLY_ALLOCATED_REG] (const LoweredExprPtr& expr,
                                                               decltype(regs_vec)& reg_map,
                                                               const std::map<tensor, Reg>& manually_assigned_regs,
                                                               size_t& counter) {
@@ -129,7 +129,7 @@ bool AssignRegisters::run(LoweredExprIR& linear_ir) {
     std::vector<std::set<Reg>> used_vec(num_expressions, std::set<Reg>());
     std::vector<std::set<Reg>> defined_vec(num_expressions, std::set<Reg>());
 
-    auto tensor2reg = [] (const std::vector<tensor>& tensors, const std::map<tensor, Reg>& reg_map) {
+    auto tensor2reg = [IS_MANUALLY_ALLOCATED_REG] (const std::vector<tensor>& tensors, const std::map<tensor, Reg>& reg_map) {
         std::set<Reg> result;
         for (const auto& t : tensors) {
             if (reg_map.count(t) == 0)
@@ -303,7 +303,7 @@ bool AssignRegisters::run(LoweredExprIR& linear_ir) {
 
     std::map<tensor, Reg> assigned_regs(std::move(manually_assigned_gprs));
     assigned_regs.insert(manually_assigned_vecs.begin(), manually_assigned_vecs.end());
-    auto register_assigned_regs = [&assigned_regs](const std::map<tensor, Reg>& unique_regs,
+    auto register_assigned_regs = [IS_MANUALLY_ALLOCATED_REG, &assigned_regs](const std::map<tensor, Reg>& unique_regs,
                                                                               const std::map<Reg, Reg>& unique2reused) {
         for (const auto& reg : unique_regs) {
             if (reg.second == IS_MANUALLY_ALLOCATED_REG)
