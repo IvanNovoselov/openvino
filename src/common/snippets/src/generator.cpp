@@ -24,6 +24,7 @@ namespace snippets {
 
 Generator::LoweringResult Generator::generate(std::shared_ptr<ov::Model>& m, const LoweringConfig& config, const void* compile_params) {
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator::generate")
+    OV_ITT_TASK_CHAIN(GENERATE, ngraph::pass::itt::domains::SnippetsTransform, "Snippets::Generator", "::Transformations")
     if (!target->is_supported())
         throw ngraph_error("unsupported architecture for code generation");
     auto linear_ir = LoweredExprIR(m, config);

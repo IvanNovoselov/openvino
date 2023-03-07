@@ -14,7 +14,7 @@ namespace lowered {
 const std::set<std::vector<int>> TransposeDecomposition::supported_cases = {{0, 2, 3, 1}};
 
 bool TransposeDecomposition::run(LoweredExprIR& linear_ir) {
-    OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::insertTransposeDecomposition")
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::insertTransposeDecomposition")
     std::vector<LoweredExprIR::container::iterator> exprs_to_del;
     bool modified = false;
     for (auto expr_it = linear_ir.begin(); expr_it != linear_ir.end(); expr_it++) {

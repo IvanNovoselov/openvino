@@ -54,7 +54,7 @@ void PropagateOffsetAndResetBuffer::propagate_offset(const LoweredExprIR& linear
 
 
 bool PropagateOffsetAndResetBuffer::run(LoweredExprIR& linear_ir) {
-    OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::buffer_propagate_offset_and_reset")
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::buffer_propagate_offset_and_reset")
     std::vector<LoweredExprIR::container::iterator> exprs_to_del;
     bool modified = false;
     size_t offset = 0;

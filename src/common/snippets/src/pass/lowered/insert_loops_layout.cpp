@@ -215,8 +215,8 @@ LoweredExprIR::exprIt InsertLoopsLayout::inject_store_buffer_load(LoweredExprIR:
     return new_loop_end_pos;
 }
 bool InsertLoopsLayout::run(LoweredExprIR& linear_ir) {
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::InsertLoopsLayout")
     m_vector_size = 16ul;
-    OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::OnsertLoopsLayout")
     if (linear_ir.empty())
         return false;
     const auto& lowering_config = linear_ir.get_config();

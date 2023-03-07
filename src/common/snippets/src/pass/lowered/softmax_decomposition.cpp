@@ -20,7 +20,7 @@ SoftmaxDecomposition::SoftmaxDecomposition(size_t vector_size, size_t buffer_all
 }
 
 bool SoftmaxDecomposition::run(LoweredExprIR& linear_ir) {
-    OV_ITT_SCOPED_TASK(itt::domains::SnippetsTransform, "Snippets::SoftmaxDecompositionLowered")
+    OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::SoftmaxDecompositionLowered")
     auto match_load = ngraph::pattern::wrap_type<op::Load>();
     auto match_softmax = ngraph::pattern::wrap_type<op::Softmax>({match_load});
     auto match_store = ngraph::pattern::wrap_type<op::Store>({match_softmax});
