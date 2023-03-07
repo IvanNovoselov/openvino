@@ -11,28 +11,6 @@ namespace snippets {
 namespace pass {
 namespace lowered {
 namespace {
-void get_managed_outputs_and_tds(LoweredExprIR::constExprIt begin, LoweredExprIR::constExprIt end,
-                                 OutputVector& managed_outputs, std::vector<TensorDescriptorPtr>& managed_tds) {
-    managed_outputs.clear();
-    managed_tds.clear();
-    for (auto expr_it = begin; expr_it != end; expr_it++) {
-        const auto& node = (*expr_it)->get_node();
-        if (is_type<op::Load>(node) || is_type<op::BroadcastLoad>(node)) {
-            const auto& source = node->get_input_source_output(0);
-            managed_outputs.push_back(source);
-            // todo: note that we need an INPUT shape here (for example, not Broadcasted) otherwise we can't calc increments
-            //  and offsets properly
-            auto td = get_tensor_descriptor_ptr(node);
-            //managed_tds.emplace_back(source.get_shape(), td.get_subtensor(), td.get_layout());
-            managed_tds.emplace_back(td);
-        } else if (is_type<op::Store>(node)) {
-            const auto& dest = node->output(0);
-            managed_outputs.push_back(dest);
-            managed_tds.push_back(get_tensor_descriptor_ptr(dest));
-        }
-    }
-}
-
 void get_managed_outputs_and_exprs(LoweredExprIR::constExprIt begin, LoweredExprIR::constExprIt end,
                                    std::vector<LoweredExprPtr>& loop_in_exprs, std::vector<LoweredExprPtr>& loop_out_exprs,
                                    OutputVector& loop_in_outputs, OutputVector& loop_out_outputs) {

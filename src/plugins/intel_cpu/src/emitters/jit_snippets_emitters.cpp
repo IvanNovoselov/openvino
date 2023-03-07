@@ -151,12 +151,8 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     ngraph::snippets::LoweredExprIR::container general_exprs;
     is_buffer_needed = false;
     for (const auto& expr : body) {
-        const auto& emitter = expr->get_emitter();
-        const auto emitter_type = std::dynamic_pointer_cast<jit_emitter>(emitter)->get_in_out_type();
-        // todo: how this will be handled if Brgemm in & out are op::Buffer
         // Brgemm is a special case since it incorporates input and output (we use onednn kernel)
         // Just like Load & Store it requires offsets calculation
-//        const auto is_brgemm = std::dynamic_pointer_cast<BrgemmEmitter>(emitter) != nullptr;
         if (std::dynamic_pointer_cast<ngraph::snippets::IOLoweredExpr>(expr)) {
             mem_access_exprs.emplace_back(expr);
         } else if (!is_buffer_needed && ov::is_type<ngraph::snippets::op::Buffer>(expr->get_node())) {
@@ -171,18 +167,11 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     map_abstract_registers(gpr_map_pool, vec_map_pool, mem_access_exprs);
     for (const auto& abstract_to_physical : gpr_map_pool.first)
         data_ptr_regs_idx.push_back(abstract_to_physical.second);
-//    for (const auto& regmap : gpr_map_pool.first) {
-//        std::cerr << regmap.first << " ---> " << regmap.second << "\n";
-//    }
-//    std::cerr << "\n\n";
     // However we can use reg_indexes_idx and reg_const_params_idx for other operations since we won't need them
     // after offsets calculation
     gpr_map_pool.second.push_back(reg_indexes_idx);
     gpr_map_pool.second.push_back(reg_const_params_idx);
     map_abstract_registers(gpr_map_pool, vec_map_pool, general_exprs);
-//    for (const auto& regmap : gpr_map_pool.first) {
-//        std::cerr << regmap.first << " ---> " << regmap.second << "\n";
-//    }
 }
 
 void KernelEmitter::emit_code(const std::vector<size_t> &in,

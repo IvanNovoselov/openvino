@@ -19,7 +19,7 @@ TensorDescriptor::TensorDescriptor(const Output<ov::Node>& out,
 TensorDescriptor::TensorDescriptor(const Output<const ov::Node>& out,
                                    std::vector<size_t> subtensor_shape,
                                    std::vector<size_t> layout)
-        : m_subtensor_shape(std::move(subtensor_shape)), m_layout(std::move(layout)) {
+        : m_layout(std::move(layout)), m_subtensor_shape(std::move(subtensor_shape)) {
     const auto& pshape = out.get_partial_shape();
     // Note: this limitation could be relaxed if necessary
     if (pshape.is_dynamic())

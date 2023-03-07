@@ -100,7 +100,7 @@ public:
     LoweredExprPtr get_expr_by_output(const TensorDescriptorPtr& n) const;
     const std::set<LoweredExprPtr>& get_exprs_by_input(const TensorDescriptorPtr& n) const;
     void replace_input(const LoweredExprPtr& expr, const TensorDescriptorPtr& from, TensorDescriptorPtr to);
-    void replace_output(const LoweredExprPtr& expr, const TensorDescriptorPtr& from, TensorDescriptorPtr to);
+    void replace_output(const LoweredExprPtr& expr, const TensorDescriptorPtr& from, const TensorDescriptorPtr& to);
     exprIt insert(constExprIt pos, const ov::NodeVector& nodes);
     exprIt insert(constExprIt pos, const std::shared_ptr<Node>& n);
     exprIt insert(constExprIt pos, container::value_type&& value);
