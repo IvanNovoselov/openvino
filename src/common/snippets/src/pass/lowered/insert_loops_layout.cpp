@@ -216,7 +216,6 @@ LoweredExprIR::exprIt InsertLoopsLayout::inject_store_buffer_load(LoweredExprIR:
 }
 bool InsertLoopsLayout::run(LoweredExprIR& linear_ir) {
     OV_ITT_SCOPED_TASK(ngraph::pass::itt::domains::SnippetsTransform, "Snippets::InsertLoopsLayout")
-    m_vector_size = 16ul;
     if (linear_ir.empty())
         return false;
     const auto& lowering_config = linear_ir.get_config();
@@ -263,13 +262,19 @@ bool InsertLoopsLayout::run(LoweredExprIR& linear_ir) {
                         continue;
                     break;
                 }
+                // An expression is added if at least one input corresponds with the in-loop descriptor
+                must_be_inside_loop = false;
+                for (size_t i = 0; i < ins.size() && !must_be_inside_loop; i++) {
+                    const auto& in = ins[i];
+                    if (in->get_layout() == loop_inner_layout &&
+                        in->get_subtensor() == loop_inner_subtensor) {
+                        must_be_inside_loop = true;
+                    }
+                }
                 // Note: Brgemm might consume the same layout, but still must be outside the loop
                 // since it has implicit loop semantics
                 if (ov::is_type<op::Brgemm>(loop_end_pos->get()->get_node()))
                     must_be_inside_loop = false;
-                const auto& layout = ins.front()->get_layout();
-                const auto& subtensor = ins.front()->get_subtensor();
-                must_be_inside_loop &= layout == loop_inner_layout && subtensor == loop_inner_subtensor;
             } while (must_be_inside_loop);
             const auto& last_in_the_loop =  *std::prev(loop_end_pos);
             loop_end_pos = inject_store_buffer_load(loop_end_pos, last_in_the_loop, linear_ir);
