@@ -201,14 +201,9 @@ private:
 
 class SnippetShapeInferFactory : public ShapeInferFactory {
 public:
-    SnippetShapeInferFactory(const std::shared_ptr<ov::Node>& op, const GraphContext::CPtr context) {
+    SnippetShapeInferFactory(const std::shared_ptr<ov::Node>& op) {
         auto subgraph = ov::as_type_ptr<ngraph::snippets::op::Subgraph>(op);
-        if (subgraph->has_type_relaxed_ops()) {
-            std::lock_guard<std::mutex> lock(*context->getSharedMutex());
-            snippet_body = subgraph->body_ptr()->clone();
-        } else {
-            snippet_body = subgraph->body_ptr()->clone();
-        }
+        snippet_body = subgraph->body_ptr()->clone();
     }
     ShapeInferPtr makeShapeInfer() const override {
         return std::make_shared<SnippetShapeInfer>(snippet_body);
@@ -220,7 +215,7 @@ private:
 } // namespace
 
 Snippet::Snippet(const std::shared_ptr<ov::Node>& op, const GraphContext::CPtr context)
-        : Node(op, context, SnippetShapeInferFactory(op, context)) {
+        : Node(op, context, SnippetShapeInferFactory(op)) {
     host_isa = dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx512_core) ?
         dnnl::impl::cpu::x64::avx512_core : dnnl::impl::cpu::x64::avx2;
     original_snippet = ov::as_type_ptr<snippets::op::Subgraph>(op);
@@ -242,14 +237,6 @@ void Snippet::copy_snippet() const {
     ngraph::copy_runtime_info(original_snippet, snippetAttrs.snippet);
     snippetAttrs.snippet->set_friendly_name(original_snippet->get_friendly_name());
     snippetAttrs.snippet->set_generator(std::make_shared<CPUGenerator>(host_isa));
-
-    if (is_dynamic && outputShapes.size() > 1) {
-        std::shared_ptr<ov::Model> new_body_for_shape_infer = snippetAttrs.snippet->body_ptr()->clone();
-        local_snippet = std::make_shared<ngraph::snippets::op::Subgraph>(subgraph_node_inputs, new_body_for_shape_infer);
-        ngraph::copy_runtime_info(snippetAttrs.snippet, local_snippet);
-        local_snippet->set_friendly_name(snippetAttrs.snippet->get_friendly_name());
-        local_snippet->set_generator(std::make_shared<CPUGenerator>(host_isa));
-    }
 }
 
 void Snippet::init_body_hash() {
@@ -340,7 +327,7 @@ void Snippet::initSupportedPrimitiveDescriptors() {
             const auto originalInputPrecision = getOriginalInputPrecisionAtPort(i);
             const auto precision = ((originalInputPrecision == InferenceEngine::Precision::FP32) &&
                                      context->getConfig().inferencePrecision == ov::element::bf16 &&
-                                     snippet->has_domain_sensitive_ops()) ?
+                                     snippetAttrs.snippet->has_domain_sensitive_ops()) ?
                 static_cast<InferenceEngine::Precision>(InferenceEngine::Precision::BF16) :
                 originalInputPrecision;
             if (supportedPrecisions.count(precision) == 0)
@@ -444,7 +431,8 @@ void Snippet::prepareParams() {
     SnippetKey key = {snippetAttrs};
 
     auto builder = [this](const SnippetKey& key) -> std::shared_ptr<SnippetExecutor> {
-        std::shared_ptr<SnippetExecutor> executor = std::make_shared<SnippetJitExecutor>(key.attrs, is_canonicalized, is_dynamic);
+        std::shared_ptr<SnippetExecutor> executor = std::make_shared<SnippetJitExecutor>(key.attrs, is_canonicalized,
+            is_dynamic, context->getConfig().enforceBF16);
         is_canonicalized = true;
         return executor;
     };
@@ -583,11 +571,11 @@ void Snippet::SnippetJitExecutor::schedule_nt(const std::vector<MemoryPtr>& inMe
     });
 }
 
-Snippet::SnippetExecutor::SnippetExecutor(const SnippetAttrs& attrs, bool is_canonicalized, bool is_dynamic)
-    : snippetAttrs(attrs), is_canonicalized(is_canonicalized), is_dynamic(is_dynamic) {}
+Snippet::SnippetExecutor::SnippetExecutor(const SnippetAttrs& attrs, bool is_canonicalized, bool is_dynamic, bool enforceBF16)
+    : snippetAttrs(attrs), is_canonicalized(is_canonicalized), is_dynamic(is_dynamic), enforceBF16(enforceBF16) {}
 
-Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool is_canonicalized, bool is_dynamic) :
-    SnippetExecutor(attrs, is_canonicalized, is_dynamic) {
+Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool is_canonicalized, bool is_dynamic, bool enforceBF16) :
+    SnippetExecutor(attrs, is_canonicalized, is_dynamic, enforceBF16) {
     auto local_copy = [this]() {
         ngraph::OutputVector subgraph_node_inputs;
         for (const auto &input : snippetAttrs.snippet->input_values()) {
@@ -793,7 +781,7 @@ bool Snippet::SnippetJitExecutor::optimizeExecDomain(std::vector<VectorDims>& in
 void Snippet::SnippetJitExecutor::generate(const jit_snippets_compile_args* jcp) {
     ov::pass::Manager pre_dialect;
     pre_dialect.register_pass<ConvertToSwishCPU>();
-    if (context->getConfig().inferencePrecision == ov::element::bf16 && snippet->has_domain_sensitive_ops()) {
+    if (enforceBF16 && snippetAttrs.snippet->has_domain_sensitive_ops()) {
         // enforce BF16 precisions to supported operations
         // MatMul has to be decomposed to Brgemm operations before enforcement
         // Note, MatMul decomposition will be ran later again for case if BF16 enforcement is not happened
