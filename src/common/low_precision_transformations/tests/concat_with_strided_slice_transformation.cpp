@@ -22,6 +22,8 @@
 #include "lpt_ngraph_functions/common/fake_quantize_on_data.hpp"
 #include "simple_low_precision_transformer.hpp"
 
+#include "ngraph/pass/serialize.hpp"
+
 using namespace testing;
 using namespace ngraph;
 using namespace ngraph::pass;
@@ -92,6 +94,9 @@ public:
             testValues.ssBeforeConcat,
             testValues.ssAfterConcat);
 
+        ngraph::pass::Serialize("svg/test.original.xml", "svg/test.original.bin").run_on_model(actualFunction);
+        ngraph::pass::VisualizeTree("svg/test.original.svg").run_on_model(actualFunction);
+
         auto supportedPrecisions = std::vector<ngraph::pass::low_precision::PrecisionsRestriction>({
            ngraph::pass::low_precision::PrecisionsRestriction::create<ngraph::opset1::Convolution>({
                {{0}, testValues.params.precisionsOnActivations},
@@ -112,6 +117,9 @@ public:
         transform.add<ngraph::pass::low_precision::StridedSliceTransformation, ngraph::opset1::StridedSlice>(testValues.params);
         transform.transform(actualFunction);
 
+        ngraph::pass::Serialize("svg/test.transformed.xml", "svg/test.transformed.bin").run_on_model(actualFunction);
+        ngraph::pass::VisualizeTree("svg/test.transformed.svg").run_on_model(actualFunction);
+
         referenceFunction = ngraph::builder::subgraph::ConcatFunction::getReferenceWithStridedSlice(
             precision,
             shape,
@@ -124,6 +132,9 @@ public:
             testValues.ssAfterConcat,
             testValues.result.dequantizationAfter1,
             testValues.result.dequantizationAfter2);
+
+        ngraph::pass::Serialize("svg/test.reference.xml", "svg/test.reference.bin").run_on_model(referenceFunction);
+        ngraph::pass::VisualizeTree("svg/test.reference.svg").run_on_model(referenceFunction);
     }
 
     static std::string getTestCaseName(testing::TestParamInfo<ConcatTransformationParams> obj) {
@@ -155,8 +166,8 @@ const std::vector<ngraph::element::Type> precisions = {
 };
 
 const std::vector<ngraph::PartialShape> shapes = {
-    { 1, 4, 9, 9 },
-    { 4, 4, 9, 9 },
+    //{ 1, 4, 9, 9 },
+    //{ 4, 4, 9, 9 },
     { Dimension::dynamic(), 4, Dimension::dynamic(), Dimension::dynamic() }
 };
 

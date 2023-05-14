@@ -119,6 +119,8 @@
 #include "dnnl.hpp"
 #include <cpu/x64/cpu_isa_traits.hpp>
 
+#include "ngraph/pass/serialize.hpp"
+
 namespace ov {
 namespace intel_cpu {
 
@@ -176,13 +178,23 @@ void Transformations::UpToCpuSpecificOpSet() {
 
     PreLpt(defaultPrecisions, isLegacyApi);
 
-    if (useLpt)
+    ngraph::pass::VisualizeTree("svg/cpu.common.svg").run_on_model(ov::Model::global_model);
+    ngraph::pass::Serialize("svg/cpu.common.xml", "svg/cpu.common.bin").run_on_model(ov::Model::global_model);
+
+    if (useLpt) {
         Lpt(hasINT16orINT32Levels, defaultPrecisions);
+
+        ngraph::pass::VisualizeTree("svg/cpu.lpt.svg").run_on_model(ov::Model::global_model);
+        ngraph::pass::Serialize("svg/cpu.lpt.xml", "svg/cpu.lpt.bin").run_on_model(ov::Model::global_model);
+    }
 
     PostLpt();
 
     if (useSnippets)
         Snippets();
+
+    ngraph::pass::VisualizeTree("svg/cpu.transformed.svg").run_on_model(ov::Model::global_model);
+    ngraph::pass::Serialize("svg/cpu.transformed.xml", "svg/cpu.transformed.bin").run_on_model(ov::Model::global_model);
 }
 
 void Transformations::CpuSpecificOpSet(void) {
