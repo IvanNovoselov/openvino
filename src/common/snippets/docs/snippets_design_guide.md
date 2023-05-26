@@ -61,7 +61,9 @@ Note that the pipeline is usually deployed on multicore processing units which c
    Tensor2 --> op2_1 --> Tensor3
    Tensor2 --> op2_2 --> Tensor3
    Tensor2 --> op2_3 --> Tensor3
-   
+
+ linkStyle 1,3,5,7,8,10,12,14 stroke:red, fill:none, stroke-width:3px;
+ 
 classDef no-bg-color fill:none,stroke-width:0px
 classDef steel1 fill:#B9D6E5, stroke: #86B3CA, color: #262626
 classDef daisy1 fill:#FFE17A, stroke: #FEC91B, color: #262626
@@ -77,8 +79,8 @@ class Tensor1,Tensor2,Tensor3 daisy1
 To understand another potential performance bottleneck, let's have a look at `Op 1 Kernel` implementation scheme which is shown on the graph below.
 ```mermaid
  graph LR
-    InputMemory[In Memory\n Pointer]
-    OutputMemory[Out Memory\n Pointer]
+    InputMemory[ ]
+    OutputMemory[ ]
     subgraph OpKernel [Op Kernel]
         subgraph Loop [Loop]
             direction RL
@@ -90,14 +92,14 @@ To understand another potential performance bottleneck, let's have a look at `Op
             Store -..->|Increment GPRs\n And repeat while needed| Load
         end
     end
-   InputMemory -- GPR --> Load
-   Store -- GPR --> OutputMemory
+   InputMemory --> Load
+   Store --> OutputMemory
    
 classDef no-bg-color fill:none,stroke-width:0px
 classDef steel1 fill:#B9D6E5, stroke: #86B3CA, color: #262626
 classDef daisy1 fill:#FFE17A, stroke: #FEC91B, color: #262626
 class OpKernel steel1
-class InputMemory,OutputMemory daisy1
+class InputMemory,OutputMemory no-bg-color
 ```
 In order to make any manipulations with data, the kernel needs to know where the input data is located and where it should place the output data. 
 So the typical kernel takes input and output memory pointers as runtime arguments. 
@@ -155,8 +157,8 @@ Firstly, fusing eliminates thread synchronization point, since there is no `Tens
 Secondly, as shown on the scheme below, fused op kernel executes both `Op 1` and `Op 2 instructions` without redundant `Store` and `Load`.
 ```mermaid
  graph LR
-    InputMemory[In Memory\n Pointer]
-    OutputMemory[Out Memory\n Pointer]
+    InputMemory[ ]
+    OutputMemory[ ]
     subgraph OpKernel [Fused Op Kernel]
         subgraph Loop [Loop]
             direction LR
@@ -170,14 +172,14 @@ Secondly, as shown on the scheme below, fused op kernel executes both `Op 1` and
             Store -.->|Increment GPRs\n And repeat while needed| Load
         end
     end
-   InputMemory -- GPR --> Load
-   Store -- GPR --> OutputMemory
+   InputMemory --> Load
+   Store --> OutputMemory
    
 classDef no-bg-color fill:none,stroke-width:0px
 classDef steel1 fill:#B9D6E5, stroke: #86B3CA, color: #262626
 classDef daisy1 fill:#FFE17A, stroke: #FEC91B, color: #262626
 class OpKernel steel1
-class InputMemory,OutputMemory daisy1
+class InputMemory,OutputMemory no-bg-color
 ```
 In other words, instead of writing the results of `Op 1 instructions` to memory (via `Store`) and reading them back (via `Load`), `Op 2 instructions` are executed directly on vector registers available after `Op 1 instructions'` execution. 
 This way we increase the amount of computations performed per every `Load`-`Store` cycle and thus relax the memory bandwidth limitation.
