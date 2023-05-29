@@ -108,23 +108,23 @@ bool SnippetKey::operator==(const SnippetKey& rhs) const {
     return retVal;
 }
 
-ngraph::snippets::op::Subgraph::BlockedShapeVector getBlockedShapes(const std::vector<std::vector<size_t>>& memBlockedDims,
+snippets::op::Subgraph::BlockedShapeVector getBlockedShapes(const std::vector<std::vector<size_t>>& memBlockedDims,
         const std::vector<std::vector<size_t>>& memOrders, const std::vector<InferenceEngine::Precision>& memPrecs) {
     int numShapes = memBlockedDims.size();
     if (memOrders.size() != numShapes || memPrecs.size() != numShapes)
         IE_THROW(Unexpected) << "Number of shapes is mismacthed for dimensions, orders and precisions";
-    ngraph::snippets::op::Subgraph::BlockedShapeVector blockedShapes(numShapes);
+    snippets::op::Subgraph::BlockedShapeVector blockedShapes(numShapes);
     for (int i = 0; i < numShapes; i++) {
         int dimSize = memBlockedDims[i].size();
         std::vector<Dimension> dims(dimSize);
         for (int j = 0; j < dimSize; j++) {
             dims[j] = memBlockedDims[i][j];
         }
-        ngraph::PartialShape shape(dims);
-        ngraph::AxisVector order(memOrders[i]);
-        ngraph::element::Type precision = InferenceEngine::details::convertPrecision(memPrecs[i]);
+        ov::PartialShape shape(dims);
+        ov::AxisVector order(memOrders[i]);
+        ov::element::Type precision = InferenceEngine::details::convertPrecision(memPrecs[i]);
 
-        blockedShapes[i] = ngraph::snippets::op::Subgraph::BlockedShape{shape, order, precision};
+        blockedShapes[i] = snippets::op::Subgraph::BlockedShape{shape, order, precision};
     }
 
     return blockedShapes;
@@ -202,7 +202,7 @@ private:
 class SnippetShapeInferFactory : public ShapeInferFactory {
 public:
     SnippetShapeInferFactory(const std::shared_ptr<ov::Node>& op) {
-        auto subgraph = ov::as_type_ptr<ngraph::snippets::op::Subgraph>(op);
+        auto subgraph = ov::as_type_ptr<snippets::op::Subgraph>(op);
         snippet_body = subgraph->body_ptr()->clone();
     }
     ShapeInferPtr makeShapeInfer() const override {
@@ -233,8 +233,8 @@ void Snippet::copy_snippet() const {
         subgraph_node_inputs.push_back(new_input);
     }
     std::shared_ptr<ov::Model> new_body = original_snippet->body_ptr()->clone();
-    snippetAttrs.snippet = std::make_shared<ngraph::snippets::op::Subgraph>(subgraph_node_inputs, new_body);
-    ngraph::copy_runtime_info(original_snippet, snippetAttrs.snippet);
+    snippetAttrs.snippet = std::make_shared<snippets::op::Subgraph>(subgraph_node_inputs, new_body);
+    ov::copy_runtime_info(original_snippet, snippetAttrs.snippet);
     snippetAttrs.snippet->set_friendly_name(original_snippet->get_friendly_name());
     snippetAttrs.snippet->set_generator(std::make_shared<CPUGenerator>(host_isa));
 }
@@ -577,15 +577,15 @@ Snippet::SnippetExecutor::SnippetExecutor(const SnippetAttrs& attrs, bool is_can
 Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool is_canonicalized, bool is_dynamic, bool enforceBF16) :
     SnippetExecutor(attrs, is_canonicalized, is_dynamic, enforceBF16) {
     auto local_copy = [this]() {
-        ngraph::OutputVector subgraph_node_inputs;
+        ov::OutputVector subgraph_node_inputs;
         for (const auto &input : snippetAttrs.snippet->input_values()) {
-            auto new_input = std::make_shared<ngraph::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
+            auto new_input = std::make_shared<ov::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
             subgraph_node_inputs.push_back(new_input);
         }
         std::shared_ptr<ov::Model> new_body = snippetAttrs.snippet->body_ptr()->clone();
 
-        snippet_for_generation = std::make_shared<ngraph::snippets::op::Subgraph>(subgraph_node_inputs, new_body);
-        ngraph::copy_runtime_info(snippetAttrs.snippet, snippet_for_generation);
+        snippet_for_generation = std::make_shared<ov::snippets::op::Subgraph>(subgraph_node_inputs, new_body);
+        ov::copy_runtime_info(snippetAttrs.snippet, snippet_for_generation);
         snippet_for_generation->set_friendly_name(snippetAttrs.snippet->get_friendly_name());
         auto host_isa = dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx512_core) ?
         dnnl::impl::cpu::x64::avx512_core : dnnl::impl::cpu::x64::avx2;
@@ -686,9 +686,10 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
             size_t ndims_to_skip = norm_shape.size() - original_input_shape_ranks[i];
             new_shapes.emplace_back(norm_shape.begin() + ndims_to_skip, norm_shape.end());
         }
-        snippet->reshape_body(new_shapes);
+        snippet_for_generation->reshape_body(new_shapes);
     }
-
+    snippet_for_generation->set_master_shape(ov::PartialShape(masterShape));
+    snippet_for_generation->set_tile_rank(tileRank);
 
     // generate
     jit_snippets_compile_args jcp;
@@ -700,10 +701,10 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
 }
 
 ov::PartialShape Snippet::SnippetJitExecutor::canonicalizeBody() {
-    ngraph::snippets::op::Subgraph::BlockedShapeVector input_blocked_shapes = getBlockedShapes(
+    ov::snippets::op::Subgraph::BlockedShapeVector input_blocked_shapes = getBlockedShapes(
         snippetAttrs.inMemBlockedDims, snippetAttrs.inMemOrders, snippetAttrs.inMemPrecs);
 
-    ngraph::snippets::op::Subgraph::BlockedShapeVector output_blocked_shapes = getBlockedShapes(
+    ov::snippets::op::Subgraph::BlockedShapeVector output_blocked_shapes = getBlockedShapes(
         snippetAttrs.outMemBlockedDims, snippetAttrs.outMemOrders, snippetAttrs.outMemPrecs);
 
     const auto& canonicalShape = snippetAttrs.snippet->canonicalize(output_blocked_shapes, input_blocked_shapes);
