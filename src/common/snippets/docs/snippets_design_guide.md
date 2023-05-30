@@ -244,11 +244,9 @@ As shown on the figure below, `Snippets` are organized in a very similar way.
       subgraph Optimizer[Optimizer]
         direction LR
         Data[Data flow \n optimizations]
-        Control[Control flow \n optimizations]
-        Data-->|nGraph \nIR|Control
       end
       Frontend[Tokenizer]-->|nGraph \nIR|Data
-      Control-->|Linear \nIR|Backend[Generator]
+      Data-->|nGraph \nIR|Backend[Generator]
    end
    Source --> Frontend
    Backend --> Executable[Kernel]
@@ -290,7 +288,7 @@ The `Snippets` integration into the plugin pipeline is schematically depicted be
     subgraph internal[<b> Transformations on internal plugin graph </b>]
          direction LR
          init["init()"]
-         subgraph create["CreateComputePrimitive"]
+         subgraph create["CreatePrimitive"]
             direction LR
             optimize[Optimizer]
             generate[Generator]
