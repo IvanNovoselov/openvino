@@ -110,14 +110,14 @@ bool SnippetKey::operator==(const SnippetKey& rhs) const {
 
 snippets::op::Subgraph::BlockedShapeVector getBlockedShapes(const std::vector<std::vector<size_t>>& memBlockedDims,
         const std::vector<std::vector<size_t>>& memOrders, const std::vector<InferenceEngine::Precision>& memPrecs) {
-    int numShapes = memBlockedDims.size();
+    size_t numShapes = memBlockedDims.size();
     if (memOrders.size() != numShapes || memPrecs.size() != numShapes)
         IE_THROW(Unexpected) << "Number of shapes is mismacthed for dimensions, orders and precisions";
     snippets::op::Subgraph::BlockedShapeVector blockedShapes(numShapes);
-    for (int i = 0; i < numShapes; i++) {
-        int dimSize = memBlockedDims[i].size();
+    for (size_t i = 0; i < numShapes; i++) {
+        size_t dimSize = memBlockedDims[i].size();
         std::vector<Dimension> dims(dimSize);
-        for (int j = 0; j < dimSize; j++) {
+        for (size_t j = 0; j < dimSize; j++) {
             dims[j] = memBlockedDims[i][j];
         }
         ov::PartialShape shape(dims);
@@ -386,14 +386,10 @@ void Snippet::selectOptimalPrimitiveDescriptor() {
     const size_t inputNum = config.inConfs.size();
     snippetAttrs.inMemPrecs.resize(inputNum);
     snippetAttrs.inMemOrders.resize(inputNum);
-    isBlockedMaster = false;
-    isBlockedInput.resize(inputNum);
     for (size_t i = 0; i < inputNum; i++) {
         const auto& memDesc = config.inConfs[i].getMemDesc();
         snippetAttrs.inMemPrecs[i] = memDesc->getPrecision();
         snippetAttrs.inMemOrders[i] = memDesc->as<BlockedMemoryDesc>()->getOrder();
-        isBlockedInput[i] = memDesc->as<BlockedMemoryDesc>()->getOrder().size() != memDesc->as<BlockedMemoryDesc>()->getBlockDims().size();
-        isBlockedMaster = isBlockedMaster || isBlockedInput[i];
     }
     const size_t outputNum = config.outConfs.size();
     snippetAttrs.outMemPrecs.resize(outputNum);
@@ -576,10 +572,16 @@ Snippet::SnippetExecutor::SnippetExecutor(const SnippetAttrs& attrs, bool is_can
 
 Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool is_canonicalized, bool is_dynamic, bool enforceBF16) :
     SnippetExecutor(attrs, is_canonicalized, is_dynamic, enforceBF16) {
+    numInput = snippetAttrs.inMemBlockedDims.size();
+    numOutput = snippetAttrs.outMemBlockedDims.size();
+    start_offset_in.resize(numInput);
+    start_offset_out.resize(numOutput);
     auto local_copy = [this]() {
         ov::OutputVector subgraph_node_inputs;
-        for (const auto &input : snippetAttrs.snippet->input_values()) {
-            auto new_input = std::make_shared<ov::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
+        for (size_t i = 0; i < numInput; i++) {
+            const auto paramShape = snippetAttrs.snippet->body_ptr()->get_parameters()[i]->get_shape();
+            const auto paramType =  snippetAttrs.snippet->body_ptr()->get_parameters()[i]->get_element_type();
+            auto new_input = std::make_shared<ov::opset1::Parameter>(paramType, paramShape);
             subgraph_node_inputs.push_back(new_input);
         }
         std::shared_ptr<ov::Model> new_body = snippetAttrs.snippet->body_ptr()->clone();
@@ -588,40 +590,24 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
         ov::copy_runtime_info(snippetAttrs.snippet, snippet_for_generation);
         snippet_for_generation->set_friendly_name(snippetAttrs.snippet->get_friendly_name());
         auto host_isa = dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx512_core) ?
-        dnnl::impl::cpu::x64::avx512_core : dnnl::impl::cpu::x64::avx2;
+            dnnl::impl::cpu::x64::avx512_core : dnnl::impl::cpu::x64::avx2;
         snippet_for_generation->set_generator(std::make_shared<CPUGenerator>(host_isa));
     };
 
-    numInput = snippetAttrs.inMemBlockedDims.size();
-    numOutput = snippetAttrs.outMemBlockedDims.size();
-    start_offset_in.resize(numInput);
-    start_offset_out.resize(numOutput);
-
     ov::PartialShape canonicalShape;
     if (is_canonicalized) {
-        // master shape is updated with new input shapes, need get updated master shape
-        std::vector<ov::Shape> outBlockedShape(snippetAttrs.outMemBlockedDims.size());
-        for (int i = 0; i < snippetAttrs.outMemBlockedDims.size(); i++) {
-            outBlockedShape[i] = ov::Shape(snippetAttrs.outMemBlockedDims[i]);
-        }
-        std::vector<ov::Shape> inBlockedShape(snippetAttrs.inMemBlockedDims.size());
-        for (int i = 0; i < snippetAttrs.inMemBlockedDims.size(); i++) {
-            inBlockedShape[i] = ov::Shape(snippetAttrs.inMemBlockedDims[i]);
-        }
-        canonicalShape = snippetAttrs.snippet->compute_master_shape(outBlockedShape, inBlockedShape);
+        // reshape with new input shapes, and get updated master shape
+        canonicalShape = reshapeCanonicalizedBody();
     } else {
         // determine canonicalize, determine master_shape
+        // canonicalShape and compute_master_shape is always on snippetAttrs.snippet, only generation on a copy.
         canonicalShape = canonicalizeBody();
     }
 
     if (is_dynamic) {
-        // we need a local snippets for generation, which will be adjusted possibily based on input shapes
-        // the adjustment may be not compatible with new input shape in dynamic node, such as broadcastMove inserted.
+        // we need a local snippets for generation, which will be adjusted based on input shapes possibily.
+        // The adjustment may be not compatible with new input shape in dynamic node, such as broadcastMove inserted.
         local_copy();
-        std::vector<ov::Shape> new_shapes;
-        for (const auto& s : snippetAttrs.inMemBlockedDims)
-            new_shapes.emplace_back(s);
-        snippet_for_generation->reshape_body(new_shapes);
     } else {
         snippet_for_generation = snippetAttrs.snippet;
     }
@@ -711,6 +697,17 @@ ov::PartialShape Snippet::SnippetJitExecutor::canonicalizeBody() {
     return canonicalShape;
 }
 
+ov::PartialShape Snippet::SnippetJitExecutor::reshapeCanonicalizedBody() {
+    ov::snippets::op::Subgraph::BlockedShapeVector input_blocked_shapes = getBlockedShapes(
+        snippetAttrs.inMemBlockedDims, snippetAttrs.inMemOrders, snippetAttrs.inMemPrecs);
+
+    ov::snippets::op::Subgraph::BlockedShapeVector output_blocked_shapes = getBlockedShapes(
+        snippetAttrs.outMemBlockedDims, snippetAttrs.outMemOrders, snippetAttrs.outMemPrecs);
+
+    const auto& canonicalShape = snippetAttrs.snippet->reshape_canonicalized_body(output_blocked_shapes, input_blocked_shapes);
+    return canonicalShape;
+}
+
 bool Snippet::SnippetJitExecutor::optimizeExecDomain(std::vector<VectorDims>& inputShapes, std::vector<VectorDims>& outputShapes,
                                  VectorDims &domain, size_t& TileRank) const {
     const size_t minimalConcurrency = parallel_get_max_threads();
@@ -782,7 +779,7 @@ bool Snippet::SnippetJitExecutor::optimizeExecDomain(std::vector<VectorDims>& in
 void Snippet::SnippetJitExecutor::generate(const jit_snippets_compile_args* jcp) {
     ov::pass::Manager pre_dialect;
     pre_dialect.register_pass<ConvertToSwishCPU>();
-    if (enforceBF16 && snippetAttrs.snippet->has_domain_sensitive_ops()) {
+    if (enforceBF16 && snippet_for_generation->has_domain_sensitive_ops()) {
         // enforce BF16 precisions to supported operations
         // MatMul has to be decomposed to Brgemm operations before enforcement
         // Note, MatMul decomposition will be ran later again for case if BF16 enforcement is not happened
