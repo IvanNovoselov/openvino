@@ -165,6 +165,10 @@ public:
                 else
                     broadcast_merge(masterShape, input_shapes[i]);
             }
+            size_t output_rank = m_body->get_output_partial_shape(0).rank().get_length();
+            if (output_rank > masterShape.size()) {
+                masterShape.insert(masterShape.begin(), output_rank - masterShape.size(), 1);
+            }
             return {{masterShape}, ShapeInferStatus::success};
         } else {
             std::vector<VectorDims> outputDims;
