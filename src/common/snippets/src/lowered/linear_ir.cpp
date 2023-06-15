@@ -122,6 +122,63 @@ LinearIR::container LinearIR::deep_copy_range(LinearIR::container::const_iterato
     return result;
 }
 
+//LinearIR LinearIR::deep_copy(const std::shared_ptr<LinearIR>& linear_ir) {
+//    // Todo: it's not very difficult to implement a deep copy of loop_manager, but we don't need it yet
+//    OPENVINO_ASSERT(linear_ir->m_loop_manager->get_map().empty(), "deep_copy of linear IR with initialized loop manager is not supported yet");
+//    return {LinearIR::deep_copy_range(linear_ir->begin(), linear_ir->end()), linear_ir->get_config()};
+//}
+
+LinearIR LinearIR::deep_copy() const {
+    // todo: implement the same functionality using standard copy constructor
+    auto clone_ports_descriptors = [](std::vector<PortDescriptorPtr>& ports) {
+        std::for_each(ports.begin(), ports.end(), [](PortDescriptorPtr& pd) { pd = pd->clone(); });
+    };
+    const auto& original_lir = *this;
+    LinearIR new_lir;
+    new_lir.m_config = original_lir.m_config;
+    new_lir.m_shape_infer = original_lir.m_shape_infer;
+    NodeVector original_nodes;
+    original_nodes.reserve(original_lir.m_expressions.size());
+    std::unordered_map<PortConnectorPtr, PortConnectorPtr> connectors_map;
+    for (const auto& orig_expr : original_lir) {
+        original_nodes.push_back(orig_expr->get_node());
+        const auto& copy_expr = ExpressionFactory::shallow_copy(orig_expr);
+        clone_ports_descriptors(copy_expr->m_input_port_descriptors);
+        clone_ports_descriptors(copy_expr->m_output_port_descriptors);
+
+        for (auto& orig_con : copy_expr->m_output_port_connectors) {
+            const auto& copy_source = copy_expr->get_output_port(orig_con->get_source().get_index());
+            const auto& copy_con = std::make_shared<PortConnector>(copy_source);
+            connectors_map[orig_con] = copy_con;
+            orig_con = copy_con;
+        }
+        for (size_t i = 0; i < copy_expr->get_input_count(); i++) {
+            const auto& copy_connector = connectors_map[copy_expr->get_input_port_connector(i)];
+            const auto& copy_consumer = copy_expr->get_input_port(i);
+            copy_connector->add_consumer(copy_consumer);
+            copy_expr->replace_input(i, copy_connector);
+        }
+
+        if (auto io_expr = std::dynamic_pointer_cast<IOExpression>(copy_expr))
+            new_lir.m_io_expressions.push_back(io_expr);
+        new_lir.m_expressions.push_back(copy_expr);
+    }
+    // node_map and expr_map map original node pointer (expression) to a new pointer (expression)
+    ngraph::NodeMap node_map;
+    OPENVINO_SUPPRESS_DEPRECATED_START
+    ngraph::clone_nodes(original_nodes,  node_map);
+    OPENVINO_SUPPRESS_DEPRECATED_END
+    new_lir.m_node2expression_map.clear();
+    for (const auto& copy_expr : new_lir.m_expressions) {
+        copy_expr->m_source_node = node_map[copy_expr->m_source_node.get()];
+        new_lir.m_node2expression_map[copy_expr->m_source_node] = copy_expr;
+    }
+    new_lir.m_loop_manager = std::make_shared<LoopManager>();
+    // It's Ok to share shapeInfer factory, since LIR doesn't change it
+    new_lir.m_shape_infer_factory = m_shape_infer_factory;
+    return new_lir;
+}
+
 void LinearIR::debug_print(bool tds_as_pointers) const {
     auto print_rinfo = [](const RegInfo& rinfo) {
         std::cerr << " : {";

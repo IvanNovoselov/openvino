@@ -5,6 +5,7 @@
 #include "snippets/itt.hpp"
 
 #include "snippets/op/broadcastmove.hpp"
+#include "snippets/op/broadcastmove.hpp"
 
 
 namespace ov {

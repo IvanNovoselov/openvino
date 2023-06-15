@@ -55,6 +55,7 @@ public:
 
     std::vector<size_t> get_loop_ids() const;
     void set_loop_ids(const std::vector<size_t>& loops);
+//    virtual ExpressionPtr clone_with_new_inputs(const std::vector<PortConnectorPtr>& new_inputs) const;
 
 protected:
     // Note: The constructor initialization is private since an expression can be created only by Linear IR.
@@ -74,7 +75,6 @@ protected:
     std::vector<size_t> m_loop_ids{};
     std::shared_ptr<IShapeInferSnippets> m_shapeInference{nullptr};
 };
-using ExpressionPtr = std::shared_ptr<Expression>;
 
 class IOExpression : public Expression {
     friend class LinearIR;
