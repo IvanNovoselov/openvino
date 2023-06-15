@@ -13,6 +13,14 @@
 namespace ov {
 namespace snippets {
 
+struct ICompiledSnippet {
+    virtual const uint8_t* get_code() const = 0;
+    virtual size_t get_code_size() const = 0;
+    virtual bool empty() const = 0;
+    virtual ~ICompiledSnippet() = default;
+};
+using CompiledSnippetPtr = std::shared_ptr<ICompiledSnippet>;
+
 typedef std::pair<std::function<std::shared_ptr<Emitter>(const std::shared_ptr<ov::Node>&)>,
         std::function<std::set<std::vector<element::Type>>(const std::shared_ptr<ov::Node>&)>> jitters_value;
 
@@ -33,7 +41,7 @@ public:
      * @brief finalizes code generation
      * @return generated kernel binary
      */
-    virtual code get_snippet() const = 0;
+    virtual CompiledSnippetPtr get_snippet() = 0;
 
     /**
      * @brief gets number of lanes supported by target's vector ISA

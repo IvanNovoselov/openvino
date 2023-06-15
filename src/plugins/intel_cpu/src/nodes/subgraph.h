@@ -36,6 +36,7 @@ public:
     // Here we convert to canonical for & jit everything
     void prepareParams() override;
     bool needPrepareParams() const override;
+    //IShapeInfer::Result shapeInfer() const override;
 
     bool canBeInPlace() const override;
     bool created() const override;
@@ -57,13 +58,8 @@ public:
     };
 
 private:
-    static const size_t rank6D {6};
-
     typedef void (*kernel)(const void *, const void *);
 
-    // Create a deep local copy of the input snippet to perform canonicalization & code generation
-    // TODO: Probably better to implement a proper copy constructor
-    void copy_snippet() const;
     void init_body_hash();
 
     size_t inputNum = 0;
@@ -80,18 +76,17 @@ private:
     std::vector<MemoryPtr> dstMemPtrs = {};
 
     mutable SnippetAttrs snippetAttrs;
-    mutable bool is_canonicalized = false;
     bool is_dynamic = false;
 
     class SnippetExecutor {
         public:
-            SnippetExecutor(const SnippetAttrs& attrs, bool is_canonicalized, bool is_dynamic, bool enforceBF16);
+            SnippetExecutor(SnippetAttrs attrs, bool is_dynamic, bool enforceBF16);
             virtual void exec(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) = 0;
             virtual ~SnippetExecutor() = default;
+            std::shared_ptr<IShapeInfer> shapeInference = nullptr;
 
         protected:
             SnippetAttrs snippetAttrs;
-            bool is_canonicalized = false;
             bool is_dynamic = false;
             bool enforceBF16 = false;
     };
@@ -100,7 +95,7 @@ private:
 
     class SnippetJitExecutor : public SnippetExecutor {
         public:
-            SnippetJitExecutor(const SnippetAttrs& attrs, bool is_canonicalized, bool is_dynamic, bool enforceBF16);
+            SnippetJitExecutor(const SnippetAttrs& attrs, bool is_dynamic, bool enforceBF16);
             void exec(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) override;
 
             bool schedule_created();
@@ -115,8 +110,6 @@ private:
 
             size_t numInput = 0;
             size_t numOutput = 0;
-
-            ov::PartialShape canonicalizeBody(bool reshape);
 
             void generate(const jit_snippets_compile_args*);
             inline void update_ptrs(jit_snippets_call_args&, const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs);

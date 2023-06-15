@@ -11,10 +11,30 @@
 #include "snippets_isa.hpp"
 
 #include "snippets/lowered/linear_ir.hpp"
-#include "snippets/lowered/pass/pass.hpp"
+#include "target_machine.hpp"
 
 namespace ov {
 namespace snippets {
+
+
+class Generator;
+/**
+ * @interface LoweringResult
+ * @brief Holds all relevant information produced during lowering
+ * @param compiled_snippet pointer to interface class that encapsulates compiled binary code
+ * @param buffer_scratchpad_size the amount of additional memory required by the binary code to execute.
+ * Must be allocated and freed by the backed.
+ */
+class LoweringResult {
+    friend class Generator;
+    // Some emitters rely on other precompiled kernels.
+    // We need to keep the pointers to such emitters alive, so the kernels would still be accessible at runtime.
+    std::vector<std::shared_ptr<Emitter>> m_saved_emitters{};
+
+public:
+    std::shared_ptr<ICompiledSnippet> compiled_snippet = nullptr;
+    size_t buffer_scratchpad_size = 0;
+};
 
 /**
  * @interface Schedule
@@ -24,26 +44,23 @@ namespace snippets {
 class Schedule {
 public:
     /**
-     * @brief Default constructor
-     */
-    Schedule() : parallel_exec_domain({}), is_flat(false), ptr(nullptr) {}
-    /**
      * @brief Default to create schedule out of specific parameters
      * @param ws work size for kernel execution
      * @param f can this kernel be linearided to 1D range
      * @param p pointer to generated code
      */
-    Schedule(const std::vector<size_t>& wd, bool f, code p) : parallel_exec_domain(wd), is_flat(f), ptr(p) {}
+    Schedule() : parallel_exec_domain(), lowering_result() {}
+    Schedule(std::vector<size_t>&& domain, LoweringResult&& lr) : parallel_exec_domain(domain), lowering_result(lr) {}
+    Schedule(std::vector<size_t> domain, LoweringResult&& lr) : parallel_exec_domain(std::move(domain)), lowering_result(lr) {}
     /**
      * @brief Returns callable instanse of code pointer
      */
     template<typename K> K get_callable() const {
-        return reinterpret_cast<K>(const_cast<unsigned char*>(ptr));
+        return reinterpret_cast<K>(const_cast<unsigned char*>(lowering_result.compiled_snippet->get_code()));
     }
 
     std::vector<size_t> parallel_exec_domain {};
-    bool is_flat {false};
-    code ptr {nullptr};
+    LoweringResult lowering_result {};
 };
 
 /**
@@ -56,7 +73,7 @@ public:
     /**
      * @brief Default constructor
      */
-    Generator(const std::shared_ptr<TargetMachine>& t) : target(t), lowered_saved{} {}
+    Generator(const std::shared_ptr<TargetMachine>& t) : target(t) {}
     /**
      * @brief Default destructor
      */
@@ -72,11 +89,7 @@ public:
      * @param compile_params parameters for generated code
      * @return pointer to generated code
      */
-     struct LoweringResult {
-         LoweringResult(code c) : binary_code(c) {}
-         code binary_code = nullptr;
-     };
-    LoweringResult generate(lowered::LinearIR& linear_ir, const lowered::Config& config, const void* compile_params = nullptr);
+    void generate(lowered::LinearIR& linear_ir, LoweringResult& result, const void* compile_params = nullptr) const;
 
     /**
      * @brief gets target machine
@@ -106,11 +119,13 @@ protected:
     * @return register type
     */
     virtual opRegType get_specific_op_reg_type(const std::shared_ptr<ov::Node>& op) const;
+    /**
+    * @brief returns true if an emitter can use precompiled kernel.
+    * @return bool
+    */
+    virtual bool uses_precompiled_kernel(const std::shared_ptr<Emitter>& emitter) const { return false; }
 
     std::shared_ptr<TargetMachine> target;
-    // todo: we need to save lowered code to access compiled brgemm kernels on execution time (normally lowered is destructed by then).
-    //  This is temporary solution, remove this when kernel caching is implemented. Don't forget to make generate const method.
-    lowered::LinearIR lowered_saved;
 };
 
 } // namespace snippets

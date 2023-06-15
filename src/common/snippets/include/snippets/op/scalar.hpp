@@ -6,6 +6,7 @@
 
 #include "openvino/op/op.hpp"
 #include "ngraph/op/constant.hpp"
+#include "snippets/lowered/shape_inference/shape_inference.hpp"
 
 namespace ov {
 namespace snippets {

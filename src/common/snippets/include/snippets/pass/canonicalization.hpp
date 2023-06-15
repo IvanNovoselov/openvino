@@ -1,0 +1,38 @@
+// Copyright (C) 2018-2023 Intel Corporation
+// SPDX-License-Identifier: Apache-2.0
+//
+
+#pragma once
+
+#include "openvino/pass/pass.hpp"
+#include "transformations_visibility.hpp"
+#include "snippets/op/subgraph.hpp"
+
+namespace ov {
+namespace snippets {
+namespace pass {
+
+/**
+ * @interface Canonicalization
+ * @ingroup snippets
+ * @brief Canonicalization inserts Unsqueeze operations to account for:
+ *  - input ranks mismatch, then inputs with smaller ranks are prepeneded with 1
+ *  - layouts mismatch (only planar + blocked is supported), plarar shapes are postpended with 1
+ */
+class Canonicalization: public ov::pass::ModelPass {
+public:
+    OPENVINO_RTTI("Canonicalization");
+    using BlockedShapeVector = op::Subgraph::BlockedShapeVector;
+    using VectorDims = op::Subgraph::VectorDims;
+    using Layout = std::vector<size_t>;
+    Canonicalization(const BlockedShapeVector& blocked_input_shapes);
+    bool run_on_model(const std::shared_ptr<ov::Model>& m) override;
+
+private:
+    std::vector<VectorDims> m_in_shapes;
+    std::vector<Layout> m_in_layouts;
+};
+
+}  // namespace pass
+}  // namespace snippets
+}  // namespace ov

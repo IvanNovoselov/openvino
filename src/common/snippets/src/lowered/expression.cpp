@@ -143,10 +143,10 @@ void Expression::updateShapes() {
         input_shapes.reserve(in_connectors.size());
         for (size_t i = 0; i < in_connectors.size(); i++) {
             const auto& src_port = in_connectors[i]->get_source();
-            const auto i_shape = src_port.get_expr()->get_output_port_descriptor(src_port.get_index())->get_shape();
+            const auto& i_shape = src_port.get_expr()->get_output_port_descriptor(src_port.get_index())->get_shape();
+            input_shapes.emplace_back(i_shape);
             // todo: do we really need to store the same shape twice in parent's out_port_desc and this in_port_descs
             in_descriptors[i]->set_shape(i_shape);
-            input_shapes.emplace_back(i_shape);
         }
 
         result = m_shapeInference->infer(input_shapes);

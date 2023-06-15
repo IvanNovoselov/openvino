@@ -59,6 +59,7 @@ const IShapeInferSnippetsFactory::TRegistry IShapeInferSnippetsFactory::registry
         SHAPE_INFER_OP_SPECIFIC(op::HorizonMax),
         SHAPE_INFER_OP_SPECIFIC(op::HorizonSum),
         SHAPE_INFER_OP_SPECIFIC(op::VectorBuffer),
+        SHAPE_INFER_OP_SPECIFIC(op::RankNormalization),
         SHAPE_INFER_OP_SPECIFIC(op::BroadcastLoad),
         SHAPE_INFER_OP_SPECIFIC(op::BroadcastMove),
 };

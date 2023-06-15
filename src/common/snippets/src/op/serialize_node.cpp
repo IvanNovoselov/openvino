@@ -3,6 +3,7 @@
 //
 
 #include "snippets/op/serialization_node.hpp"
+#include "snippets/utils.hpp"
 
 
 namespace ov {
@@ -34,15 +35,17 @@ std::shared_ptr<Node> SerializationNode::clone_with_new_inputs(const OutputVecto
 bool SerializationNode::visit_attributes(AttributeVisitor &visitor) {
     std::vector<std::pair<std::string, ov::PartialShape>> shapes;
     const auto &node = m_expr->get_node();
-    for (size_t i = 0; i < node->get_input_size(); i++) {
-        const auto &pshape = node->get_input_partial_shape(i);
-            if (pshape.begin() != pshape.end())
-                shapes.emplace_back("in_shape_" + std::to_string(i), node->get_input_partial_shape(i));
+    const auto& in_port_descs = m_expr->get_input_port_descriptors();
+    for (size_t i = 0; i < in_port_descs.size(); i++) {
+        const auto& shape = in_port_descs[i]->get_shape();
+        if (!shape.empty())
+            shapes.emplace_back("in_shape_" + std::to_string(i), utils::vector_dims_to_partial_shape(shape));
     }
-    for (size_t i = 0; i < node->get_output_size(); i++) {
-        const auto &pshape = node->get_output_partial_shape(i);
-        if (pshape.begin() != pshape.end())
-            shapes.emplace_back("out_shape_" + std::to_string(i), pshape);
+    const auto& out_port_descs = m_expr->get_output_port_descriptors();
+    for (size_t i = 0; i < out_port_descs.size(); i++) {
+        const auto& shape = out_port_descs[i]->get_shape();
+        if (!shape.empty())
+            shapes.emplace_back("out_shape_" + std::to_string(i), utils::vector_dims_to_partial_shape(shape));
     }
     auto loop_ids = m_expr->get_loop_ids();
     auto rinfo = m_expr->get_reg_info();

@@ -33,7 +33,6 @@ public:
 class entryFirstPassthrough : public IShapeInferSnippets {
 public:
     Result infer(const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes) override {
-        OPENVINO_ASSERT(!input_shapes.empty(), "Empty Input shapes are not allowed for entryFirstPassthrough");
         std::vector<VectorDims> output_shapes {input_shapes[0].get()};
         return {std::move(output_shapes), ShapeInferStatus::success};
     }
