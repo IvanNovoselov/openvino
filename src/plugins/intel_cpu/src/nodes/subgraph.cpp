@@ -91,21 +91,32 @@ bool SnippetKey::operator==(const SnippetKey& rhs) const {
         attrs.outMemPrecs.size() != rhs.attrs.outMemPrecs.size())
         return false;
 
-    bool retVal = true;
-    for (size_t i = 0; i < attrs.inMemBlockedDims.size(); i++)
-        retVal = retVal && attrs.inMemBlockedDims[i] == rhs.attrs.inMemBlockedDims[i];
-    for (size_t i = 0; i < attrs.inMemOrders.size(); i++)
-        retVal = retVal && attrs.inMemOrders[i] == rhs.attrs.inMemOrders[i];
-    for (size_t i = 0; i < attrs.inMemPrecs.size(); i++)
-        retVal = retVal && attrs.inMemPrecs[i] == rhs.attrs.inMemPrecs[i];
-    for (size_t i = 0; i < attrs.outMemBlockedDims.size(); i++)
-        retVal = retVal && attrs.outMemBlockedDims[i] == rhs.attrs.outMemBlockedDims[i];
-    for (size_t i = 0; i < attrs.outMemOrders.size(); i++)
-        retVal = retVal && attrs.outMemOrders[i] == rhs.attrs.outMemOrders[i];
-    for (size_t i = 0; i < attrs.outMemPrecs.size(); i++)
-        retVal = retVal && attrs.outMemPrecs[i] == rhs.attrs.outMemPrecs[i];
+    for (size_t i = 0; i < attrs.inMemBlockedDims.size(); i++) {
+        if (!(attrs.inMemBlockedDims[i] == rhs.attrs.inMemBlockedDims[i]))
+            return false;
+    }
+    for (size_t i = 0; i < attrs.outMemBlockedDims.size(); i++) {
+        if (!(attrs.outMemBlockedDims[i] == rhs.attrs.outMemBlockedDims[i]))
+            return false;
+    }
+    for (size_t i = 0; i < attrs.inMemOrders.size(); i++) {
+        if (!(attrs.inMemOrders[i] == rhs.attrs.inMemOrders[i]))
+            return false;
+    }
+    for (size_t i = 0; i < attrs.outMemOrders.size(); i++) {
+        if (!(attrs.outMemOrders[i] == rhs.attrs.outMemOrders[i]))
+            return false;
+    }
+    for (size_t i = 0; i < attrs.inMemPrecs.size(); i++) {
+        if (!(attrs.inMemPrecs[i] == rhs.attrs.inMemPrecs[i]))
+            return false;
+    }
+    for (size_t i = 0; i < attrs.outMemPrecs.size(); i++) {
+        if (!(attrs.outMemPrecs[i] == rhs.attrs.outMemPrecs[i]))
+            return false;
+    }
 
-    return retVal;
+    return true;
 }
 
 snippets::op::Subgraph::BlockedShapeVector getBlockedShapes(const std::vector<std::vector<size_t>>& memBlockedDims,
@@ -142,18 +153,13 @@ public:
             auto src_rank = src.size();
             const auto new_rank = std::max(dst_rank, src_rank);
             dst.insert(dst.begin(), new_rank - dst_rank, 1);
-            bool success = true;
             for (size_t i = 0; i < new_rank; i++) {
                 auto srci = i < (new_rank - src_rank) ? 1 : src[i - (new_rank - src_rank)];
                 if (dst[i] != srci && srci != Shape::UNDEFINED_DIM) {
-                    if (dst[i] == 1 || dst[i] == Shape::UNDEFINED_DIM) {
+                    if (dst[i] == 1 || dst[i] == Shape::UNDEFINED_DIM)
                         dst[i] = srci;
-                    } else {
-                        success = false;
-                    }
                 }
             }
-            return success;
         };
 
         const size_t out_size = m_body->get_output_size();
@@ -240,14 +246,17 @@ void Snippet::copy_snippet() const {
     snippetAttrs.snippet = std::make_shared<snippets::op::Subgraph>(subgraph_node_inputs, new_body);
     ov::copy_runtime_info(original_snippet, snippetAttrs.snippet);
     snippetAttrs.snippet->set_friendly_name(original_snippet->get_friendly_name());
+#if defined(OPENVINO_ARCH_X86_64)
     snippetAttrs.snippet->set_generator(std::make_shared<CPUGenerator>(host_isa));
+#else
+    IE_THROW(NotImplemented) << "CPU plugin: code-generation is not supported on non-x64 platforms";
+#endif // OPENVINO_ARCH_X86_64
 }
 
 void Snippet::init_body_hash() {
     uint64_t seed = 0;
-    ov::pass::Manager m;
-    m.register_pass<ov::pass::Hash>(seed);
-    m.run_passes(std::const_pointer_cast<ov::Model>(original_snippet->body_ptr()));
+    ov::pass::Hash hash_function(seed);
+    hash_function.run_on_model(original_snippet->body_ptr());
     snippetAttrs.bodyHash = seed;
 }
 
@@ -385,9 +394,13 @@ void Snippet::initSupportedPrimitiveDescriptors() {
 
 void Snippet::selectOptimalPrimitiveDescriptor() {
     selectPreferPrimitiveDescriptor(getImplPriority(), true);
+}
+
+void Snippet::initOptimalPrimitiveDescriptor() {
+    Node::initOptimalPrimitiveDescriptor();
     // memory order and precision is determined now, there is no need to prepare for each dynamic shapes.
     const auto config = getSelectedPrimitiveDescriptor()->getConfig();
-    const size_t inputNum = config.inConfs.size();
+    inputNum = config.inConfs.size();
     snippetAttrs.inMemPrecs.resize(inputNum);
     snippetAttrs.inMemOrders.resize(inputNum);
     for (size_t i = 0; i < inputNum; i++) {
@@ -395,13 +408,18 @@ void Snippet::selectOptimalPrimitiveDescriptor() {
         snippetAttrs.inMemPrecs[i] = memDesc->getPrecision();
         snippetAttrs.inMemOrders[i] = memDesc->as<BlockedMemoryDesc>()->getOrder();
     }
-    const size_t outputNum = config.outConfs.size();
+    outputNum = config.outConfs.size();
     snippetAttrs.outMemPrecs.resize(outputNum);
     snippetAttrs.outMemOrders.resize(outputNum);
     for (size_t i = 0; i < outputNum; i++) {
         snippetAttrs.outMemPrecs[i] = config.outConfs[i].getMemDesc()->getPrecision();
         snippetAttrs.outMemOrders[i] = config.outConfs[i].getMemDesc()->as<BlockedMemoryDesc>()->getOrder();
     }
+    // reserve fixed size.
+    snippetAttrs.inMemBlockedDims.resize(inputNum);
+    snippetAttrs.outMemBlockedDims.resize(outputNum);
+    srcMemPtrs.resize(inputNum);
+    dstMemPtrs.resize(outputNum);
 }
 
 InferenceEngine::Precision Snippet::getRuntimePrecision() const {
@@ -417,16 +435,10 @@ InferenceEngine::Precision Snippet::getRuntimePrecision() const {
 }
 
 void Snippet::prepareParams() {
-    auto inputSize = inputShapes.size();
-    snippetAttrs.inMemBlockedDims.resize(inputSize);
-    for (size_t i = 0; i < inputSize; i++) {
+    for (size_t i = 0; i < inputNum; i++)
         snippetAttrs.inMemBlockedDims[i] = getParentEdgesAtPort(i)[0]->getMemory().getDescWithType<BlockedMemoryDesc>()->getBlockDims();
-    }
-    auto outputSize = outputShapes.size();
-    snippetAttrs.outMemBlockedDims.resize(outputSize);
-    for (size_t i = 0; i < outputSize; i++) {
+    for (size_t i = 0; i < outputNum; i++)
         snippetAttrs.outMemBlockedDims[i] = getChildEdgesAtPort(i)[0]->getMemory().getDescWithType<BlockedMemoryDesc>()->getBlockDims();
-    }
 
     SnippetKey key = {snippetAttrs};
 
@@ -483,13 +495,9 @@ void Snippet::execute(dnnl::stream strm) {
     if (!execPtr) {
         IE_THROW() << "Can't execute Subgraph node. Primitive didn't created";
     }
-    auto inputSize = inputShapes.size();
-    srcMemPtrs.resize(inputSize);
-    for (size_t i = 0; i < inputSize; i++)
+    for (size_t i = 0; i < inputNum; i++)
         srcMemPtrs[i] = getParentEdgeAt(i)->getMemoryPtr();
-    auto outputSize = outputShapes.size();
-    dstMemPtrs.resize(outputSize);
-    for (size_t i = 0; i < outputSize; i++)
+    for (size_t i = 0; i < outputNum; i++)
         dstMemPtrs[i] = getChildEdgeAt(i)->getMemoryPtr();
 
     execPtr->exec(srcMemPtrs, dstMemPtrs);
@@ -600,12 +608,12 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
 
     ov::PartialShape canonicalShape;
     if (is_canonicalized) {
-        // reshape with new input shapes, and get updated master shape
-        canonicalShape = reshapeCanonicalizedBody();
+        // just reshape with new input shapes, and get updated master shape
+        canonicalShape = canonicalizeBody(true);
     } else {
         // determine canonicalize, determine master_shape
         // canonicalShape and compute_master_shape is always on snippetAttrs.snippet, only generation on a copy.
-        canonicalShape = canonicalizeBody();
+        canonicalShape = canonicalizeBody(false);
     }
 
     if (is_dynamic) {
@@ -690,25 +698,14 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
     buffer_scratchpad.resize(buffer_scratchpad_size * parallel_get_max_threads(), 0);
 }
 
-ov::PartialShape Snippet::SnippetJitExecutor::canonicalizeBody() {
+ov::PartialShape Snippet::SnippetJitExecutor::canonicalizeBody(bool reshape) {
     ov::snippets::op::Subgraph::BlockedShapeVector input_blocked_shapes = getBlockedShapes(
         snippetAttrs.inMemBlockedDims, snippetAttrs.inMemOrders, snippetAttrs.inMemPrecs);
 
     ov::snippets::op::Subgraph::BlockedShapeVector output_blocked_shapes = getBlockedShapes(
         snippetAttrs.outMemBlockedDims, snippetAttrs.outMemOrders, snippetAttrs.outMemPrecs);
 
-    const auto& canonicalShape = snippetAttrs.snippet->canonicalize(output_blocked_shapes, input_blocked_shapes);
-    return canonicalShape;
-}
-
-ov::PartialShape Snippet::SnippetJitExecutor::reshapeCanonicalizedBody() {
-    ov::snippets::op::Subgraph::BlockedShapeVector input_blocked_shapes = getBlockedShapes(
-        snippetAttrs.inMemBlockedDims, snippetAttrs.inMemOrders, snippetAttrs.inMemPrecs);
-
-    ov::snippets::op::Subgraph::BlockedShapeVector output_blocked_shapes = getBlockedShapes(
-        snippetAttrs.outMemBlockedDims, snippetAttrs.outMemOrders, snippetAttrs.outMemPrecs);
-
-    const auto& canonicalShape = snippetAttrs.snippet->reshape_canonicalized_body(output_blocked_shapes, input_blocked_shapes);
+    const auto& canonicalShape = snippetAttrs.snippet->canonicalize(output_blocked_shapes, input_blocked_shapes, reshape);
     return canonicalShape;
 }
 
@@ -815,7 +812,7 @@ void Snippet::SnippetJitExecutor::generate(const jit_snippets_compile_args* jcp)
 }
 
 bool Snippet::SnippetJitExecutor::schedule_created() {
-    return schedule.ptr == nullptr ? false : true;
+    return schedule.ptr != nullptr;
 }
 
 }   // namespace node
