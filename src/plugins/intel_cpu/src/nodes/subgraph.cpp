@@ -34,8 +34,7 @@
 #include "transformations/cpu_opset/common/pass/convert_to_swish_cpu.hpp"
 #include "transformations/defs.hpp"
 #include <common/primitive_hashing_utils.hpp>
-#include "openvino/pass/manager.hpp"
-#include "transformations/hash.hpp"
+#include "snippets/pass/hash.hpp"
 
 using namespace InferenceEngine;
 using namespace dnnl::impl::utils;
@@ -260,7 +259,7 @@ void Snippet::copy_snippet() const {
 
 void Snippet::init_body_hash() {
     uint64_t seed = 0;
-    ov::pass::Hash hash_function(seed);
+    ov::snippets::pass::Hash hash_function(seed);
     hash_function.run_on_model(original_snippet->body_ptr());
     snippetAttrs.bodyHash = seed;
 }
