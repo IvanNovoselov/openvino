@@ -52,4 +52,4 @@ endif()
 ie_add_sample(NAME speech_sample
               SOURCES ${SRC}
               HEADERS ${HDR}
-              DEPENDENCIES ${GFLAGS_TARGET} cnpy ie_samples_utils)
+              DEPENDENCIES ${GFLAGS_TARGET} cnpy format_reader ie_samples_utils)
