@@ -380,8 +380,6 @@ void Snippet::initOptimalPrimitiveDescriptor() {
 
     original_snippet->data_flow_shape_agnostic(in_blocked_shapes, input_precisions, output_precisions, backend_passes);
     original_snippet->convert_body_to_linear_ir(std::make_shared<snippets::CPUShapeInferSnippetsFactory>());
-//    std::string name = "snsdebug_original_snippets";
-//    ov::pass::Serialize(name + ".xml", name + ".bin").run_on_model(original_snippet->body_ptr());
     snippetAttrs.snippet = original_snippet;
 }
 
