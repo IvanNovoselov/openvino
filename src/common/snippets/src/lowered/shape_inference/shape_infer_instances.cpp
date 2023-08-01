@@ -6,8 +6,8 @@
 #include "openvino/op/select.hpp"
 namespace ov {
 namespace snippets {
-namespace {
-// broadcast_merge_into for VectorDimp
+
+// broadcast_merge_into for VectorDims
 bool broadcast_merge_into(IShapeInferSnippets::VectorDims& dst,
                           const IShapeInferSnippets::VectorDims& src,
                           const ov::op::AutoBroadcastSpec& autob) {
@@ -64,6 +64,7 @@ bool broadcast_merge_into(IShapeInferSnippets::VectorDims& dst,
     }
     return false;
 }
+
 bool merge_into(IShapeInferSnippets::VectorDims& dst, const IShapeInferSnippets::VectorDims& src) {
     auto merge_dim = [](size_t& dst, const size_t& d1, const size_t& d2) {
         if (d1 == d2 || d1 == IShapeInferSnippets::DYNAMIC_DIMENSION) {
@@ -83,7 +84,6 @@ bool merge_into(IShapeInferSnippets::VectorDims& dst, const IShapeInferSnippets:
         success &= merge_dim(dst[i], dst[i], src[i]);
     return success;
 }
-} // namespace
 
 
 IShapeInferSnippets::Result
