@@ -164,6 +164,7 @@ Subgraph::Subgraph(const OutputVector& args, const std::shared_ptr<ov::Model>& b
     m_transformations_allowed = false;
     m_shape_infer = std::make_shared<ngraphShapeInferSnippets>(body);
     m_is_dynamic = body->is_dynamic();
+    m_shape_infer = std::make_shared<ngraphShapeInferSnippets>(body);
 }
 
 Subgraph::Subgraph(const NodeVector& args, const std::shared_ptr<ov::Model>& body)
