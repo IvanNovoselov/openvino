@@ -103,8 +103,25 @@ public:
 
     const LoopManagerPtr& get_loop_manager() const { return m_loop_manager; }
     const std::shared_ptr<IShapeInferSnippetsFactory>& get_shape_infer_factory() { return m_shape_infer_factory; }
+    IShapeInferSnippets::Result
+    shape_infer(const std::vector<std::reference_wrapper<const IShapeInferSnippets::VectorDims>>& input_shapes);
+    std::shared_ptr<ShapeInferSnippetsNode> get_shape_infer_instance() const {return  m_shape_infer; }
 
 private:
+    std::shared_ptr<ShapeInferSnippetsNode> m_shape_infer = nullptr;
+
+    class LIRShapeInferSnippets : public ShapeInferSnippetsNode {
+        using IOExpression = lowered::IOExpression;
+    public:
+        explicit LIRShapeInferSnippets(container& body_exprs, io_container& io_exprs);
+        Result infer(const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes) override;
+
+    private:
+        const std::shared_ptr<container> m_exprs = nullptr;
+        std::vector<std::shared_ptr<IOExpression>> m_input_exprs {};
+        std::vector<std::shared_ptr<IOExpression>> m_output_exprs {};
+    };
+
     static ov::NodeVector get_ordered_ops(const std::shared_ptr<ov::Model>& model);
     // Default ctor - can be called only from Linear IR initialization as default way
     ExpressionPtr create_expression(const std::shared_ptr<Node>& n, const std::shared_ptr<ov::Model>& model = nullptr);

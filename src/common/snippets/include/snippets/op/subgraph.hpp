@@ -181,13 +181,6 @@ private:
         bool m_has_domain_sensitive_ops = false;
     } config;
 
-    class ShapeInferSnippetsNode : public IShapeInferSnippets {
-    public:
-        const Result& get_last_result() {return m_last_result; }
-    protected:
-        Result m_last_result{{}, ShapeInferStatus::success};
-    };
-
     std::shared_ptr<ShapeInferSnippetsNode> m_shape_infer = nullptr;
 
     class ngraphShapeInferSnippets : public ShapeInferSnippetsNode {
@@ -196,15 +189,6 @@ private:
         ResultVector m_results;
     public:
         explicit ngraphShapeInferSnippets(const std::shared_ptr<ov::Model>& body);
-        Result infer(const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes) override;
-    };
-    class LIRShapeInferSnippets : public ShapeInferSnippetsNode {
-        using IOExpression = lowered::IOExpression;
-        std::shared_ptr<lowered::LinearIR> m_lir_body;
-        std::vector<std::shared_ptr<IOExpression>> m_param_exprs;
-        std::vector<std::shared_ptr<IOExpression>> m_result_exprs;
-    public:
-        explicit LIRShapeInferSnippets(const std::shared_ptr<lowered::LinearIR>& body);
         Result infer(const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes) override;
     };
 };

@@ -152,6 +152,7 @@ Subgraph::Subgraph(const OutputVector& args, const std::shared_ptr<ov::Model>& b
     for (size_t i = 0; i < body->get_output_size(); ++i)
         m_output_descriptions[0].push_back(std::make_shared<BodyOutputDescription>(i, i));
     m_transformations_allowed = false;
+    m_shape_infer = std::make_shared<ngraphShapeInferSnippets>(body);
 }
 
 Subgraph::Subgraph(const NodeVector& args, const std::shared_ptr<ov::Model>& body)
@@ -478,12 +479,8 @@ bool Subgraph::check_broadcast(const std::shared_ptr<const ov::Node>& node) noex
 
 IShapeInferSnippets::Result
 Subgraph::shape_infer(const std::vector<std::reference_wrapper<const IShapeInferSnippets::VectorDims>>& input_shapes) {
-    if (!m_shape_infer && !m_linear_ir) {
-        OPENVINO_ASSERT(body_ptr(), "Can't create shape infer for Subgraph with an empy body");
-        m_shape_infer = std::make_shared<ngraphShapeInferSnippets>(body_ptr());
-    } else if (!std::dynamic_pointer_cast<LIRShapeInferSnippets>(m_shape_infer) && m_linear_ir) {
-        m_shape_infer = std::make_shared<LIRShapeInferSnippets>(m_linear_ir);
-    }
+    OPENVINO_ASSERT(m_shape_infer, "Attempt to call shape_infer when the shapeInfer instance was not created");
+    // Note that m_shape_infer is updated inside convert_to_linear_ir to use shape inference on LIR
     return m_shape_infer->infer(input_shapes);
 }
 
@@ -522,39 +519,6 @@ Subgraph::ngraphShapeInferSnippets::infer(const std::vector<std::reference_wrapp
     return m_last_result;
 }
 
-Subgraph::LIRShapeInferSnippets::LIRShapeInferSnippets(const std::shared_ptr<lowered::LinearIR>& body) :
-        m_lir_body(body) {
-    for (const auto& io_expr : m_lir_body->get_IO_ops()) {
-        switch (io_expr->get_type()) {
-            case IOExpression::io_type::INPUT : m_param_exprs.push_back(io_expr); break;
-            case IOExpression::io_type::OUTPUT : m_result_exprs.push_back(io_expr); break;
-            default : OPENVINO_THROW("Undefined io expression type");
-        }
-    }
-}
-
-IShapeInferSnippets::Result
-Subgraph::LIRShapeInferSnippets::infer(const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes) {
-    OPENVINO_ASSERT(m_param_exprs.size() == input_shapes.size(), "Got invalid number of input shapes in LIR ShapeInfer");
-    // todo: check that order of param_exprs is always the same as that of input_shapes
-    //  if not use io_expr index to sort in constructor
-
-    for (size_t i = 0; i < m_param_exprs.size(); ++i) {
-        m_param_exprs[i]->get_output_port_descriptor(0)->set_shape(input_shapes[i]);
-    }
-    for (auto& expr : *m_lir_body) {
-        if (expr->needShapeInfer())
-            expr->updateShapes();
-    }
-    std::vector<VectorDims> outputDims;
-    outputDims.reserve(m_result_exprs.size());
-    for (const auto& r : m_result_exprs) {
-        outputDims.push_back(r->get_input_port_descriptor(0)->get_shape());
-    }
-    m_last_result = {outputDims, ShapeInferStatus::success};
-    return m_last_result;
-}
-
 std::shared_ptr<lowered::LinearIR>
 Subgraph::convert_body_to_linear_ir(const std::shared_ptr<IShapeInferSnippetsFactory>& factory) {
     lowered::Config lowering_config;
@@ -563,7 +527,8 @@ Subgraph::convert_body_to_linear_ir(const std::shared_ptr<IShapeInferSnippetsFac
     lowering_config.m_loop_depth = tileRank;
 
     // Todo: uncomment this line and return m_linear_ir before pipeline refactoring is merged
-    //m_linear_ir = std::make_shared<lowered::LinearIR>(body_ptr(), factory, lowering_config);
+    // m_linear_ir = std::make_shared<lowered::LinearIR>(body_ptr(), factory, lowering_config);
+    // m_shape_infer = m_linear_ir->get_shape_infer_instance();
     return std::make_shared<lowered::LinearIR>(body_ptr(), factory, lowering_config);
 }
 

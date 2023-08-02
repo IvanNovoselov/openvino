@@ -42,6 +42,19 @@ public:
 };
 
 /**
+ * Shape inference class for Sungraph node (both nGraph and Linear IRs).
+ * It stores the result of the last shape inference, so it can be reused in optimization pipeline.
+ *
+ */
+class ShapeInferSnippetsNode : public IShapeInferSnippets {
+public:
+    const Result& get_last_result() {return m_last_result; }
+protected:
+    Result m_last_result{{}, ShapeInferStatus::success};
+};
+
+
+/**
  * \brief Shape infer factory
  *
  * \tparam R     Result type of created interface object.

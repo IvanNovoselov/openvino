@@ -17,7 +17,6 @@
 namespace ov {
 namespace intel_cpu {
 namespace pass {
-using LoopManager = snippets::lowered::LinearIR::LoopManager;
 using VectorDims = snippets::IShapeInferSnippets::VectorDims;
 
 DomainOptimization::DomainOptimization(size_t min_parallel_work_amount, size_t min_jit_work_amount)
@@ -28,18 +27,6 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
     if (linear_ir.empty())
         return false;
 
-    auto can_not_optimize = [](const VectorDims& shape) {
-        // Not enough dims to collapse
-        if (shape.size() <= 2)
-            return true;
-        const auto last = *shape.rbegin();
-        const auto prelast = *++shape.rbegin();
-
-        // Can't collapse dynamic dimensions
-        return  last == snippets::IShapeInferSnippets::DYNAMIC_DIMENSION ||
-                prelast == snippets::IShapeInferSnippets::DYNAMIC_DIMENSION;
-    };
-
     std::vector<std::shared_ptr<snippets::lowered::IOExpression>> input_exprs;
     std::vector<snippets::IShapeInferSnippets::VectorDims> input_shapes;
     VectorDims master_shape{1};
@@ -47,22 +34,27 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
         if (expr->get_type() == snippets::lowered::IOExpression::io_type::INPUT) {
             input_exprs.push_back(expr);
             const auto& shape = expr->get_output_port_descriptor(0)->get_shape();
-            if (can_not_optimize(shape))
-                return false;
+            OPENVINO_ASSERT(std::any_of(shape.begin(), shape.end(),
+                                        [](size_t d) {return d == snippets::IShapeInferSnippets::DYNAMIC_DIMENSION; }),
+                            "DomainOptimization pass does not support dynamic shapes");
             OPENVINO_ASSERT(ov::snippets::broadcast_merge_into(master_shape, shape),
                             "Failed to merge input shapes in DomainOptimization pass");
             input_shapes.emplace_back(shape);
         }
     }
-    const auto total_work_amount =
-            std::accumulate(master_shape.begin(), master_shape.end(), 1, std::multiplies<size_t>());
-    if (*master_shape.rbegin() >= m_min_jit_work_amount || // Already enough work for JIT kernel, no need to collapse
-        total_work_amount < m_min_parallel_work_amount * m_min_jit_work_amount) { // There won't be enough work for every thread (even one iter) if we collapse
+
+    const auto total_work_amount = std::accumulate(master_shape.begin(),
+                                                   master_shape.end(),
+                                                   1,
+                                                   std::multiplies<size_t>());
+    if (master_shape.size() <= 2 ||                                               // Nothing to collapse
+        *master_shape.rbegin() >= m_min_jit_work_amount ||                        // Already enough work for JIT kernel, no need to collapse
+        total_work_amount < m_min_parallel_work_amount * m_min_jit_work_amount) { // There won't be enough work for every thread, no point to collapse
         std::cerr << "aborted\n" << std::flush;
         return false;
     }
 
-    auto collapseLastDim = [](VectorDims& dims) {
+    auto CollapseLastDim = [](VectorDims& dims) {
         OPENVINO_ASSERT(dims.size() >= 2, "CollapseLastDim can't process shape with less than two dims");
         dims[dims.size() - 2] *= dims.back();
         for (auto i = dims.size() - 2; i > 0; i--)
@@ -85,9 +77,9 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
            LastDimsNotBroadcasted()) {
 
         for (auto &s : input_shapes)
-            collapseLastDim(s);
+            CollapseLastDim(s);
 
-        collapseLastDim(master_shape);
+        CollapseLastDim(master_shape);
 
         jit_work_amount = next_jit_work_amount;
         next_jit_work_amount *= master_shape[master_shape.size() - 2];
