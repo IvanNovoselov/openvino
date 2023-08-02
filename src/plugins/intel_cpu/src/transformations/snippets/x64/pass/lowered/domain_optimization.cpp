@@ -22,35 +22,17 @@ using VectorDims = snippets::IShapeInferSnippets::VectorDims;
 DomainOptimization::DomainOptimization(size_t min_parallel_work_amount, size_t min_jit_work_amount)
                   : Pass(), m_min_parallel_work_amount{min_parallel_work_amount}, m_min_jit_work_amount{min_jit_work_amount} {
 }
-bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
-    OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "Snippets::DomainOptimization")
-    if (linear_ir.empty())
-        return false;
-
-    std::vector<std::shared_ptr<snippets::lowered::IOExpression>> input_exprs;
-    std::vector<snippets::IShapeInferSnippets::VectorDims> input_shapes;
-    VectorDims master_shape{1};
-    for (const auto& expr : linear_ir.get_IO_ops()) {
-        if (expr->get_type() == snippets::lowered::IOExpression::io_type::INPUT) {
-            input_exprs.push_back(expr);
-            const auto& shape = expr->get_output_port_descriptor(0)->get_shape();
-            OPENVINO_ASSERT(std::any_of(shape.begin(), shape.end(),
-                                        [](size_t d) {return d == snippets::IShapeInferSnippets::DYNAMIC_DIMENSION; }),
-                            "DomainOptimization pass does not support dynamic shapes");
-            OPENVINO_ASSERT(ov::snippets::broadcast_merge_into(master_shape, shape),
-                            "Failed to merge input shapes in DomainOptimization pass");
-            input_shapes.emplace_back(shape);
-        }
-    }
-
+bool DomainOptimization::optimize(std::vector<VectorDims>& input_shapes,
+                                  VectorDims& master_shape,
+                                  const size_t min_parallel_work_amount,
+                                  const size_t min_jit_work_amount) {
     const auto total_work_amount = std::accumulate(master_shape.begin(),
                                                    master_shape.end(),
-                                                   1,
+                                                   (size_t)1,
                                                    std::multiplies<size_t>());
-    if (master_shape.size() <= 2 ||                                               // Nothing to collapse
-        *master_shape.rbegin() >= m_min_jit_work_amount ||                        // Already enough work for JIT kernel, no need to collapse
-        total_work_amount < m_min_parallel_work_amount * m_min_jit_work_amount) { // There won't be enough work for every thread, no point to collapse
-        std::cerr << "aborted\n" << std::flush;
+    if (master_shape.size() <= 2 ||                                           // Nothing to collapse
+        *master_shape.rbegin() >= min_jit_work_amount ||                      // Already enough work for JIT kernel, no need to collapse
+        total_work_amount < min_parallel_work_amount * min_jit_work_amount) { // There won't be enough work for every thread, no point to collapse
         return false;
     }
 
@@ -71,11 +53,10 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
     size_t jit_work_amount = master_shape.back();
     size_t next_jit_work_amount = jit_work_amount * master_shape[master_shape.size() - 2];
     bool some_dims_collapsed {false};
-    while (jit_work_amount < m_min_jit_work_amount &&
-           next_jit_work_amount * m_min_parallel_work_amount < total_work_amount &&
+    while (jit_work_amount < min_jit_work_amount &&
+           next_jit_work_amount * min_parallel_work_amount < total_work_amount &&
            master_shape.size() > 2 &&
            LastDimsNotBroadcasted()) {
-
         for (auto &s : input_shapes)
             CollapseLastDim(s);
 
@@ -85,15 +66,45 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
         next_jit_work_amount *= master_shape[master_shape.size() - 2];
         some_dims_collapsed = true;
     }
+    return some_dims_collapsed;
+}
+
+bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
+    OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "Snippets::DomainOptimization")
+    if (linear_ir.empty())
+        return false;
+
+    std::vector<std::shared_ptr<snippets::lowered::IOExpression>> input_exprs;
+    std::vector<VectorDims> input_shapes;
+    VectorDims master_shape{1};
+    for (const auto& expr : linear_ir.get_IO_ops()) {
+        if (expr->get_type() == snippets::lowered::IOExpression::io_type::INPUT) {
+            input_exprs.push_back(expr);
+            const auto& shape = expr->get_output_port_descriptor(0)->get_shape();
+            OPENVINO_ASSERT(std::none_of(shape.begin(), shape.end(),
+                                        [](size_t d) {return d == snippets::IShapeInferSnippets::DYNAMIC_DIMENSION; }),
+                            "DomainOptimization pass does not support dynamic shapes");
+            OPENVINO_ASSERT(ov::snippets::broadcast_merge_into(master_shape, shape),
+                            "Failed to merge input shapes in DomainOptimization pass");
+            input_shapes.emplace_back(shape);
+        }
+    }
+    const bool some_dims_collapsed = optimize(input_shapes,
+                                              master_shape,
+                                              m_min_parallel_work_amount,
+                                              m_min_jit_work_amount);
     if (some_dims_collapsed) {
-        for (auto i = 0; i < input_exprs.size(); i++) {
+        std::vector<std::reference_wrapper<const VectorDims>> infer_shapes;
+        infer_shapes.reserve(input_shapes.size());
+        for (size_t i = 0; i < input_exprs.size(); i++) {
             const auto& expr = input_exprs[i];
             const auto& par = ov::as_type_ptr<ov::op::v0::Parameter>(expr->get_node());
             OPENVINO_ASSERT(par, "Input expression does not contain Parameter node.");
             par->set_partial_shape(ov::Shape(input_shapes[i]));
+            infer_shapes.emplace_back(input_shapes[i]);
         }
-        // todo: we need to trigger shapeInfer here to reshape the graph
-        //  Subgraph::LIRShapeInferSnippets::infer(const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes)
+        // Need to propagate updated shapes through LIR
+        linear_ir.shape_infer(infer_shapes);
     }
     return some_dims_collapsed;
 }

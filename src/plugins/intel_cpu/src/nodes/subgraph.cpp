@@ -28,6 +28,7 @@
 #include "transformations/snippets/x64/pass/remove_converts.hpp"
 #include "transformations/snippets/x64/pass/enforce_precision.hpp"
 #include "transformations/snippets/x64/pass/set_brgemm_cpu_blocking_params.hpp"
+#include "transformations/snippets/x64/pass/lowered/domain_optimization.hpp"
 #include "transformations/snippets/x64/shape_inference.hpp"
 #include "transformations/cpu_opset/common/pass/convert_to_swish_cpu.hpp"
 #include "transformations/defs.hpp"
@@ -529,7 +530,8 @@ Snippet::SnippetExecutor::SnippetExecutor(const SnippetAttrs& attrs, bool is_can
     : snippetAttrs(attrs), is_canonicalized(is_canonicalized), is_dynamic(is_dynamic), enforceBF16(enforceBF16) {}
 
 Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool is_canonicalized, bool is_dynamic, bool enforceBF16) :
-    SnippetExecutor(attrs, is_canonicalized, is_dynamic, enforceBF16) {
+    SnippetExecutor(attrs, is_canonicalized, is_dynamic, enforceBF16),
+    min_parallel_work_amount{static_cast<size_t>(parallel_get_max_threads())} {
     numInput = snippetAttrs.inMemBlockedDims.size();
     numOutput = snippetAttrs.outMemBlockedDims.size();
     start_offset_in.resize(numInput);
@@ -601,8 +603,16 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
     fullWorkAmount = std::accumulate(masterShape.begin(), masterShape.end(), 1, std::multiplies<size_t>());
     if (snippet_for_generation->has_domain_sensitive_ops()) {
         tileRank = 2;
-    } else {
-        dims_collapsed = optimizeExecDomain(normInputShapes, normOutputShapes, masterShape, tileRank);
+    } else if (masterShape.size() >= 2) {
+        const bool dims_will_collapse = pass::DomainOptimization::optimize(normInputShapes,
+                                                                           masterShape,
+                                                                           min_parallel_work_amount,
+                                                                           min_jit_work_amount);
+        const auto tile2D_work_amount = masterShape[masterShape.size() - 1] * masterShape[masterShape.size() - 2];
+        if (!dims_will_collapse &&
+            fullWorkAmount >= tile2D_work_amount * min_parallel_work_amount) {
+            tileRank++;
+        }
     }
     exec_domain = masterShape;
 
@@ -747,10 +757,14 @@ void Snippet::SnippetJitExecutor::generate(const jit_snippets_compile_args* jcp)
 #undef SNIPPETS_ADD_POS_PASS
 
     ov::snippets::lowered::pass::PassPipeline control_flow_markup_pipeline;
-    CPU_REGISTER_PASS_X64(control_flow_markup_pipeline, ov::intel_cpu::pass::BrgemmBlocking);
+    CPU_REGISTER_PASS_X64(control_flow_markup_pipeline,
+                          ov::intel_cpu::pass::DomainOptimization,
+                          min_parallel_work_amount,
+                          min_jit_work_amount)
+    CPU_REGISTER_PASS_X64(control_flow_markup_pipeline, ov::intel_cpu::pass::BrgemmBlocking)
 
     ov::snippets::lowered::pass::PassPipeline control_flow_pipeline;
-    CPU_REGISTER_PASS_X64(control_flow_pipeline, ov::intel_cpu::pass::FuseLoadStoreConvert);
+    CPU_REGISTER_PASS_X64(control_flow_pipeline, ov::intel_cpu::pass::FuseLoadStoreConvert)
     // Todo: We don't need shape infer factory now, since shape infer will be done through validata_and_infer_types
     //  pass std::make_shared<snippets::CPUShapeInferSnippetsFactory>() instead of nullptr, when shape infer is performed on LIR
     schedule = snippet_for_generation->generate(backend_passes,

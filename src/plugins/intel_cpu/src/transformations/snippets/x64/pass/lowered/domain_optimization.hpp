@@ -23,6 +23,10 @@ public:
     OPENVINO_RTTI("DomainOptimization", "Pass")
     DomainOptimization(size_t min_parallel_work_amount, size_t min_jit_work_amount);
     bool run(snippets::lowered::LinearIR& linear_ir) override;
+    static bool optimize(std::vector<snippets::IShapeInferSnippets::VectorDims>& input_shapes,
+                         snippets::IShapeInferSnippets::VectorDims& master_shape,
+                         size_t min_parallel_work_amount,
+                         size_t min_jit_work_amount);
 };
 
 }  // namespace pass
