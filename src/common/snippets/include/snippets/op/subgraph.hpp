@@ -185,8 +185,6 @@ private:
 
     class ngraphShapeInferSnippets : public ShapeInferSnippetsNode {
         std::shared_ptr<ov::Model> m_ngraph_body;
-        ParameterVector m_parameters;
-        ResultVector m_results;
     public:
         explicit ngraphShapeInferSnippets(const std::shared_ptr<ov::Model>& body);
         Result infer(const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes) override;

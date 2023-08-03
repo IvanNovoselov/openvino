@@ -485,13 +485,16 @@ Subgraph::shape_infer(const std::vector<std::reference_wrapper<const IShapeInfer
 }
 
 Subgraph::ngraphShapeInferSnippets::ngraphShapeInferSnippets(const std::shared_ptr<ov::Model>& body) :
-    m_ngraph_body(body), m_parameters(body->get_parameters()), m_results(body->get_results()) {
+    m_ngraph_body(body) {
+    OPENVINO_ASSERT(m_ngraph_body, "Can't initialize shape infer with empty body");
 }
 
 IShapeInferSnippets::Result
 Subgraph::ngraphShapeInferSnippets::infer(const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes) {
-    OPENVINO_ASSERT(m_parameters.size() == input_shapes.size(), "Got invalid number of input shapes to reshape subgraph body");
-    for (size_t i = 0; i < m_parameters.size(); ++i) {
+    const ParameterVector& parameters = m_ngraph_body->get_parameters();
+    const ResultVector& results = m_ngraph_body->get_results();
+    OPENVINO_ASSERT(parameters.size() == input_shapes.size(), "Got invalid number of input shapes to reshape subgraph body");
+    for (size_t i = 0; i < parameters.size(); ++i) {
         const auto& in_shape = input_shapes[i].get();
         std::vector<Dimension> new_shape;
         std::transform(in_shape.cbegin(), in_shape.cend(), std::back_inserter(new_shape),
@@ -500,11 +503,11 @@ Subgraph::ngraphShapeInferSnippets::infer(const std::vector<std::reference_wrapp
                                   Dimension::dynamic() :
                                   Dimension(static_cast<Dimension::value_type>(v));
                       });
-        m_parameters[i]->set_partial_shape(new_shape);
+        parameters[i]->set_partial_shape(new_shape);
     }
     m_ngraph_body->validate_nodes_and_infer_types();
     std::vector<VectorDims> outputDims;
-    for (const auto& res : m_results) {
+    for (const auto& res : results) {
         const auto& out_shape = res->get_input_partial_shape(0);
         VectorDims new_shape;
         std::transform(out_shape.cbegin(), out_shape.cend(), std::back_inserter(new_shape),

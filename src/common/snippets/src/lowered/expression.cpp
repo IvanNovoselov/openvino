@@ -116,6 +116,23 @@ ExpressionPort Expression::get_output_port(size_t i) {
 }
 
 void Expression::updateShapes() {
+    if (!m_shapeInference) {
+        // Propagate inputs shape from parents' outputs to expr inputs
+        for (size_t i = 0; i < m_input_port_connectors.size(); i++) {
+            const auto& src_port = m_input_port_connectors[i]->get_source();
+            const auto i_shape = src_port.get_expr()->get_output_port_descriptor(src_port.get_index())->get_shape();
+            m_input_port_descriptors[i]->set_shape(i_shape);
+        }
+        m_source_node->validate_and_infer_types();
+        const size_t num_out_ports = std::min(m_source_node->get_output_size(), m_output_port_descriptors.size());
+        if (m_source_node->get_output_size() != m_output_port_descriptors.size())
+            std::cerr << m_source_node->get_type_name() << "\n";
+        for (size_t i = 0; i < num_out_ports; i++) {
+            m_output_port_descriptors[i]->set_shape(utils::partial_shape_to_vector_dims(m_source_node->get_output_partial_shape(i)));
+        }
+        return;
+    }
+    OPENVINO_ASSERT(m_shapeInference, "Attempt to UpdateShapes without initialized shapeInference");
     IShapeInferSnippets::Result result;
     try {
         std::vector<std::reference_wrapper<const std::vector<size_t>>> input_shapes;

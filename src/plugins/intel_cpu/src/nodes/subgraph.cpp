@@ -612,6 +612,7 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
         if (!dims_will_collapse &&
             fullWorkAmount >= tile2D_work_amount * min_parallel_work_amount) {
             tileRank++;
+            std::cerr << "snsdebug: Tile rank increased\n" << std::flush;
         }
     }
     exec_domain = masterShape;

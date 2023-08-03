@@ -94,17 +94,22 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
                                               m_min_parallel_work_amount,
                                               m_min_jit_work_amount);
     if (some_dims_collapsed) {
+//        linear_ir.serialize("snsdebug_before.xml", "snsdebug_before.bin");
         std::vector<std::reference_wrapper<const VectorDims>> infer_shapes;
         infer_shapes.reserve(input_shapes.size());
         for (size_t i = 0; i < input_exprs.size(); i++) {
             const auto& expr = input_exprs[i];
             const auto& par = ov::as_type_ptr<ov::op::v0::Parameter>(expr->get_node());
             OPENVINO_ASSERT(par, "Input expression does not contain Parameter node.");
+            // todo: we won't really need to update nGraph shapes when we move to LIR shape infer
             par->set_partial_shape(ov::Shape(input_shapes[i]));
+            par->validate_and_infer_types();
             infer_shapes.emplace_back(input_shapes[i]);
         }
         // Need to propagate updated shapes through LIR
         linear_ir.shape_infer(infer_shapes);
+        std::cerr << "snsdebug: Domain optimized\n" << std::flush;
+//        linear_ir.serialize("snsdebug_after.xml", "snsdebug_after.bin");
     }
     return some_dims_collapsed;
 }
