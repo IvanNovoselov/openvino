@@ -240,11 +240,8 @@ void KernelEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, const Xb
             strides = std::move(reordered_strides);
         }
         // the last stride is ignored, since the entire last dim is processed by kernel
-        // and no parallel_for data_ptr offsets can be applied in this case (cover tile_rank == 1)
+        // and no parallel_for data_ptr offsets can be applied in this case
         strides.pop_back();
-        // if tile_rank > 1, then zero corresponding strides since no external offset can be applied
-        // for (auto j = 0; j < tile_rank - 1; j++)
-        //    strides[strides.size() - 1 - j] = 0;
         // actual offset size might be larger that the shape size due to 6D scheduling
         strides.insert(strides.begin(), offset_rank - strides.size(), 0);
 

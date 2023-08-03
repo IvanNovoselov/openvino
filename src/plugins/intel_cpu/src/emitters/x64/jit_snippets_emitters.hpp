@@ -35,7 +35,6 @@ struct jit_snippets_call_args {
 
 struct jit_snippets_compile_args {
     std::vector<size_t> master_shape{};
-    size_t tile_rank = 0;
 };
 ///
 /// \brief jit_container_emitter designed to wrap Emitters that contain other Emitters (for example, KernelEmitter)

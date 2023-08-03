@@ -40,6 +40,7 @@
 #include "snippets/lowered/pass/identify_buffers.hpp"
 #include "snippets/lowered/pass/validate_loops.hpp"
 #include "snippets/lowered/pass/insert_loops.hpp"
+#include "snippets/lowered/pass/domain_optimization.hpp"
 
 #include "transformations/utils/utils.hpp"
 
@@ -65,6 +66,14 @@ void Subgraph::set_generator(std::shared_ptr<ov::snippets::Generator> generator)
 
 void Subgraph::set_virtual_port_count(const size_t count) {
     m_virtual_port_count = count;
+}
+
+void Subgraph::set_min_jit_work_amount(const size_t jit_work_amount) {
+    config.m_min_jit_work_amount = jit_work_amount;
+}
+
+void Subgraph::set_min_parallel_work_amount(const size_t parallel_work_amount) {
+    config.m_min_parallel_work_amount = parallel_work_amount;
 }
 
 auto Subgraph::is_domain_sensitive_op(const std::shared_ptr<ov::Node>& op) -> bool {
@@ -528,6 +537,9 @@ Subgraph::convert_body_to_linear_ir(const std::shared_ptr<IShapeInferSnippetsFac
     lowering_config.m_save_expressions = config.m_has_domain_sensitive_ops;
     lowering_config.m_need_fill_tail_register = config.m_has_domain_sensitive_ops;
     lowering_config.m_loop_depth = tileRank;
+    lowering_config.m_enable_domain_optimization = !config.m_has_domain_sensitive_ops;
+    lowering_config.m_min_parallel_work_amount = config.m_min_parallel_work_amount;
+    lowering_config.m_min_jit_work_amount = config.m_min_jit_work_amount;
 
     // Todo: uncomment this line and return m_linear_ir before pipeline refactoring is merged
     // m_linear_ir = std::make_shared<lowered::LinearIR>(body_ptr(), factory, lowering_config);
@@ -620,6 +632,10 @@ void Subgraph::control_flow_transformations(lowered::LinearIR& linear_ir,
 
     const size_t vector_size = get_generator()->get_target_machine()->get_lanes();
     const int32_t buffer_allocation_rank = static_cast<int32_t>(linear_ir.get_config().m_loop_depth);
+    // Domain optimization must be the first pass, because all other transformations may depend on exrpr shapes
+    lowered::pass::PassPipeline domain_optimization_pipeline;
+    domain_optimization_pipeline.register_pass<lowered::pass::DomainOptimization>();
+    domain_optimization_pipeline.run(linear_ir);
 
     // Ticket: 113666
     // TODO: Make pass pipeline with backend passes more flexible
@@ -692,7 +708,6 @@ snippets::Schedule Subgraph::generate(const std::vector<pass::Manager::Positione
 
     lowered::LinearIR linear_ir = *convert_body_to_linear_ir(factory);
     control_flow_transformations(linear_ir, pre_common, post_common);
-//    linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
     // actual code emission
     const auto& lowering_result = m_generator->generate(linear_ir, linear_ir.get_config(), compile_params);
     const auto ptr = lowering_result.binary_code;

@@ -2,25 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "domain_optimization.hpp"
+#include "snippets/lowered/pass/domain_optimization.hpp"
 
-#include "openvino/pass/pattern/matcher.hpp"
-#include "openvino/pass/pattern/op/wrap_type.hpp"
 #include "snippets/itt.hpp"
 #include "snippets/lowered/linear_ir.hpp"
-#include "snippets/lowered/loop_manager.hpp"
 #include "snippets/snippets_isa.hpp"
-#include "transformations/snippets/x64/op/brgemm_cpu.hpp"
 #include "snippets/lowered/shape_inference/shape_inference.hpp"
 
 
 namespace ov {
-namespace intel_cpu {
+namespace snippets {
+namespace lowered {
 namespace pass {
-using VectorDims = snippets::IShapeInferSnippets::VectorDims;
 
-DomainOptimization::DomainOptimization(size_t min_parallel_work_amount, size_t min_jit_work_amount)
-                  : Pass(), m_min_parallel_work_amount{min_parallel_work_amount}, m_min_jit_work_amount{min_jit_work_amount} {
+using VectorDims = IShapeInferSnippets::VectorDims;
+DomainOptimization::DomainOptimization() : Pass() {
 }
 bool DomainOptimization::optimize(std::vector<VectorDims>& input_shapes,
                                   VectorDims& master_shape,
@@ -74,7 +70,10 @@ bool DomainOptimization::optimize(std::vector<VectorDims>& input_shapes,
 
 bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
     OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "Snippets::DomainOptimization")
+    const auto& config = linear_ir.get_config();
     if (linear_ir.empty())
+        return false;
+    if (!config.m_enable_domain_optimization)
         return false;
 
     std::vector<std::shared_ptr<snippets::lowered::IOExpression>> input_exprs;
@@ -94,8 +93,8 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
     }
     const bool some_dims_collapsed = optimize(input_shapes,
                                               master_shape,
-                                              m_min_parallel_work_amount,
-                                              m_min_jit_work_amount);
+                                              config.m_min_parallel_work_amount,
+                                              config.m_min_jit_work_amount);
     if (some_dims_collapsed) {
         std::vector<std::reference_wrapper<const VectorDims>> infer_shapes;
         infer_shapes.reserve(input_shapes.size());
@@ -113,6 +112,8 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
     }
     return some_dims_collapsed;
 }
-}  // namespace pass
-}  // namespace intel_cpu
-}  // namespace ov
+
+} // namespace pass
+} // namespace lowered
+} // namespace snippets
+} // namespace ov

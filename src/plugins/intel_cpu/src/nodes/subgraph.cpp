@@ -18,6 +18,7 @@
 #include <ie_ngraph_utils.hpp>
 
 #include <snippets/op/subgraph.hpp>
+#include <snippets/lowered/pass/domain_optimization.hpp>
 #include "snippets/pass/matmul_to_brgemm.hpp"
 #include "utils/cpu_utils.hpp"
 #include "emitters/x64/cpu_generator.hpp"
@@ -28,7 +29,6 @@
 #include "transformations/snippets/x64/pass/remove_converts.hpp"
 #include "transformations/snippets/x64/pass/enforce_precision.hpp"
 #include "transformations/snippets/x64/pass/set_brgemm_cpu_blocking_params.hpp"
-#include "transformations/snippets/x64/pass/lowered/domain_optimization.hpp"
 #include "transformations/snippets/x64/shape_inference.hpp"
 #include "transformations/cpu_opset/common/pass/convert_to_swish_cpu.hpp"
 #include "transformations/defs.hpp"
@@ -604,10 +604,10 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
     if (snippet_for_generation->has_domain_sensitive_ops()) {
         tileRank = 2;
     } else if (masterShape.size() >= 2) {
-        const bool dims_will_collapse = pass::DomainOptimization::optimize(normInputShapes,
-                                                                           masterShape,
-                                                                           min_parallel_work_amount,
-                                                                           min_jit_work_amount);
+        const bool dims_will_collapse = snippets::lowered::pass::DomainOptimization::optimize(normInputShapes,
+                                                                                              masterShape,
+                                                                                                 min_parallel_work_amount,
+                                                                                                 min_jit_work_amount);
         const auto tile2D_work_amount = masterShape[masterShape.size() - 1] * masterShape[masterShape.size() - 2];
         if (!dims_will_collapse &&
             fullWorkAmount >= tile2D_work_amount * min_parallel_work_amount) {
@@ -630,10 +630,12 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
     snippet_for_generation->set_master_shape(ov::PartialShape(masterShape));
     snippet_for_generation->set_tile_rank(tileRank);
 
+    snippet_for_generation->set_min_parallel_work_amount(min_parallel_work_amount);
+    snippet_for_generation->set_min_jit_work_amount(min_jit_work_amount);
+
     // generate
     jit_snippets_compile_args jcp;
     jcp.master_shape = masterShape;
-    jcp.tile_rank = tileRank;
     generate(&jcp);
     buffer_scratchpad_size = snippet_for_generation->get_buffer_scratchpad_size();
     buffer_scratchpad.resize(buffer_scratchpad_size * parallel_get_max_threads(), 0);
@@ -748,12 +750,6 @@ void Snippet::SnippetJitExecutor::generate(const jit_snippets_compile_args* jcp)
 #undef SNIPPETS_ADD_POS_PASS
 
     ov::snippets::lowered::pass::PassPipeline control_flow_markup_pipeline;
-    // Domain optimization doesn't support support domain sensitive ops
-    if (!snippet_for_generation->has_domain_sensitive_ops())
-        CPU_REGISTER_PASS_X64(control_flow_markup_pipeline,
-                              ov::intel_cpu::pass::DomainOptimization,
-                              min_parallel_work_amount,
-                              min_jit_work_amount)
     CPU_REGISTER_PASS_X64(control_flow_markup_pipeline, ov::intel_cpu::pass::BrgemmBlocking)
 
     ov::snippets::lowered::pass::PassPipeline control_flow_pipeline;

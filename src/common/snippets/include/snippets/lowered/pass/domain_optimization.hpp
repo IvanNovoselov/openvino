@@ -7,7 +7,8 @@
 #include "snippets/lowered/pass/pass.hpp"
 
 namespace ov {
-namespace intel_cpu {
+namespace snippets {
+namespace lowered {
 namespace pass {
 
 /**
@@ -17,11 +18,9 @@ namespace pass {
  */
 
 class DomainOptimization : public snippets::lowered::pass::Pass {
-    const size_t m_min_parallel_work_amount = 0;
-    const size_t m_min_jit_work_amount = 0;
 public:
     OPENVINO_RTTI("DomainOptimization", "Pass")
-    DomainOptimization(size_t min_parallel_work_amount, size_t min_jit_work_amount);
+    DomainOptimization();
     bool run(snippets::lowered::LinearIR& linear_ir) override;
     static bool optimize(std::vector<snippets::IShapeInferSnippets::VectorDims>& input_shapes,
                          snippets::IShapeInferSnippets::VectorDims& master_shape,
@@ -29,6 +28,7 @@ public:
                          size_t min_jit_work_amount);
 };
 
-}  // namespace pass
-}  // namespace intel_cpu
-}  // namespace ov
+} // namespace pass
+} // namespace lowered
+} // namespace snippets
+} // namespace ov

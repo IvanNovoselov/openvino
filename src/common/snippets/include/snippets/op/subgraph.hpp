@@ -98,6 +98,8 @@ public:
     size_t get_virtual_port_count() const { return m_virtual_port_count; }
     bool is_quantized() const { return config.m_is_quantized; }
     bool has_domain_sensitive_ops() const { return config.m_has_domain_sensitive_ops; }
+
+
     snippets::Schedule generate(const BlockedShapeVector& output_shapes,
                                 const BlockedShapeVector& input_shapes,
                                 const std::vector<pass::Manager::PositionedPass>& backend_passes,
@@ -125,6 +127,8 @@ public:
     void set_generator(std::shared_ptr<ov::snippets::Generator> generator);
     void set_tile_rank(size_t newRank) {tileRank = newRank;}
     void set_virtual_port_count(const size_t count);
+    void set_min_jit_work_amount(const size_t jit_work_amount);
+    void set_min_parallel_work_amount(const size_t parallel_work_amount);
 
     void print() const;
 
@@ -179,6 +183,12 @@ private:
         // True if body has operations that don't support plugin-side domain optimizations
         // (e.g. Transpose, Softmax, MatMul in general doesn't support dimensions collapsing)
         bool m_has_domain_sensitive_ops = false;
+        // Minimal advised work amount for parallel execution.
+        // Set by a backend, typical equals to the number of threads available on the machine.
+        size_t m_min_parallel_work_amount = 8;
+        // Minimal advised work amount every JIT kernel should process during one execution call
+        // Set by a backend, should be large enough to compensate for the kernel call overheads
+        size_t m_min_jit_work_amount = 256;
     } config;
 
     std::shared_ptr<ShapeInferSnippetsNode> m_shape_infer = nullptr;
