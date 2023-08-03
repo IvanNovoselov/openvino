@@ -630,12 +630,17 @@ void Subgraph::control_flow_transformations(lowered::LinearIR& linear_ir,
     INTERNAL_OP_SCOPE(Subgraph);
     OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "Snippets::op::control_flow_transformations")
 
+    // Domain optimization must be the first pass, because all other transformations may depend on exrpr shapes
+    size_t loop_depth = 1;
+    lowered::pass::PassPipeline domain_optimization_pipeline;
+    domain_optimization_pipeline.register_pass<lowered::pass::DomainOptimization>(loop_depth);
+    domain_optimization_pipeline.run(linear_ir);
+    // todo: for discussion on review: we can move control_flow_transformations to LinearIR
+    //  then we won't have to introduce this method
+    linear_ir.set_loop_depth(loop_depth);
+
     const size_t vector_size = get_generator()->get_target_machine()->get_lanes();
     const int32_t buffer_allocation_rank = static_cast<int32_t>(linear_ir.get_config().m_loop_depth);
-    // Domain optimization must be the first pass, because all other transformations may depend on exrpr shapes
-    lowered::pass::PassPipeline domain_optimization_pipeline;
-    domain_optimization_pipeline.register_pass<lowered::pass::DomainOptimization>();
-    domain_optimization_pipeline.run(linear_ir);
 
     // Ticket: 113666
     // TODO: Make pass pipeline with backend passes more flexible
@@ -712,7 +717,24 @@ snippets::Schedule Subgraph::generate(const std::vector<pass::Manager::Positione
     const auto& lowering_result = m_generator->generate(linear_ir, linear_ir.get_config(), compile_params);
     const auto ptr = lowering_result.binary_code;
 
-    return {master_shape, false /*canBeLinearized*/, ptr};
+
+    IShapeInferSnippets::VectorDims work_domain{1};
+    for (const auto& expr : linear_ir.get_IO_ops()) {
+        if (expr->get_type() == snippets::lowered::IOExpression::io_type::OUTPUT) {
+            const auto& shape = expr->get_output_port_descriptor(0)->get_shape();
+            OPENVINO_ASSERT(std::none_of(shape.begin(), shape.end(),
+                                         [](size_t d) {return d == snippets::IShapeInferSnippets::DYNAMIC_DIMENSION; }),
+                            "Failed to calculate work_domain for dynamic shapes");
+            OPENVINO_ASSERT(ov::snippets::broadcast_merge_into(work_domain, shape),
+                            "Failed to merge input shapes into work_domain");
+        }
+    }
+    const size_t loop_depth = linear_ir.get_config().m_loop_depth;
+    OPENVINO_ASSERT(loop_depth < work_domain.size(), "Work domain should leave some work for the parallel execution");
+    for (size_t i = 0; i < loop_depth; i++)
+        work_domain[work_domain.size() - 1 - i] = 1;
+
+    return {work_domain, false /*canBeLinearized*/, ptr};
 }
 
 void Subgraph::print() const {

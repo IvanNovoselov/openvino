@@ -16,16 +16,13 @@ namespace lowered {
 namespace pass {
 
 using VectorDims = IShapeInferSnippets::VectorDims;
-DomainOptimization::DomainOptimization() : Pass() {
+DomainOptimization::DomainOptimization(size_t& tile_rank) : Pass(), m_tile_rank(tile_rank) {
 }
 bool DomainOptimization::optimize(std::vector<VectorDims>& input_shapes,
                                   VectorDims& master_shape,
+                                  const size_t total_work_amount,
                                   const size_t min_parallel_work_amount,
                                   const size_t min_jit_work_amount) {
-    const auto total_work_amount = std::accumulate(master_shape.begin(),
-                                                   master_shape.end(),
-                                                   (size_t)1,
-                                                   std::multiplies<size_t>());
     if (master_shape.size() <= 2 ||                                           // Nothing to collapse
         *master_shape.rbegin() >= min_jit_work_amount ||                      // Already enough work for JIT kernel, no need to collapse
         total_work_amount < min_parallel_work_amount * min_jit_work_amount) { // There won't be enough work for every thread, no point to collapse
@@ -73,8 +70,6 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
     const auto& config = linear_ir.get_config();
     if (linear_ir.empty())
         return false;
-    if (!config.m_enable_domain_optimization)
-        return false;
 
     std::vector<std::shared_ptr<snippets::lowered::IOExpression>> input_exprs;
     std::vector<VectorDims> input_shapes;
@@ -91,8 +86,19 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
             input_shapes.emplace_back(shape);
         }
     }
+    m_tile_rank = 1;
+    if (!config.m_enable_domain_optimization) {
+        // Note: this is a special case: if optimization is not allowed, always assume 2D tile
+        m_tile_rank += master_shape.size() > 2;
+        return false;
+    }
+    const auto total_work_amount = std::accumulate(master_shape.begin(),
+                                                   master_shape.end(),
+                                                   (size_t)1,
+                                                   std::multiplies<size_t>());
     const bool some_dims_collapsed = optimize(input_shapes,
                                               master_shape,
+                                              total_work_amount,
                                               config.m_min_parallel_work_amount,
                                               config.m_min_jit_work_amount);
     if (some_dims_collapsed) {
@@ -109,6 +115,13 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
         }
         // Need to propagate updated shapes through LIR
         linear_ir.shape_infer(infer_shapes);
+    }
+    // We can still try to increment tile rank after dimension collapsing
+    if (master_shape.size() >= 2) {
+        const auto tile2D_work_amount = master_shape[master_shape.size() - 1] * master_shape[master_shape.size() - 2];
+        if (total_work_amount >= tile2D_work_amount * config.m_min_parallel_work_amount) {
+            m_tile_rank++;
+        }
     }
     return some_dims_collapsed;
 }

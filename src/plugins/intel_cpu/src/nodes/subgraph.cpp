@@ -492,7 +492,7 @@ void Snippet::SnippetJitExecutor::update_ptrs(jit_snippets_call_args& call_args,
 }
 
 void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {
-    const auto& dom = exec_domain;
+    const auto& dom = schedule.parallel_exec_domain;
     // < N, C, H, W > < 1, 1, N, C*H*W>
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
         [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
@@ -505,7 +505,7 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
 }
 
 void Snippet::SnippetJitExecutor::schedule_nt(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {
-    const auto& work_size = exec_domain;
+    const auto& work_size = schedule.parallel_exec_domain;
     parallel_nt(0, [&](const int ithr, const int nthr) {
         jit_snippets_call_args call_args;
         update_ptrs(call_args, inMemPtrs, outMemPtrs);
@@ -600,35 +600,32 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
 
     tileRank = 1;
 
-    fullWorkAmount = std::accumulate(masterShape.begin(), masterShape.end(), 1, std::multiplies<size_t>());
-    if (snippet_for_generation->has_domain_sensitive_ops()) {
-        tileRank = 2;
-    } else if (masterShape.size() >= 2) {
-        const bool dims_will_collapse = snippets::lowered::pass::DomainOptimization::optimize(normInputShapes,
-                                                                                              masterShape,
-                                                                                                 min_parallel_work_amount,
-                                                                                                 min_jit_work_amount);
-        const auto tile2D_work_amount = masterShape[masterShape.size() - 1] * masterShape[masterShape.size() - 2];
-        if (!dims_will_collapse &&
-            fullWorkAmount >= tile2D_work_amount * min_parallel_work_amount) {
-            tileRank++;
-        }
-    }
-    exec_domain = masterShape;
+//    fullWorkAmount = std::accumulate(masterShape.begin(), masterShape.end(), 1, std::multiplies<size_t>());
+//    if (snippet_for_generation->has_domain_sensitive_ops()) {
+//        tileRank = 2;
+//    } else if (masterShape.size() >= 2) {
+//        const bool dims_will_collapse = snippets::lowered::pass::DomainOptimization::optimize(normInputShapes,
+//                                                                                              masterShape,
+//                                                                                                 min_parallel_work_amount,
+//                                                                                                 min_jit_work_amount);
+//        const auto tile2D_work_amount = masterShape[masterShape.size() - 1] * masterShape[masterShape.size() - 2];
+//        if (!dims_will_collapse &&
+//            fullWorkAmount >= tile2D_work_amount * min_parallel_work_amount) {
+//            tileRank++;
+//        }
+//    }
+//    exec_domain = masterShape;
 
-    std::vector<size_t> scheduler_work_amounts;
-    // rename schedulerWorkAmount to harnessWorkAmount?
-    harnessWorkAmount = fullWorkAmount;
-    const auto rank = exec_domain.size();
-    for (auto i = rank - tileRank; i < rank; i++) {
-        auto& dim = exec_domain[i];
-        harnessWorkAmount /= dim;
-        scheduler_work_amounts.push_back(dim);
-        dim = 1;
-    }
+//    harnessWorkAmount = fullWorkAmount;
+//    const auto rank = exec_domain.size();
+//    for (auto i = rank - tileRank; i < rank; i++) {
+//        auto& dim = exec_domain[i];
+//        harnessWorkAmount /= dim;
+//        dim = 1;
+//    }
 
-    snippet_for_generation->set_master_shape(ov::PartialShape(masterShape));
-    snippet_for_generation->set_tile_rank(tileRank);
+//    snippet_for_generation->set_master_shape(ov::PartialShape(masterShape));
+//    snippet_for_generation->set_tile_rank(tileRank);
 
     snippet_for_generation->set_min_parallel_work_amount(min_parallel_work_amount);
     snippet_for_generation->set_min_jit_work_amount(min_jit_work_amount);
@@ -639,6 +636,8 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
     generate(&jcp);
     buffer_scratchpad_size = snippet_for_generation->get_buffer_scratchpad_size();
     buffer_scratchpad.resize(buffer_scratchpad_size * parallel_get_max_threads(), 0);
+    const auto& dom = schedule.parallel_exec_domain;
+    harnessWorkAmount = std::accumulate(dom.begin(), dom.end(), 1, std::multiplies<size_t>());
 }
 
 ov::PartialShape Snippet::SnippetJitExecutor::canonicalizeBody(bool reshape) {
