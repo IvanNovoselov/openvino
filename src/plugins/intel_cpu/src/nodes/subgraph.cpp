@@ -599,7 +599,7 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
         pshape = getNormalizedDimsBySize(pshape, tensorRank);
 
     tileRank = 1;
-    bool dims_collapsed = false;
+
     fullWorkAmount = std::accumulate(masterShape.begin(), masterShape.end(), 1, std::multiplies<size_t>());
     if (snippet_for_generation->has_domain_sensitive_ops()) {
         tileRank = 2;
@@ -612,7 +612,6 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
         if (!dims_will_collapse &&
             fullWorkAmount >= tile2D_work_amount * min_parallel_work_amount) {
             tileRank++;
-            std::cerr << "snsdebug: Tile rank increased\n" << std::flush;
         }
     }
     exec_domain = masterShape;
@@ -628,15 +627,6 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
         dim = 1;
     }
 
-    if (dims_collapsed) {
-        std::vector<ov::Shape> new_shapes;
-        for (size_t i = 0; i < normInputShapes.size(); i++) {
-            const auto norm_shape = normInputShapes[i];
-            size_t ndims_to_skip = norm_shape.size() - original_input_shape_ranks[i];
-            new_shapes.emplace_back(norm_shape.begin() + ndims_to_skip, norm_shape.end());
-        }
-        snippet_for_generation->reshape_body(new_shapes);
-    }
     snippet_for_generation->set_master_shape(ov::PartialShape(masterShape));
     snippet_for_generation->set_tile_rank(tileRank);
 
@@ -758,10 +748,12 @@ void Snippet::SnippetJitExecutor::generate(const jit_snippets_compile_args* jcp)
 #undef SNIPPETS_ADD_POS_PASS
 
     ov::snippets::lowered::pass::PassPipeline control_flow_markup_pipeline;
-    CPU_REGISTER_PASS_X64(control_flow_markup_pipeline,
-                          ov::intel_cpu::pass::DomainOptimization,
-                          min_parallel_work_amount,
-                          min_jit_work_amount)
+    // Domain optimization doesn't support support domain sensitive ops
+    if (!snippet_for_generation->has_domain_sensitive_ops())
+        CPU_REGISTER_PASS_X64(control_flow_markup_pipeline,
+                              ov::intel_cpu::pass::DomainOptimization,
+                              min_parallel_work_amount,
+                              min_jit_work_amount)
     CPU_REGISTER_PASS_X64(control_flow_markup_pipeline, ov::intel_cpu::pass::BrgemmBlocking)
 
     ov::snippets::lowered::pass::PassPipeline control_flow_pipeline;

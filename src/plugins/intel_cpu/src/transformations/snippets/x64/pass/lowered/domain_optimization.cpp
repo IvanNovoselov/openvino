@@ -42,12 +42,15 @@ bool DomainOptimization::optimize(std::vector<VectorDims>& input_shapes,
         for (auto i = dims.size() - 2; i > 0; i--)
             dims[i] = dims[i - 1];
     };
-    auto LastDimsNotBroadcasted = [&input_shapes, &master_shape] () {
-        for (const auto& s : input_shapes) {
-            if (s.back() != master_shape.back())
-                return false;
-        }
-        return true;
+    // Check that neither of the two last dims is broadcasted, so they can be collapsed
+    auto LastDimsNotBroadcasted = [] (const std::vector<VectorDims>& input_shapes, const VectorDims& master_shape) {
+        const auto master_last = *master_shape.rbegin();
+        const auto master_prelast = *++master_shape.rbegin();
+        return std::all_of(input_shapes.begin(), input_shapes.end(),
+                           [=](const VectorDims& s) {
+                               return *s.rbegin() == master_last &&
+                                      *++s.rbegin() != master_prelast;
+                            });
     };
 
     size_t jit_work_amount = master_shape.back();
@@ -56,7 +59,7 @@ bool DomainOptimization::optimize(std::vector<VectorDims>& input_shapes,
     while (jit_work_amount < min_jit_work_amount &&
            next_jit_work_amount * min_parallel_work_amount < total_work_amount &&
            master_shape.size() > 2 &&
-           LastDimsNotBroadcasted()) {
+           LastDimsNotBroadcasted(input_shapes, master_shape)) {
         for (auto &s : input_shapes)
             CollapseLastDim(s);
 
@@ -94,7 +97,6 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
                                               m_min_parallel_work_amount,
                                               m_min_jit_work_amount);
     if (some_dims_collapsed) {
-//        linear_ir.serialize("snsdebug_before.xml", "snsdebug_before.bin");
         std::vector<std::reference_wrapper<const VectorDims>> infer_shapes;
         infer_shapes.reserve(input_shapes.size());
         for (size_t i = 0; i < input_exprs.size(); i++) {
@@ -108,8 +110,6 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
         }
         // Need to propagate updated shapes through LIR
         linear_ir.shape_infer(infer_shapes);
-        std::cerr << "snsdebug: Domain optimized\n" << std::flush;
-//        linear_ir.serialize("snsdebug_after.xml", "snsdebug_after.bin");
     }
     return some_dims_collapsed;
 }
