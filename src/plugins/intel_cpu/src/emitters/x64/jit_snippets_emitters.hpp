@@ -22,6 +22,8 @@
 namespace ov {
 namespace intel_cpu {
 
+extern jit_emitter* g_debug_err_handler;
+
 #define SNIPPETS_MAX_SNIPPETS_DIMS 12
 #define SNIPPETS_MAX_HARNESS_DIMS 5
 #define SNIPPETS_MAX_TILE_RANK 2
@@ -79,6 +81,7 @@ public:
     size_t get_inputs_num() const override {return 0;}
     void emit_code(const std::vector<size_t> &in,
                    const std::vector<size_t> &out) const;
+    static void print_debug_info();
 
 private:
     using jit_emitter::emit_code;

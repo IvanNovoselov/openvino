@@ -21,6 +21,8 @@ using namespace dnnl::impl::cpu::x64;
 namespace ov {
 namespace intel_cpu {
 
+jit_emitter* g_debug_err_handler = nullptr;
+
 namespace {
 constexpr size_t gpr_size = 8;
 } // namespace
@@ -310,13 +312,26 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
     std::vector<Reg64> data_ptr_regs;
     transform_idxs_to_regs(data_ptr_regs_idx, data_ptr_regs);
 
-    init_data_pointers(reg_indexes, reg_const_params, data_ptr_regs);
-    for (const auto& expression : body) {
-        const auto& emitter = expression->get_emitter();
-        std::vector<size_t> in_regs, out_regs;
-        std::tie(in_regs, out_regs) = expression->get_reg_info();
-        emitter->emit_code(in_regs, out_regs, vec_regs_pool, gp_regs_pool);
-    }
+//    init_data_pointers(reg_indexes, reg_const_params, data_ptr_regs);
+    h->nop();
+    h->nop();
+    h->nop();
+
+    h->mov(reg_const_params, reinterpret_cast<uint64_t>(&g_debug_err_handler));
+    h->mov(reg_indexes, reinterpret_cast<uint64_t>(this));
+    h->mov(h->qword[reg_const_params], reinterpret_cast<uint64_t>(this));
+//    h->mov(h->qword[reg_const_params], reinterpret_cast<uint64_t>(this));
+
+    h->nop();
+    h->nop();
+    h->nop();
+
+//    for (const auto& expression : body) {
+//        const auto& emitter = expression->get_emitter();
+//        std::vector<size_t> in_regs, out_regs;
+//        std::tie(in_regs, out_regs) = expression->get_reg_info();
+//        emitter->emit_code(in_regs, out_regs, vec_regs_pool, gp_regs_pool);
+//    }
     h->postamble();
 }
 

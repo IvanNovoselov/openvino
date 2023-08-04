@@ -34,7 +34,7 @@
 #include <common/primitive_hashing_utils.hpp>
 #include "snippets/pass/hash.hpp"
 
-#include <snippets/utils.hpp>
+#include <emitters/x64/jit_snippets_emitters.hpp>
 #include <fstream>
 
 using namespace InferenceEngine;
@@ -510,13 +510,20 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
     const auto& dom = exec_domain;
     // < N, C, H, W > < 1, 1, N, C*H*W>
     const auto callable = schedule.get_callable<kernel>();
-    parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
-        [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
-            int64_t indexes[] = {d0, d1, d2, d3, d4};
-            jit_snippets_call_args call_args;
-            update_ptrs(call_args, inMemPtrs, outMemPtrs);
-            callable(indexes, &call_args);
-        });
+    int64_t indexes[] = {0, 0, 0, 0, 0};
+    jit_snippets_call_args call_args;
+    update_ptrs(call_args, inMemPtrs, outMemPtrs);
+    callable(indexes, &call_args);
+    OPENVINO_ASSERT(dynamic_cast<ov::intel_cpu::KernelEmitter*>(g_debug_err_handler) == nullptr,
+                    "SUCCESS!!!!!!!!");
+    OPENVINO_THROW("EXPERIMENT FAILED (:-0]");
+//    parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
+//        [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
+//            int64_t indexes[] = {d0, d1, d2, d3, d4};
+//            jit_snippets_call_args call_args;
+//            update_ptrs(call_args, inMemPtrs, outMemPtrs);
+//            callable(indexes, &call_args);
+//        });
 }
 
 void Snippet::SnippetJitExecutor::schedule_nt(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {
