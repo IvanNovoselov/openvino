@@ -26,14 +26,14 @@ public:
     /**
      * @brief Default constructor
      */
-    Schedule() : work_size({}), is_flat(false), ptr(nullptr) {}
+    Schedule() : parallel_exec_domain({}), is_flat(false), ptr(nullptr) {}
     /**
      * @brief Default to create schedule out of specific parameters
      * @param ws work size for kernel execution
      * @param f can this kernel be linearided to 1D range
      * @param p pointer to generated code
      */
-    Schedule(const ov::PartialShape& ws, bool f, code p) : work_size(ws), is_flat(f), ptr(p) {}
+    Schedule(const std::vector<size_t>& wd, bool f, code p) : parallel_exec_domain(wd), is_flat(f), ptr(p) {}
     /**
      * @brief Returns callable instanse of code pointer
      */
@@ -41,7 +41,7 @@ public:
         return reinterpret_cast<K>(const_cast<unsigned char*>(ptr));
     }
 
-    ov::PartialShape work_size {};
+    std::vector<size_t> parallel_exec_domain {};
     bool is_flat {false};
     code ptr {nullptr};
 };

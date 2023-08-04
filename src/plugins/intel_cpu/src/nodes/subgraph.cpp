@@ -492,7 +492,7 @@ void Snippet::SnippetJitExecutor::update_ptrs(jit_snippets_call_args& call_args,
 }
 
 void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {
-    const auto& dom = schedule.parallel_exec_domain;
+    const auto& dom = exec_domain;
     // < N, C, H, W > < 1, 1, N, C*H*W>
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
         [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
@@ -505,7 +505,7 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
 }
 
 void Snippet::SnippetJitExecutor::schedule_nt(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {
-    const auto& work_size = schedule.parallel_exec_domain;
+    const auto& work_size = exec_domain;
     parallel_nt(0, [&](const int ithr, const int nthr) {
         jit_snippets_call_args call_args;
         update_ptrs(call_args, inMemPtrs, outMemPtrs);
@@ -632,12 +632,14 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
 
     // generate
     jit_snippets_compile_args jcp;
+    //masterShape = {1, 1, 1, 128, 12, 64};
     jcp.master_shape = masterShape;
     generate(&jcp);
     buffer_scratchpad_size = snippet_for_generation->get_buffer_scratchpad_size();
     buffer_scratchpad.resize(buffer_scratchpad_size * parallel_get_max_threads(), 0);
     const auto& dom = schedule.parallel_exec_domain;
     harnessWorkAmount = std::accumulate(dom.begin(), dom.end(), 1, std::multiplies<size_t>());
+    exec_domain = getNormalizedDimsBySize(dom, tensorRank);
 }
 
 ov::PartialShape Snippet::SnippetJitExecutor::canonicalizeBody(bool reshape) {

@@ -70,7 +70,12 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
     const auto& config = linear_ir.get_config();
     if (linear_ir.empty())
         return false;
-
+    m_tile_rank = 1;
+    if (!config.m_enable_domain_optimization) {
+        // Note: this is a special case: if optimization is not allowed, always assume 2D tile
+        m_tile_rank = 2;
+        return false;
+    }
     std::vector<std::shared_ptr<snippets::lowered::IOExpression>> input_exprs;
     std::vector<VectorDims> input_shapes;
     VectorDims master_shape{1};
@@ -85,12 +90,6 @@ bool DomainOptimization::run(snippets::lowered::LinearIR& linear_ir) {
                             "Failed to merge input shapes in DomainOptimization pass");
             input_shapes.emplace_back(shape);
         }
-    }
-    m_tile_rank = 1;
-    if (!config.m_enable_domain_optimization) {
-        // Note: this is a special case: if optimization is not allowed, always assume 2D tile
-        m_tile_rank += master_shape.size() > 2;
-        return false;
     }
     const auto total_work_amount = std::accumulate(master_shape.begin(),
                                                    master_shape.end(),

@@ -622,6 +622,7 @@ void Subgraph::data_flow_transformations(const std::vector<snippets::pass::Manag
     for (const auto& pos_pass : backend_passes)
         manager.register_pass_instance(pos_pass.first, pos_pass.second);
     manager.run_passes(body_ptr());
+//    ov::pass::Serialize("snsdebug_dataflow.xml", "snsdebug_dataflow.bin").run_on_model(body_ptr());
 }
 
 void Subgraph::control_flow_transformations(lowered::LinearIR& linear_ir,
@@ -674,6 +675,7 @@ void Subgraph::control_flow_transformations(lowered::LinearIR& linear_ir,
     final_pipeline.register_pass<lowered::pass::PropagateLayout>();
     final_pipeline.register_pass<lowered::pass::CleanupLoopOffsets>();
     final_pipeline.run(linear_ir);
+//    linear_ir.serialize("snsdebug_control_flow.xml", "snsdebug_control_flow.bin");
 
     m_buffer_scratchpad = buffer_allocation_pass->get_scratchpad_size();
 }
@@ -721,7 +723,7 @@ snippets::Schedule Subgraph::generate(const std::vector<pass::Manager::Positione
     IShapeInferSnippets::VectorDims work_domain{1};
     for (const auto& expr : linear_ir.get_IO_ops()) {
         if (expr->get_type() == snippets::lowered::IOExpression::io_type::OUTPUT) {
-            const auto& shape = expr->get_output_port_descriptor(0)->get_shape();
+            const auto& shape = utils::lowered::get_port_planar_shape(*expr->get_input_port_descriptor(0));
             OPENVINO_ASSERT(std::none_of(shape.begin(), shape.end(),
                                          [](size_t d) {return d == snippets::IShapeInferSnippets::DYNAMIC_DIMENSION; }),
                             "Failed to calculate work_domain for dynamic shapes");
@@ -730,7 +732,6 @@ snippets::Schedule Subgraph::generate(const std::vector<pass::Manager::Positione
         }
     }
     const size_t loop_depth = linear_ir.get_config().m_loop_depth;
-    OPENVINO_ASSERT(loop_depth < work_domain.size(), "Work domain should leave some work for the parallel execution");
     for (size_t i = 0; i < loop_depth; i++)
         work_domain[work_domain.size() - 1 - i] = 1;
 
