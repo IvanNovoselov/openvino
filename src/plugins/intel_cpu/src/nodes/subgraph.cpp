@@ -579,61 +579,12 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
 
     if (canonicalShape.is_dynamic())
         IE_THROW() << "Snippets: Canonicalization returned dynamic shape in static pipeline";
-    masterShape = canonicalShape.get_shape();
-    const auto &body = snippet_for_generation->body_ptr();
-    normInputShapes.clear();
-    for (const auto& p : body->get_parameters())
-        normInputShapes.emplace_back(p->get_output_shape(0));
-    normOutputShapes.clear();
-    for (const auto& r : body->get_results())
-        normOutputShapes.emplace_back(r->get_input_shape(0));
-
-    // prepare
-    masterShape = getNormalizedDimsBySize(masterShape, tensorRank);
-    std::vector<size_t> original_input_shape_ranks;
-    for (auto& pshape : normInputShapes) {
-        original_input_shape_ranks.push_back(pshape.size());
-        pshape = getNormalizedDimsBySize(pshape, tensorRank);
-    }
-    for (auto& pshape : normOutputShapes)
-        pshape = getNormalizedDimsBySize(pshape, tensorRank);
-
-    tileRank = 1;
-
-//    fullWorkAmount = std::accumulate(masterShape.begin(), masterShape.end(), 1, std::multiplies<size_t>());
-//    if (snippet_for_generation->has_domain_sensitive_ops()) {
-//        tileRank = 2;
-//    } else if (masterShape.size() >= 2) {
-//        const bool dims_will_collapse = snippets::lowered::pass::DomainOptimization::optimize(normInputShapes,
-//                                                                                              masterShape,
-//                                                                                                 min_parallel_work_amount,
-//                                                                                                 min_jit_work_amount);
-//        const auto tile2D_work_amount = masterShape[masterShape.size() - 1] * masterShape[masterShape.size() - 2];
-//        if (!dims_will_collapse &&
-//            fullWorkAmount >= tile2D_work_amount * min_parallel_work_amount) {
-//            tileRank++;
-//        }
-//    }
-//    exec_domain = masterShape;
-
-//    harnessWorkAmount = fullWorkAmount;
-//    const auto rank = exec_domain.size();
-//    for (auto i = rank - tileRank; i < rank; i++) {
-//        auto& dim = exec_domain[i];
-//        harnessWorkAmount /= dim;
-//        dim = 1;
-//    }
-
-//    snippet_for_generation->set_master_shape(ov::PartialShape(masterShape));
-//    snippet_for_generation->set_tile_rank(tileRank);
-
     snippet_for_generation->set_min_parallel_work_amount(min_parallel_work_amount);
     snippet_for_generation->set_min_jit_work_amount(min_jit_work_amount);
 
     // generate
     jit_snippets_compile_args jcp;
-    //masterShape = {1, 1, 1, 128, 12, 64};
-    jcp.master_shape = masterShape;
+    jcp.master_shape = getNormalizedDimsBySize(canonicalShape.get_shape(), tensorRank);;
     generate(&jcp);
     buffer_scratchpad_size = snippet_for_generation->get_buffer_scratchpad_size();
     buffer_scratchpad.resize(buffer_scratchpad_size * parallel_get_max_threads(), 0);
@@ -655,74 +606,6 @@ ov::PartialShape Snippet::SnippetJitExecutor::canonicalizeBody(bool reshape) {
         const auto& canonicalShape = snippetAttrs.snippet->canonicalize(output_blocked_shapes, input_blocked_shapes);
         return canonicalShape;
     }
-}
-
-bool Snippet::SnippetJitExecutor::optimizeExecDomain(std::vector<VectorDims>& inputShapes, std::vector<VectorDims>& outputShapes,
-                                 VectorDims &domain, size_t& TileRank) const {
-    const size_t minimalConcurrency = parallel_get_max_threads();
-    const size_t minimalJitWorkAmount = 256;
-    const size_t ds = domain.size();
-    if ( ds <= 2 || // not enough dimensions to collapse
-         domain[ds-1] >= minimalJitWorkAmount || // There is enough work for 1D Tiles, no need to collapse
-         domain[ds-1] * domain[ds-2] >= fullWorkAmount / minimalConcurrency) // There won't be enough work for every thread (even one iter) if we collapse
-        return false;
-    auto findDimsToCollapse = [&]() {
-        auto collapseLastDims = [](VectorDims& dims, size_t dimsToCollapse) {
-            if (dimsToCollapse >= dims.size() - 1)
-                IE_THROW() << "Got invalid number of dims to collapse. Expected < " << dims.size() - 1 << " got " << dimsToCollapse;
-            for (int i = dims.size() - 2; i > static_cast<int>(dims.size() - dimsToCollapse - 2); i--) {
-                dims[dims.size() - 1] *= dims[i];
-            }
-
-            for (int i = dims.size() - 2; i >= static_cast<int>(dimsToCollapse); i--) {
-                dims[i] = dims[i - dimsToCollapse];
-            }
-
-            for (int i = dimsToCollapse - 1; i >= 0; i--) {
-                dims[i] = 1;
-            }
-        };
-        int collapsedDims = 0;
-        size_t currentJitWorkAmount = domain[domain.size() - 1];
-        while (currentJitWorkAmount < minimalJitWorkAmount && currentJitWorkAmount < fullWorkAmount) {
-            if (static_cast<int>(domain.size()) - collapsedDims - 2 < 0)
-                break;
-
-            bool canCollapse = true;
-            for (size_t i = 0; i < inputShapes.size(); i++) {
-                const size_t last = inputShapes[i].size() - 1;
-                if ((inputShapes[i][last - 1] != 1 && inputShapes[i][last] == 1) ||
-                    (inputShapes[i][last - 1] == 1 && inputShapes[i][last] != 1)) {
-                    canCollapse = false;
-                    break;
-                }
-            }
-
-            size_t nextJitWorkAmount = currentJitWorkAmount * domain[domain.size() - 2];
-            if (fullWorkAmount / nextJitWorkAmount >= minimalConcurrency) {
-                currentJitWorkAmount = nextJitWorkAmount;
-                // if we cannot use dim collapsing we should use tile2D
-                if (!canCollapse) {
-                    if (TileRank < maxTileRank) {
-                        TileRank++;
-                        continue;
-                    }
-
-                    break;
-                }
-                collapsedDims++;
-                for (auto &d : inputShapes)
-                    collapseLastDims(d, 1);
-                for (auto &d : outputShapes)
-                    collapseLastDims(d, 1);
-                collapseLastDims(domain, 1);
-            } else {
-                break;
-            }
-        }
-        return collapsedDims > 0;
-    };
-    return findDimsToCollapse();
 }
 
 void Snippet::SnippetJitExecutor::generate(const jit_snippets_compile_args* jcp) {

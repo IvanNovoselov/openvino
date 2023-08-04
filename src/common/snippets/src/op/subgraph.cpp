@@ -622,7 +622,6 @@ void Subgraph::data_flow_transformations(const std::vector<snippets::pass::Manag
     for (const auto& pos_pass : backend_passes)
         manager.register_pass_instance(pos_pass.first, pos_pass.second);
     manager.run_passes(body_ptr());
-//    ov::pass::Serialize("snsdebug_dataflow.xml", "snsdebug_dataflow.bin").run_on_model(body_ptr());
 }
 
 void Subgraph::control_flow_transformations(lowered::LinearIR& linear_ir,
@@ -675,7 +674,6 @@ void Subgraph::control_flow_transformations(lowered::LinearIR& linear_ir,
     final_pipeline.register_pass<lowered::pass::PropagateLayout>();
     final_pipeline.register_pass<lowered::pass::CleanupLoopOffsets>();
     final_pipeline.run(linear_ir);
-//    linear_ir.serialize("snsdebug_control_flow.xml", "snsdebug_control_flow.bin");
 
     m_buffer_scratchpad = buffer_allocation_pass->get_scratchpad_size();
 }
