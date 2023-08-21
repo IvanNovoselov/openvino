@@ -514,8 +514,9 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
     jit_snippets_call_args call_args;
     update_ptrs(call_args, inMemPtrs, outMemPtrs);
     callable(indexes, &call_args);
-    auto rep1 = reinterpret_cast<const ov::intel_cpu::KernelEmitter*>(g_debug_err_handler);
-    rep1->print_debug_info();
+    OPENVINO_ASSERT(g_debug_err_handler, "Debug handler was not set");
+    std::cerr << g_debug_err_handler->emitter_type_name << "\n";
+    std::cerr << g_debug_err_handler->node->get_friendly_name() << "\n";
     OPENVINO_THROW("EXPERIMENT FINISHED");
 //    parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
 //        [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {

@@ -22,7 +22,11 @@
 namespace ov {
 namespace intel_cpu {
 
-extern jit_emitter* g_debug_err_handler;
+struct jit_debug_info {
+    std::string emitter_type_name = "";
+    std::shared_ptr<ov::Node> node = nullptr;
+};
+extern jit_debug_info* g_debug_err_handler;
 
 #define SNIPPETS_MAX_SNIPPETS_DIMS 12
 #define SNIPPETS_MAX_HARNESS_DIMS 5
@@ -109,6 +113,7 @@ private:
 
     const size_t reg_indexes_idx;
     const size_t reg_const_params_idx;
+    jit_debug_info m_debug_info;
 };
 
 class LoopBeginEmitter : public jit_emitter {

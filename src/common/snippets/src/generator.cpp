@@ -51,6 +51,9 @@ void Generator::generate(lowered::LinearIR& linear_ir, LoweringResult& result, c
                 result.m_saved_emitters.emplace_back(emitter);
         }
     }
+    // todo: remove the code below before commit
+    result.m_saved_emitters.emplace_back(kernel);
+    //
     result.compiled_snippet = target->get_snippet();
 }
 

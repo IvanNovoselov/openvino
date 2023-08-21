@@ -12,6 +12,7 @@
 #include "transformations/snippets/x64/op/brgemm_copy_b.hpp"
 #include "transformations/snippets/x64/op//brgemm_cpu.hpp"
 #include "snippets/op/rank_normalization.hpp"
+#include <cxxabi.h>
 
 using namespace InferenceEngine;
 using namespace Xbyak;
@@ -21,10 +22,21 @@ using namespace dnnl::impl::cpu::x64;
 namespace ov {
 namespace intel_cpu {
 
-jit_emitter* g_debug_err_handler = nullptr;
+jit_debug_info* g_debug_err_handler;
 
 namespace {
 constexpr size_t gpr_size = 8;
+std::string get_type_name(const jit_emitter* emitter) {
+        std::string name = typeid(*emitter).name();
+#ifndef _WIN32
+        int status;
+        std::unique_ptr<char, void (*)(void*)> demangled_name(
+                abi::__cxa_demangle(name.c_str(), nullptr, nullptr, &status),
+                std::free);
+        name = demangled_name.get();
+#endif
+        return name;
+}
 } // namespace
 
 inline static void transform_idxs_to_regs(const std::vector<size_t>& idxs, std::vector<Reg64>& regs) {
@@ -197,6 +209,9 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     gpr_map_pool.second.push_back(reg_indexes_idx);
     gpr_map_pool.second.push_back(reg_const_params_idx);
     map_abstract_registers(gpr_map_pool, vec_map_pool, general_exprs);
+
+    m_debug_info.emitter_type_name = get_type_name(this);
+    m_debug_info.node = ov::as_type_ptr<snippets::op::Kernel>(n);
 }
 
 void KernelEmitter::emit_code(const std::vector<size_t> &in,
@@ -319,19 +334,17 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
     h->nop();
     h->nop();
     h->nop();
+
     h->push(reg_const_params);
-    const int xmm_size = 16;
-    h->sub(h->rsp, xmm_size);
-    h->uni_vmovups(h->ptr[h->rsp], Xmm(0));
+    h->push(reg_indexes);
 
-    h->mov(reg_const_params, reinterpret_cast<uint64_t>(this));
-    h->uni_vmovq(Xmm(0), reg_const_params);
-    h->mov(reg_const_params, reinterpret_cast<uint64_t>(&g_debug_err_handler));
-    h->uni_vmovq(h->qword[reg_const_params], Xmm(0));
+    h->mov(reg_indexes, reinterpret_cast<uint64_t>(&g_debug_err_handler));
+    h->mov(reg_const_params, reinterpret_cast<uint64_t>(&m_debug_info));
+    h->mov(h->qword[reg_indexes], reg_const_params);
 
+    h->pop(reg_indexes);
     h->pop(reg_const_params);
-    h->uni_vmovups(Xmm(0), h->ptr[h->rsp]);
-    h->add(h->rsp, xmm_size);
+
 
     h->nop();
     h->nop();
