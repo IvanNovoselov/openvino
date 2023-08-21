@@ -204,7 +204,7 @@ snippets::Generator::opRegType intel_cpu::CPUGenerator::get_specific_op_reg_type
         OPENVINO_THROW("Register type of the operation " + std::string(op->get_type_name()) + " isn't determined!");
 }
 bool intel_cpu::CPUGenerator::uses_precompiled_kernel(const std::shared_ptr<snippets::Emitter>& e) const {
-    return std::dynamic_pointer_cast<intel_cpu::BrgemmEmitter>(e) ||
+    return true || std::dynamic_pointer_cast<intel_cpu::BrgemmEmitter>(e) ||
            std::dynamic_pointer_cast<intel_cpu::BrgemmCopyBEmitter>(e);
 }
 } // namespace ov

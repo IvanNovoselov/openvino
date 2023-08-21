@@ -204,6 +204,9 @@ void KernelEmitter::emit_code(const std::vector<size_t> &in,
     validate_arguments(in, out);
     emit_impl(in, out);
 }
+void KernelEmitter::print_debug_info() const {
+    std::cerr << "Debug info for KernelEmitter was printed successfully\n";
+}
 
 void KernelEmitter::validate_arguments(const std::vector<size_t> &in,
                                        const std::vector<size_t> &out) const {
@@ -316,11 +319,19 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
     h->nop();
     h->nop();
     h->nop();
+    h->push(reg_const_params);
+    const int xmm_size = 16;
+    h->sub(h->rsp, xmm_size);
+    h->uni_vmovups(h->ptr[h->rsp], Xmm(0));
 
+    h->mov(reg_const_params, reinterpret_cast<uint64_t>(this));
+    h->uni_vmovq(Xmm(0), reg_const_params);
     h->mov(reg_const_params, reinterpret_cast<uint64_t>(&g_debug_err_handler));
-    h->mov(reg_indexes, reinterpret_cast<uint64_t>(this));
-    h->mov(h->qword[reg_const_params], reinterpret_cast<uint64_t>(this));
-//    h->mov(h->qword[reg_const_params], reinterpret_cast<uint64_t>(this));
+    h->uni_vmovq(h->qword[reg_const_params], Xmm(0));
+
+    h->pop(reg_const_params);
+    h->uni_vmovups(Xmm(0), h->ptr[h->rsp]);
+    h->add(h->rsp, xmm_size);
 
     h->nop();
     h->nop();

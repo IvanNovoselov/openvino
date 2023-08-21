@@ -81,7 +81,7 @@ public:
     size_t get_inputs_num() const override {return 0;}
     void emit_code(const std::vector<size_t> &in,
                    const std::vector<size_t> &out) const;
-    static void print_debug_info();
+    void print_debug_info() const;
 
 private:
     using jit_emitter::emit_code;
