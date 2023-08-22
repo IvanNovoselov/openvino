@@ -344,6 +344,7 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
 
     h->pop(reg_indexes);
     h->pop(reg_const_params);
+    h->int_(11);
 
 
     h->nop();
