@@ -43,7 +43,7 @@
 
 #include "transformations/utils/utils.hpp"
 
-#include <ngraph/pass/manager.hpp>
+#include "snippets/pass_manager.hpp"
 #include "ngraph/pass/constant_folding.hpp"
 #include "ov_ops/type_relaxed.hpp"
 #include <openvino/pass/serialize.hpp>
@@ -548,7 +548,7 @@ void Subgraph::data_flow_transformations(const std::vector<snippets::pass::Manag
                                                     [](const shared_ptr<ov::op::v0::Parameter>& p) {
                                                         return p->get_partial_shape().rbegin()->is_dynamic();
                                                     });
-    pass::Manager manager;
+    snippets::pass::Manager manager;
     if (config.m_has_domain_sensitive_ops) {
         manager.register_pass<snippets::pass::MatMulToBrgemm>();
         manager.register_pass<snippets::pass::FuseTransposeBrgemm>();

@@ -18,6 +18,7 @@ namespace pass {
  */
 class OPENVINO_API Manager : public ov::pass::Manager {
 public:
+    ~Manager() override = default;
     using PassBase = ov::pass::PassBase;
     using Validate = ov::pass::Validate;
     /**
