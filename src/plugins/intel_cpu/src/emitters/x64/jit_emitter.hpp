@@ -49,6 +49,7 @@ public:
     virtual size_t get_inputs_num() const = 0;
     virtual size_t aux_vecs_count() const;
     emitter_in_out_map get_in_out_type() const;
+    virtual void print_debug_info() const {std::cerr << "Debug info was not specified"; }
 
     /**
      * @brief Returns supported precisions.

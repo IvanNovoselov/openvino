@@ -22,7 +22,7 @@ using namespace dnnl::impl::cpu::x64;
 namespace ov {
 namespace intel_cpu {
 
-jit_debug_info* g_debug_err_handler;
+jit_emitter* g_debug_err_handler = nullptr;
 
 namespace {
 constexpr size_t gpr_size = 8;
@@ -112,7 +112,9 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     jit_container_emitter(h, isa, n),
     reg_indexes_idx(abi_param1.getIdx()),
     reg_const_params_idx(abi_param2.getIdx()) {
-    const auto kernel = ov::as_type_ptr<snippets::op::Kernel>(n);
+    m_kernel_node = ov::as_type_ptr<snippets::op::Kernel>(n);
+//    const auto kernel = ov::as_type_ptr<snippets::op::Kernel>(n);
+    const auto kernel = m_kernel_node;
     if (!kernel)
         IE_THROW() << "KernelEmitter invoked with invalid op argument";
     if (kernel->region.empty())
@@ -209,9 +211,6 @@ KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl:
     gpr_map_pool.second.push_back(reg_indexes_idx);
     gpr_map_pool.second.push_back(reg_const_params_idx);
     map_abstract_registers(gpr_map_pool, vec_map_pool, general_exprs);
-
-    m_debug_info.emitter_type_name = get_type_name(this);
-    m_debug_info.node = ov::as_type_ptr<snippets::op::Kernel>(n);
 }
 
 void KernelEmitter::emit_code(const std::vector<size_t> &in,
@@ -220,6 +219,8 @@ void KernelEmitter::emit_code(const std::vector<size_t> &in,
     emit_impl(in, out);
 }
 void KernelEmitter::print_debug_info() const {
+    std::cerr << "Emitter type name:" << get_type_name(this) << "\n";
+    std::cerr << "Mapped node friendly name:" << m_kernel_node->get_friendly_name() << "\n";
     std::cerr << "Debug info for KernelEmitter was printed successfully\n";
 }
 
@@ -339,7 +340,7 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
     h->push(reg_indexes);
 
     h->mov(reg_indexes, reinterpret_cast<uint64_t>(&g_debug_err_handler));
-    h->mov(reg_const_params, reinterpret_cast<uint64_t>(&m_debug_info));
+    h->mov(reg_const_params, reinterpret_cast<uint64_t>(this));
     h->mov(h->qword[reg_indexes], reg_const_params);
 
     h->pop(reg_indexes);

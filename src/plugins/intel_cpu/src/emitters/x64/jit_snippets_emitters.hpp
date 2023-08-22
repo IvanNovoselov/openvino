@@ -22,11 +22,7 @@
 namespace ov {
 namespace intel_cpu {
 
-struct jit_debug_info {
-    std::string emitter_type_name = "";
-    std::shared_ptr<ov::Node> node = nullptr;
-};
-extern jit_debug_info* g_debug_err_handler;
+extern jit_emitter* g_debug_err_handler;
 
 #define SNIPPETS_MAX_SNIPPETS_DIMS 12
 #define SNIPPETS_MAX_HARNESS_DIMS 5
@@ -85,7 +81,7 @@ public:
     size_t get_inputs_num() const override {return 0;}
     void emit_code(const std::vector<size_t> &in,
                    const std::vector<size_t> &out) const;
-    void print_debug_info() const;
+    void print_debug_info() const override;
 
 private:
     using jit_emitter::emit_code;
@@ -113,7 +109,7 @@ private:
 
     const size_t reg_indexes_idx;
     const size_t reg_const_params_idx;
-    jit_debug_info m_debug_info;
+    std::shared_ptr<snippets::op::Kernel> m_kernel_node;
 };
 
 class LoopBeginEmitter : public jit_emitter {
