@@ -113,8 +113,7 @@ auto Subgraph::get_estimated_buffer_count(const ov::NodeVector& ops) -> size_t {
                                                            [](const ov::Input<ov::Node>& in) {
                                                                return ov::is_type<ov::op::v0::Result>(in.get_node());
                                                            }) ||
-                                              !ov::is_type<ov::op::v0::Parameter>(
-                                                      transpose->get_input_node_shared_ptr(0));
+                                              !ov::is_type<ov::op::v0::Parameter>(transpose->get_input_node_shared_ptr(0));
             if (are_prev_or_next_ops) {
                 push_prc_size(transpose->get_element_type().size());
             }
@@ -164,8 +163,7 @@ std::shared_ptr<Node> Subgraph::clone_with_new_inputs(const OutputVector& inputs
 
 std::vector<PartialShape> Subgraph::reshape_body(const std::vector<PartialShape>& input_shapes) {
     auto& params = body_ptr()->get_parameters();
-    OPENVINO_ASSERT(params.size() == input_shapes.size(),
-                    "Got invalid number of input shapes to reshape subgraph body");
+    OPENVINO_ASSERT(params.size() == input_shapes.size(), "Got invalid number of input shapes to reshape subgraph body");
     for (size_t i = 0; i < params.size(); ++i) {
         params[i]->set_partial_shape(input_shapes[i]);
     }
@@ -179,8 +177,7 @@ std::vector<PartialShape> Subgraph::reshape_body(const std::vector<PartialShape>
 
 std::vector<Shape> Subgraph::reshape_body(const std::vector<Shape>& input_shapes) {
     auto& params = body_ptr()->get_parameters();
-    OPENVINO_ASSERT(params.size() == input_shapes.size(),
-                    "Got invalid number of input shapes to reshape subgraph body");
+    OPENVINO_ASSERT(params.size() == input_shapes.size(), "Got invalid number of input shapes to reshape subgraph body");
     for (size_t i = 0; i < params.size(); ++i) {
         params[i]->set_partial_shape(input_shapes[i]);
     }
@@ -203,8 +200,7 @@ void Subgraph::validate_and_infer_types() {
     }
 
     for (size_t i = 0; i < get_input_size(); ++i) {
-        body_ptr()->replace_parameter(i, std::make_shared<ov::op::v0::Parameter>(get_input_element_type(i),
-                                                                                 get_input_partial_shape(i)));
+        body_ptr()->replace_parameter(i, std::make_shared<ov::op::v0::Parameter>(get_input_element_type(i), get_input_partial_shape(i)));
     }
 
     body_ptr()->validate_nodes_and_infer_types();
@@ -241,8 +237,7 @@ auto Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ov::Node>& node) -> s
              constant_input_should_be_inside_body(node))) {
             body_inputs.push_back(input);
         } else {
-            auto parameter = std::make_shared<ov::opset1::Parameter>(input.get_element_type(),
-                                                                     input.get_partial_shape());
+            auto parameter = std::make_shared<ov::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
             body_parameters.push_back(parameter);
             body_parameters.back()->set_friendly_name(input.get_node()->get_friendly_name());
             body_inputs.push_back(parameter->output(0));
@@ -286,8 +281,7 @@ auto Subgraph::wrap_node_as_subgraph(const std::shared_ptr<ov::Node>& node) -> s
     return subgraph;
 }
 
-void
-Subgraph::fill_empty_output_names(const Output<Node>& target_output_node, const Output<Node>& replacement_output_node) {
+void Subgraph::fill_empty_output_names(const Output<Node>& target_output_node, const Output<Node>& replacement_output_node) {
     NGRAPH_SUPPRESS_DEPRECATED_START
     auto& out_tensor = target_output_node.get_tensor();
     const std::string new_name = ov::op::util::get_ie_output_name(replacement_output_node);
@@ -296,7 +290,8 @@ Subgraph::fill_empty_output_names(const Output<Node>& target_output_node, const 
     }
     if (!replacement_output_node.get_names().empty()) {
         out_tensor.set_names(replacement_output_node.get_names());
-    }NGRAPH_SUPPRESS_DEPRECATED_END
+    }
+    NGRAPH_SUPPRESS_DEPRECATED_END
 }
 
 auto Subgraph::constant_input_should_be_inside_body(const std::shared_ptr<ov::Node>& node) -> bool {
@@ -352,13 +347,11 @@ ov::PartialShape snippets::op::Subgraph::canonicalize(const BlockedShapeVector& 
             // todo: more complicated logics is needed if we want to merge smth else than blocked and planar
             if (baseIsBlocked) {
                 const bool inIsNotBlocked = inOrder.size() == std::set<size_t>(inOrder.begin(), inOrder.end()).size();
-                NODE_VALIDATION_CHECK(this, inIsNotBlocked,
-                                      "Snippets don't support conversion between blocked layouts of different ranks");
+                NODE_VALIDATION_CHECK(this, inIsNotBlocked, "Snippets don't support conversion between blocked layouts of different ranks");
                 inShape.insert(inShape.end(), ov::Dimension(1));
                 appendOnesForCanonical[i]--;
             }
-            NODE_VALIDATION_CHECK(this, PartialShape::broadcast_merge_into(newShape, inShape,
-                                                                           ov::op::AutoBroadcastType::NUMPY),
+            NODE_VALIDATION_CHECK(this, PartialShape::broadcast_merge_into(newShape, inShape, ov::op::AutoBroadcastType::NUMPY),
                                   "Failed to broadcast_merge inputs in snippets canonicalization");
             inShape = std::move(newShape);
         } else {
@@ -371,8 +364,7 @@ ov::PartialShape snippets::op::Subgraph::canonicalize(const BlockedShapeVector& 
         // todo: we need to generalize canonicalization for domain-sensitive ops. E.g. MatMul inputs can't be broadcasted one to another
         if (!config.m_has_domain_sensitive_ops)
             NODE_VALIDATION_CHECK(this,
-                                  PartialShape::broadcast_merge_into(tmpPShape, inShape,
-                                                                     ::ov::op::AutoBroadcastType::NUMPY),
+                                  PartialShape::broadcast_merge_into(tmpPShape, inShape, ::ov::op::AutoBroadcastType::NUMPY),
                                   "Failed to create broadcastable shapes in snippets canonicalization");
         const auto paramShape = body_ptr()->get_parameters()[i]->get_partial_shape();
         const auto paramType = body_ptr()->get_parameters()[i]->get_element_type();
