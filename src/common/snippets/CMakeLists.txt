@@ -29,7 +29,7 @@ ie_faster_build(${TARGET_NAME}
 )
 
 target_link_libraries(${TARGET_NAME} PUBLIC openvino::runtime
-                                     PRIVATE openvino::reference openvino::runtime::dev)
+                                     PRIVATE openvino::reference openvino::runtime::dev openvino::core::dev)
 
 target_include_directories(${TARGET_NAME} PUBLIC $<BUILD_INTERFACE:${PUBLIC_HEADERS_DIR}>
                                           PRIVATE $<BUILD_INTERFACE:${SHAPE_INFER_INCLUDE_DIR}>)
