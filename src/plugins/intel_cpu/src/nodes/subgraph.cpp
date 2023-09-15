@@ -35,9 +35,6 @@
 #include <common/primitive_hashing_utils.hpp>
 #include "snippets/pass/hash.hpp"
 
-#include <snippets/utils.hpp>
-#include <fstream>
-
 using namespace InferenceEngine;
 using namespace dnnl::impl::utils;
 using namespace dnnl::impl::cpu;

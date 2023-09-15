@@ -6,6 +6,7 @@
 #include "snippets/op/rank_normalization.hpp"
 #include "snippets/itt.hpp"
 #include "snippets/utils.hpp"
+#include "snippets/lowered/port_descriptor.hpp"
 
 namespace ov {
 namespace snippets {
@@ -17,6 +18,7 @@ pass::Canonicalization::Canonicalization(const BlockedShapeVector& blocked_input
     m_in_shapes.reserve(blocked_input_shapes.size());
     m_in_layouts.reserve(blocked_input_shapes.size());
     for (const auto& bs : blocked_input_shapes) {
+        m_has_dynamic_inputs |= utils::is_dynamic_vdims(bs.first);
         m_in_shapes.emplace_back(bs.first);
         m_in_layouts.emplace_back(bs.second);
         // Note: Blocking (if any) must be accounted for in input shapes
@@ -28,6 +30,7 @@ bool pass::Canonicalization::run_on_model(const std::shared_ptr<ov::Model>& m) {
     RUN_ON_MODEL_SCOPE(Canonicalization);
     OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "Snippets::Canonicalization")
     bool is_modified = false;
+    bool validation_needed = false;
     const ParameterVector& params = m->get_parameters();
     OPENVINO_ASSERT(m_in_shapes.size() == params.size(),
                     "Number of parameters for snippet doesn't match passed to the Canonicalization pass. ",
@@ -36,6 +39,13 @@ bool pass::Canonicalization::run_on_model(const std::shared_ptr<ov::Model>& m) {
     // Note that shape rank also incorporates layout, so NCHW16c would have shape rank 5
     auto is_blocked_layout = [](const Layout& l) {
         return l.size() != std::set<size_t>(l.begin(), l.end()).size();
+    };
+    auto is_planar_layout = [](const Layout& l) {
+        for (size_t d = 0; d < l.size(); d++) {
+            if (d != l[d])
+                return false;
+        }
+        return true;
     };
     auto get_rank = [](const Layout& l, const Layout& r) {
         return l.size() < r.size();
@@ -48,6 +58,7 @@ bool pass::Canonicalization::run_on_model(const std::shared_ptr<ov::Model>& m) {
 
     for (size_t i = 0; i < m_in_layouts.size(); i++) {
         const auto& i_layout = m_in_layouts[i];
+        const auto& i_shape = m_in_shapes[i];
         const auto i_rank = i_layout.size();
         const bool i_is_blocked = is_blocked_layout(i_layout);
         // Canonicalization logic briefly:
@@ -59,8 +70,9 @@ bool pass::Canonicalization::run_on_model(const std::shared_ptr<ov::Model>& m) {
         //   similar ranks.
         if (i_is_blocked) {
             OPENVINO_ASSERT(base_is_blocked && i_rank == max_rank, "If this shape is blocked, base must also be blocked");
-            params[i]->set_partial_shape(snippets::utils::vdims_to_pshape(m_in_shapes[i]));
+            params[i]->set_partial_shape(snippets::utils::vdims_to_pshape(i_shape));
             is_modified = true;
+            validation_needed = true;
         } else if (i_rank < max_rank) {
             size_t num_append = base_is_blocked;
             OPENVINO_ASSERT(max_rank >= i_rank + num_append, "Unsupported blocked shapes combination in canonicalization");
@@ -71,14 +83,31 @@ bool pass::Canonicalization::run_on_model(const std::shared_ptr<ov::Model>& m) {
             for (auto& in : target_inputs)
                 in.replace_source_output(rank_norm);
             is_modified = true;
+            validation_needed = true;
         } else {
             // todo: 4d blocked + 5d planar layouts are not supported: <N, C, H, W, c> + <N, C, D, H, W>
             OPENVINO_ASSERT(equal(base_layout.begin(), base_layout.end(), i_layout.begin()),
                             "Canonicalization got input shapes of equal ranks but different layouts, which is not supported");
         }
+        if (!is_planar_layout(i_layout)) {
+            //  * If the model has dynamic inputs then expression shapes will be calculated via LIR shape infer in runtime.
+            //    It means we need to store appropriate layouts, so that shape_infer can account for them.
+            //  * If the model is static, then shape inference is performed in validate_and_infer_types which ignores
+            //    snippets layouts. So we need to set reordered shape to Parameters and re-validate the model.
+            if (m_has_dynamic_inputs) {
+                const auto& out = params[i]->output(0);
+                const auto& port_desc = std::make_shared<lowered::PortDescriptor>(out);
+                port_desc->set_layout(i_layout);
+                lowered::PortDescriptorUtils::set_port_descriptor_ptr(out, port_desc);
+            } else if (!i_is_blocked) {
+                params[i]->set_partial_shape(snippets::utils::vdims_to_pshape(i_shape));
+                validation_needed = true;
+            }
+            is_modified = true;
+        }
     }
     // todo: disable it if per-pass validation will be enabled
-    if (is_modified)
+    if (validation_needed)
         m->validate_nodes_and_infer_types();
     return is_modified;
 }

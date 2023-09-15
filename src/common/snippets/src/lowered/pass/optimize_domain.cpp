@@ -8,6 +8,7 @@
 #include "snippets/lowered/linear_ir.hpp"
 #include "snippets/snippets_isa.hpp"
 #include "snippets/shape_inference/shape_inference.hpp"
+#include "snippets/utils.hpp"
 
 
 namespace ov {
@@ -85,7 +86,7 @@ bool OptimizeDomain::run(snippets::lowered::LinearIR& linear_ir) {
     for (const auto& expr : linear_ir.get_IO_ops()) {
         if (expr->get_type() == snippets::lowered::IOExpression::io_type::INPUT) {
             input_exprs.push_back(expr);
-            const auto& shape = expr->get_output_port_descriptor(0)->get_shape();
+            const auto& shape = utils::get_planar_vdims(expr->get_output_port_descriptor(0));
             OPENVINO_ASSERT(std::none_of(shape.begin(), shape.end(),
                                         [](size_t d) {return d == snippets::IShapeInferSnippets::DYNAMIC_DIMENSION; }),
                             "OptimizeDomain pass does not support dynamic shapes");

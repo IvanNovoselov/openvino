@@ -31,6 +31,7 @@ public:
 private:
     std::vector<VectorDims> m_in_shapes;
     std::vector<Layout> m_in_layouts;
+    bool m_has_dynamic_inputs = false;
 };
 
 }  // namespace pass

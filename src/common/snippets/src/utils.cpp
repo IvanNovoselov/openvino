@@ -133,6 +133,14 @@ VectorDims get_planar_vdims(const snippets::lowered::ExpressionPort& expr_port) 
     return get_planar_vdims(expr_port.get_descriptor_ptr());
 }
 
+bool is_dynamic_vdims(const VectorDims& shape) {
+    for (const auto& v : shape) {
+        if (v == IShapeInferSnippets::DYNAMIC_DIMENSION)
+            return true;
+    }
+    return false;
+}
+
 } // namespace utils
 } // namespace snippets
 } // namespace ov
