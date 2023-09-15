@@ -54,9 +54,12 @@ bool InsertBroadcastMove::run(LinearIR& linear_ir) {
                 OPENVINO_ASSERT(last_dims[i] == 1,
                                 "Attempt to broadcast non-1 dimension. Target dim: ", broadcasted_dim,
                                 " This dim: ", last_dims[i]);
-
                 auto input_shape = node->get_input_partial_shape(i);
-                *input_shape.rbegin() = Dimension(static_cast<Dimension::value_type>(broadcasted_dim));
+                // Note that input_shape could be empty (aka ngraph scalar), so we can't just replace the last dim,
+                // but need broadcast_merge_into to cover such cases
+                PartialShape::broadcast_merge_into(input_shape,
+                                                   PartialShape({static_cast<Dimension::value_type>(broadcasted_dim)}),
+                                                   ov::op::AutoBroadcastType::NUMPY);
                 const auto broadcast = std::make_shared<op::BroadcastMove>(node->get_input_source_output(i), input_shape);
 
                 PortDescriptorUtils::set_port_descriptor_ptr(broadcast->output(0), connectors[i]->get_source().get_descriptor_ptr()->clone());

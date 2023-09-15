@@ -358,6 +358,10 @@ Subgraph::convert_body_to_linear_ir(const std::shared_ptr<IShapeInferSnippetsFac
 
      m_linear_ir = std::make_shared<lowered::LinearIR>(body_ptr(), shape_infer_factory, lowering_config);
      m_shape_infer = m_linear_ir->get_shape_infer_instance();
+     // todo: this is for debug rutposes. remove before review
+     // ov::pass::Serialize("snsdebug_ngraph.xml", "snsdebug_ngraph.bin").run_on_model(body_ptr());
+     // m_linear_ir->serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
+
     return m_linear_ir;
 }
 

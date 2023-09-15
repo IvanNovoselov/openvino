@@ -33,9 +33,10 @@ void PortDescriptor::validate_arguments() {
         m_layout.resize(m_tensor_shape.size());
         // NCHW layout by default
         std::iota(m_layout.begin(), m_layout.end(), 0);
-    } else if (m_layout.size() != m_tensor_shape.size()) {
-        OPENVINO_THROW("Snippets tensor descriptor: Layout size must be equal to the shape size");
     }
+    OPENVINO_ASSERT(m_layout.size() == m_tensor_shape.size(), "Snippets tensor descriptor: Layout size must be equal to the shape size");
+    // todo: for discussion on review: should we allow for empty tensor shapes at all? What's with LoopEnd?
+    // OPENVINO_ASSERT(!m_tensor_shape.empty(), "Snippets tensor descriptor: empty shape is not allowed");
 }
 
 PortDescriptorPtr PortDescriptor::clone() const {

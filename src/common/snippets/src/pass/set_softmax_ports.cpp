@@ -42,7 +42,7 @@ ov::snippets::pass::SetSoftmaxPorts::SetSoftmaxPorts() {
 
         OPENVINO_ASSERT(axis < static_cast<int64_t>(rank), "Softmax has incorrect axis");
         std::vector<size_t> subtensor(rank, 1);
-        for (int i = axis; i < rank; ++i)
+        for (auto i = axis; i < rank; ++i)
             subtensor[i] = lowered::PortDescriptor::ServiceDimensions::FULL_DIM;
 
         lowered::PortDescriptorUtils::set_port_descriptor_ptr(root->input(0), std::make_shared<lowered::PortDescriptor>(root->input(0), subtensor));

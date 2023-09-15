@@ -92,7 +92,8 @@ VectorDims pshape_to_vdims(const PartialShape& pshape) {
     result.reserve(pshape.size());
     for (const auto& d : pshape)
         result.push_back(d.is_dynamic() ? IShapeInferSnippets::DYNAMIC_DIMENSION : d.get_length());
-    return result;
+    // Note: PartialShape could be empty which designates scalar value. However, Scalars are represented as {1} in Snippets
+    return result.empty() ? VectorDims {1} : result;
 }
 
 ov::PartialShape vdims_to_pshape(const VectorDims& vdims) {
