@@ -24,11 +24,12 @@ public:
 
 class CPUTargetMachine : public snippets::TargetMachine {
 public:
-    CPUTargetMachine(dnnl::impl::cpu::x64::cpu_isa_t host_isa);
+    explicit CPUTargetMachine(dnnl::impl::cpu::x64::cpu_isa_t host_isa);
 
     bool is_supported() const override;
     snippets::CompiledSnippetPtr get_snippet() override;
     size_t get_lanes() const override;
+    dnnl::impl::cpu::x64::cpu_isa_t get_isa() const;
 
 private:
     std::unique_ptr<dnnl::impl::cpu::x64::jit_generator> h;
@@ -38,6 +39,7 @@ private:
 class CPUGenerator : public snippets::Generator {
 public:
     CPUGenerator(dnnl::impl::cpu::x64::cpu_isa_t isa);
+    std::shared_ptr<Generator> clone() const override;
 
 protected:
     bool uses_precompiled_kernel(const std::shared_ptr<snippets::Emitter>& emitter) const override;

@@ -43,6 +43,7 @@ class DummyGenerator : public ov::snippets::Generator {
 public:
     DummyGenerator() : ov::snippets::Generator(std::make_shared<DummyTargetMachine>()) {}
     DummyGenerator(const std::shared_ptr<ov::snippets::TargetMachine>& t) : ov::snippets::Generator(t) {}
+    std::shared_ptr<Generator> clone() const override { return std::make_shared<DummyGenerator>(target); }
 
 protected:
     opRegType get_specific_op_reg_type(const std::shared_ptr<ov::Node>& op) const override { return vec2vec; };

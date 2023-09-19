@@ -60,6 +60,9 @@ public:
 private:
     typedef void (*kernel)(const void *, const void *);
 
+    // Create a deep local copy of the input snippet to perform canonicalization & code generation
+    // TODO: Probably better to implement a proper copy constructor
+    void copy_snippet() const;
     void init_body_hash();
 
     size_t inputNum = 0;

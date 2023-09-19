@@ -127,13 +127,25 @@ Snippet::Snippet(const std::shared_ptr<ov::Node>& op, const GraphContext::CPtr& 
     if (!original_snippet) {
         IE_THROW(NotImplemented) << "Node is not an instance of snippets::op::Subgraph";
     }
-    #if defined(OPENVINO_ARCH_X86_64)
-        original_snippet->set_generator(std::make_shared<CPUGenerator>(host_isa));
-    #else
-        IE_THROW(NotImplemented) << "CPU plugin: code-generation is not supported on non-x64 platforms";
-    #endif // OPENVINO_ARCH_X86_64
     init_body_hash();
     is_dynamic = isDynamicNgraphNode(op);
+}
+
+void Snippet::copy_snippet() const {
+    ov::OutputVector subgraph_node_inputs;
+    for (const auto &input : original_snippet->input_values()) {
+        auto new_input = std::make_shared<ov::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
+        subgraph_node_inputs.push_back(new_input);
+    }
+    std::shared_ptr<ov::Model> new_body = original_snippet->body_ptr()->clone();
+    snippetAttrs.snippet = std::make_shared<snippets::op::Subgraph>(subgraph_node_inputs, new_body);
+    ov::copy_runtime_info(original_snippet, snippetAttrs.snippet);
+    snippetAttrs.snippet->set_friendly_name(original_snippet->get_friendly_name());
+#if defined(OPENVINO_ARCH_X86_64)
+    snippetAttrs.snippet->set_generator(std::make_shared<CPUGenerator>(host_isa));
+#else
+    IE_THROW(NotImplemented) << "CPU plugin: code-generation is not supported on non-x64 platforms";
+#endif // OPENVINO_ARCH_X86_64
 }
 
 void Snippet::init_body_hash() {
@@ -144,6 +156,7 @@ void Snippet::init_body_hash() {
 }
 
 void Snippet::initSupportedPrimitiveDescriptors() {
+    copy_snippet();
     if (!supportedPrimitiveDescriptors.empty())
         return;
 
@@ -159,7 +172,7 @@ void Snippet::initSupportedPrimitiveDescriptors() {
 
     const size_t ndims = outputShapes[0].getRank();
     // Domain sensitive operations support only Planar layout
-    const bool isOnlyPlanarApplicable = original_snippet->has_domain_sensitive_ops();
+    const bool isOnlyPlanarApplicable = snippetAttrs.snippet->has_domain_sensitive_ops();
     const bool isChannelsFirstApplicable = dnnl::impl::utils::one_of(ndims, 1u, 2u, 3u, 4u, 5u) && dimRanksAreEqual && !isOnlyPlanarApplicable;
     // Todo: Snippets currently don't support per-channel broadcasting of Blocked descriptors because
     //  canonicalization can't distinguish between <N, C, H, W, c> and <N, C, D, H, W> cases.
@@ -222,7 +235,7 @@ void Snippet::initSupportedPrimitiveDescriptors() {
             const auto originalInputPrecision = getOriginalInputPrecisionAtPort(i);
             const auto precision = ((originalInputPrecision == InferenceEngine::Precision::FP32) &&
                                      context->getConfig().inferencePrecision == ov::element::bf16 &&
-                                     original_snippet->has_domain_sensitive_ops()) ?
+                                     snippetAttrs.snippet->has_domain_sensitive_ops()) ?
                 static_cast<InferenceEngine::Precision>(InferenceEngine::Precision::BF16) :
                 originalInputPrecision;
             if (supportedPrecisions.count(precision) == 0)
@@ -320,7 +333,7 @@ void Snippet::initOptimalPrimitiveDescriptor() {
             backend_passes.emplace_back(PASS_POS, std::make_shared<PASS>(__VA_ARGS__))
 
     SNIPPETS_REGISTER_PASS(PassPosition(Place::PipelineStart), ConvertToSwishCPU);
-    if (context->getConfig().inferencePrecision == ov::element::bf16 && original_snippet->has_domain_sensitive_ops()) {
+    if (context->getConfig().inferencePrecision == ov::element::bf16 && snippetAttrs.snippet->has_domain_sensitive_ops()) {
         // enforce BF16 precisions to supported operations
         // MatMul has to be decomposed to Brgemm operations before enforcement
         // Note, MatMul decomposition will be run later again for case if BF16 enforcement is not happened
@@ -347,9 +360,8 @@ void Snippet::initOptimalPrimitiveDescriptor() {
     for (const auto& p :  snippetAttrs.outMemPrecs)
         output_precisions.push_back(InferenceEngine::details::convertPrecision(p));
 
-    original_snippet->data_flow_shape_agnostic(in_blocked_shapes, input_precisions, output_precisions, backend_passes);
-    original_snippet->convert_body_to_linear_ir(std::make_shared<snippets::CPUShapeInferSnippetsFactory>());
-    snippetAttrs.snippet = original_snippet;
+    snippetAttrs.snippet->data_flow_shape_agnostic(in_blocked_shapes, input_precisions, output_precisions, backend_passes);
+    snippetAttrs.snippet->convert_body_to_linear_ir(std::make_shared<snippets::CPUShapeInferSnippetsFactory>());
 }
 
 InferenceEngine::Precision Snippet::getRuntimePrecision() const {

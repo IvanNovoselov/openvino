@@ -113,6 +113,8 @@ public:
      */
     opRegType get_op_reg_type(const std::shared_ptr<Node>& op) const;
 
+    virtual std::shared_ptr<Generator> clone() const = 0;
+
 protected:
     /**
     * @brief gets register type by specific plugin op type

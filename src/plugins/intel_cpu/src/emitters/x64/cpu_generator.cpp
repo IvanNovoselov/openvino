@@ -168,6 +168,10 @@ size_t intel_cpu::CPUTargetMachine::get_lanes() const {
     }
 }
 
+dnnl::impl::cpu::x64::cpu_isa_t intel_cpu::CPUTargetMachine::get_isa() const {
+    return isa;
+}
+
 bool intel_cpu::CPUTargetMachine::is_supported() const {
     return dnnl::impl::cpu::x64::mayiuse(isa);
 }
@@ -199,6 +203,12 @@ bool intel_cpu::CompiledSnippetCPU::empty() const {
 }
 
 intel_cpu::CPUGenerator::CPUGenerator(dnnl::impl::cpu::x64::cpu_isa_t isa_) : Generator(std::make_shared<CPUTargetMachine>(isa_)) {
+}
+
+std::shared_ptr<snippets::Generator> intel_cpu::CPUGenerator::clone() const {
+    const auto& cpu_target_machine = std::dynamic_pointer_cast<CPUTargetMachine>(target);
+    OPENVINO_ASSERT(cpu_target_machine, "Failed to clone CPUGenerator: the instance contains incompatible TargetMachine type");
+    return std::make_shared<CPUGenerator>(cpu_target_machine->get_isa());
 }
 
 snippets::Generator::opRegType intel_cpu::CPUGenerator::get_specific_op_reg_type(const std::shared_ptr<ov::Node>& op) const {

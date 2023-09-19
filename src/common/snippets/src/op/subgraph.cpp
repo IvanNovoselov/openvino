@@ -472,9 +472,10 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const lowered::pass::PassPi
     //  until we fix this behavior, we have to make a copy of LIR before giving it to the generator.
     OPENVINO_ASSERT(m_linear_ir, "Attempt to call generate, when linear IR was not initialized");
     auto linear_ir = m_linear_ir->deep_copy();
+    auto generator = m_generator->clone();
     LoweringResult lowering_result;
     control_flow_transformations(linear_ir, lowering_result, backend_passes_pre_common, backend_passes_post_common);
-    m_generator->generate(linear_ir, lowering_result, compile_params);
+    generator->generate(linear_ir, lowering_result, compile_params);
 
     VectorDims work_domain = linear_ir.get_master_shape();
     const size_t loop_depth = linear_ir.get_config().m_loop_depth;
