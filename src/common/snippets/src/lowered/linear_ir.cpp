@@ -396,6 +396,19 @@ LinearIR::LIRShapeInfer::LIRShapeInfer(container& body_exprs, io_container& io_e
             OPENVINO_THROW("Invalid io expression type detected");
         }
     }
+    // Note that if all output shapes are static, as in the case when the first shape infer was performed on nGraph,
+    // we can treat them as the last result
+    std::vector<VectorDims> outputDims;
+    outputDims.reserve(m_output_exprs.size());
+    for (const auto& expr : m_output_exprs) {
+        const auto &shape = expr->get_input_port_descriptor(0)->get_shape();
+        if (utils::is_dynamic_vdims(shape)) {
+            outputDims.clear();
+            break;
+        }
+        outputDims.push_back(shape);
+    }
+    m_last_result = {outputDims, ShapeInferStatus::success};
 }
 
 IShapeInferSnippets::Result LinearIR::LIRShapeInfer::infer(const std::vector<VectorDimsRef>& input_shapes) {

@@ -127,6 +127,8 @@ Snippet::Snippet(const std::shared_ptr<ov::Node>& op, const GraphContext::CPtr& 
     if (!original_snippet) {
         IE_THROW(NotImplemented) << "Node is not an instance of snippets::op::Subgraph";
     }
+    copy_snippet();
+    shapeInference = SnippetShapeInferFactory(snippetAttrs.snippet).makeShapeInfer();
     init_body_hash();
     is_dynamic = isDynamicNgraphNode(op);
 }
@@ -156,7 +158,6 @@ void Snippet::init_body_hash() {
 }
 
 void Snippet::initSupportedPrimitiveDescriptors() {
-    copy_snippet();
     if (!supportedPrimitiveDescriptors.empty())
         return;
 
