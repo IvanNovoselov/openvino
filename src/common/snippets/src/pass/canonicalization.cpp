@@ -78,10 +78,12 @@ bool pass::Canonicalization::run_on_model(const std::shared_ptr<ov::Model>& m) {
             OPENVINO_ASSERT(max_rank >= i_rank + num_append, "Unsupported blocked shapes combination in canonicalization");
             size_t num_prepend = max_rank - i_rank - num_append;
             // here I should insert unsqueeze operation after the corresponding input
-            auto target_inputs = params[i]->output(0).get_target_inputs();
-            auto rank_norm = std::make_shared<op::RankNormalization>(params[i], num_prepend, num_append);
-            for (auto& in : target_inputs)
-                in.replace_source_output(rank_norm);
+            for (const auto& out : params[i]->outputs()) {
+                const auto& target_inputs = out.get_target_inputs();
+                auto rank_norm = std::make_shared<op::RankNormalization>(out, num_prepend, num_append);
+                for (auto& in : target_inputs)
+                    in.replace_source_output(rank_norm);
+            }
             is_modified = true;
             validation_needed = true;
         } else {
