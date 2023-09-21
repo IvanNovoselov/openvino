@@ -123,38 +123,27 @@ Snippet::Snippet(const std::shared_ptr<ov::Node>& op, const GraphContext::CPtr& 
         : Node(op, context, SnippetShapeInferFactory(op)) {
     host_isa = dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx512_core) ?
         dnnl::impl::cpu::x64::avx512_core : dnnl::impl::cpu::x64::avx2;
-    original_snippet = ov::as_type_ptr<snippets::op::Subgraph>(op);
-    if (!original_snippet) {
-        IE_THROW(NotImplemented) << "Node is not an instance of snippets::op::Subgraph";
-    }
-    copy_snippet();
-    shapeInference = SnippetShapeInferFactory(snippetAttrs.snippet).makeShapeInfer();
-    init_body_hash();
-    is_dynamic = isDynamicNgraphNode(op);
-}
+    const auto& tmp_snippet = ov::as_type_ptr<snippets::op::Subgraph>(op);
+    OPENVINO_ASSERT(tmp_snippet, "Attempt to create Snippet node from an invalid op type");
+    snippetAttrs.snippet = tmp_snippet->clone();
+    snippetAttrs.bodyHash = get_body_hash(tmp_snippet);
 
-void Snippet::copy_snippet() const {
-    ov::OutputVector subgraph_node_inputs;
-    for (const auto &input : original_snippet->input_values()) {
-        auto new_input = std::make_shared<ov::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
-        subgraph_node_inputs.push_back(new_input);
-    }
-    std::shared_ptr<ov::Model> new_body = original_snippet->body_ptr()->clone();
-    snippetAttrs.snippet = std::make_shared<snippets::op::Subgraph>(subgraph_node_inputs, new_body);
-    ov::copy_runtime_info(original_snippet, snippetAttrs.snippet);
-    snippetAttrs.snippet->set_friendly_name(original_snippet->get_friendly_name());
 #if defined(OPENVINO_ARCH_X86_64)
     snippetAttrs.snippet->set_generator(std::make_shared<CPUGenerator>(host_isa));
 #else
-    IE_THROW(NotImplemented) << "CPU plugin: code-generation is not supported on non-x64 platforms";
+    OPENVINO_THROW("CPU plugin: Snippets code-generator is not supported on non-x64 platforms");
 #endif // OPENVINO_ARCH_X86_64
+
+    // Note: we have to update shapeInfer, so it uses the per-thread op::Subgraph copy
+    shapeInference = SnippetShapeInferFactory(snippetAttrs.snippet).makeShapeInfer();
+    is_dynamic = isDynamicNgraphNode(op);
 }
 
-void Snippet::init_body_hash() {
+uint64_t Snippet::get_body_hash(const std::shared_ptr<snippets::op::Subgraph>& snippet) {
     uint64_t seed = 0;
     ov::snippets::pass::Hash hash_function(seed);
-    hash_function.run_on_model(original_snippet->body_ptr());
-    snippetAttrs.bodyHash = seed;
+    hash_function.run_on_model(snippet->body_ptr());
+    return seed;
 }
 
 void Snippet::initSupportedPrimitiveDescriptors() {
@@ -526,16 +515,14 @@ void Snippet::SnippetJitExecutor::schedule_nt(const std::vector<MemoryPtr>& inMe
 Snippet::SnippetExecutor::SnippetExecutor(SnippetAttrs attrs, bool is_dynamic, bool enforceBF16)
     : snippetAttrs(std::move(attrs)), is_dynamic(is_dynamic), enforceBF16(enforceBF16) {}
 
-Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool is_dynamic, bool enforceBF16) :
-    SnippetExecutor(attrs, is_dynamic, enforceBF16) {
+Snippet::SnippetJitExecutor::SnippetJitExecutor(SnippetAttrs attrs, bool is_dynamic, bool enforceBF16) :
+    SnippetExecutor(std::move(attrs), is_dynamic, enforceBF16) {
     numInput = snippetAttrs.inMemBlockedDims.size();
     numOutput = snippetAttrs.outMemBlockedDims.size();
     start_offset_in.resize(numInput);
     start_offset_out.resize(numOutput);
 
     const VectorDims& canonicalShape = snippetAttrs.snippet->get_master_shape();
-
-    snippet_for_generation = snippetAttrs.snippet;
 
     // initialize by maximum output dimension. Dimensions of outputs should be broadcastable
     tensorRank = std::max(static_cast<size_t>(rank6D), canonicalShape.size());
@@ -551,10 +538,10 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(const SnippetAttrs& attrs, bool 
     if (std::any_of(canonicalShape.begin(), canonicalShape.end(),
                     [](size_t x){return x == snippets::IShapeInferSnippets::DYNAMIC_DIMENSION;}))
         IE_THROW() << "Snippets: Canonicalization returned dynamic shape in static pipeline";
-    snippet_for_generation->set_min_parallel_work_amount(static_cast<size_t>(parallel_get_max_threads()));
+    snippetAttrs.snippet->set_min_parallel_work_amount(static_cast<size_t>(parallel_get_max_threads()));
     // Note: minimal JIT work amount is a predefined value that describes the number of kernel iterations (work amount)
     // needed to cover kernel call overhead. It is used for balancing between parallel and JIT work amounts in domain optimization.
-    snippet_for_generation->set_min_jit_work_amount(256);
+    snippetAttrs.snippet->set_min_jit_work_amount(256);
 
     // generate
     jit_snippets_compile_args jcp;
@@ -574,9 +561,9 @@ void Snippet::SnippetJitExecutor::generate(const jit_snippets_compile_args* jcp)
     ov::snippets::lowered::pass::PassPipeline control_flow_pipeline;
     CPU_REGISTER_PASS_X64(control_flow_pipeline, ov::intel_cpu::pass::FuseLoadStoreConvert)
 
-    schedule = snippet_for_generation->generate_from_linear_ir(control_flow_markup_pipeline,
-                                                               control_flow_pipeline,
-                                                               reinterpret_cast<const void*>(jcp));
+    schedule = snippetAttrs.snippet->generate_from_linear_ir(control_flow_markup_pipeline,
+                                                             control_flow_pipeline,
+                                                             reinterpret_cast<const void*>(jcp));
 }
 
 bool Snippet::SnippetJitExecutor::schedule_created() {

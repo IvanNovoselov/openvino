@@ -361,6 +361,26 @@ Subgraph::convert_body_to_linear_ir(const std::shared_ptr<IShapeInferSnippetsFac
     return m_linear_ir;
 }
 
+std::shared_ptr<Subgraph> Subgraph::clone() const {
+    ov::OutputVector subgraph_node_inputs;
+    for (const auto &input : input_values()) {
+        auto new_input = std::make_shared<ov::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
+        subgraph_node_inputs.push_back(new_input);
+    }
+    std::shared_ptr<ov::Model> new_body = body_ptr()->clone();
+    auto result = std::make_shared<snippets::op::Subgraph>(subgraph_node_inputs, new_body);
+    // Note: ov::copy_runtime_info accepts only shared_ptr<ov::Node> as "from" but never modifies it,
+    // so we have to cast away constness to copy runtime info
+    ov::copy_runtime_info(const_pointer_cast<Node>(shared_from_this()), result);
+    result->set_friendly_name(get_friendly_name());
+    if (m_linear_ir)
+        result->m_linear_ir = std::make_shared<lowered::LinearIR>(m_linear_ir->deep_copy());
+    // Note: we don't update shapeInfer here, since it's initialized ihn the constructor
+    if (m_generator)
+        result->m_generator = m_generator->clone();
+    return result;
+}
+
 void Subgraph::data_flow_shape_agnostic(const BlockedShapeVector& blocked_input_shapes,
                                         const std::vector<ov::element::Type>& input_precisions,
                                         const std::vector<ov::element::Type>& output_precisions,
@@ -472,10 +492,9 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const lowered::pass::PassPi
     //  until we fix this behavior, we have to make a copy of LIR before giving it to the generator.
     OPENVINO_ASSERT(m_linear_ir, "Attempt to call generate, when linear IR was not initialized");
     auto linear_ir = m_linear_ir->deep_copy();
-    auto generator = m_generator->clone();
     LoweringResult lowering_result;
     control_flow_transformations(linear_ir, lowering_result, backend_passes_pre_common, backend_passes_post_common);
-    generator->generate(linear_ir, lowering_result, compile_params);
+    m_generator->generate(linear_ir, lowering_result, compile_params);
 
     VectorDims work_domain = linear_ir.get_master_shape();
     const size_t loop_depth = linear_ir.get_config().m_loop_depth;

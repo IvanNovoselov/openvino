@@ -60,17 +60,10 @@ public:
 private:
     typedef void (*kernel)(const void *, const void *);
 
-    // Create a deep local copy of the input snippet to perform canonicalization & code generation
-    // TODO: Probably better to implement a proper copy constructor
-    void copy_snippet() const;
-    void init_body_hash();
+    static uint64_t get_body_hash(const std::shared_ptr<snippets::op::Subgraph>& snippet);
 
     size_t inputNum = 0;
     size_t outputNum = 0;
-
-    // Original subgraph node
-    std::shared_ptr<snippets::op::Subgraph> original_snippet;
-    mutable std::shared_ptr<snippets::op::Subgraph> local_snippet;
 
     // Holds ISA version used is codeGeneration target
     dnnl::impl::cpu::x64::cpu_isa_t host_isa;
@@ -98,7 +91,7 @@ private:
 
     class SnippetJitExecutor : public SnippetExecutor {
         public:
-            SnippetJitExecutor(const SnippetAttrs& attrs, bool is_dynamic, bool enforceBF16);
+            SnippetJitExecutor(SnippetAttrs attrs, bool is_dynamic, bool enforceBF16);
             void exec(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) override;
 
             bool schedule_created();
@@ -116,8 +109,6 @@ private:
             // Evaluates generated snippet using parallel backend
             void schedule_6d(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs);
             void schedule_nt(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs);
-
-            std::shared_ptr<snippets::op::Subgraph> snippet_for_generation;
 
             // Holds generated snippet with information about how to schedule it
             snippets::Schedule schedule;

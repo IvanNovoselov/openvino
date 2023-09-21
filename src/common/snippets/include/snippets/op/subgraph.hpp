@@ -146,6 +146,7 @@ public:
                                   const std::vector<snippets::pass::Manager::PositionedPass>& = {});
     std::shared_ptr<lowered::LinearIR>
     convert_body_to_linear_ir(const std::shared_ptr<IShapeInferSnippetsFactory>& shape_infer_factory = std::make_shared<IShapeInferSnippetsFactory>());
+    std::shared_ptr<Subgraph> clone() const;
 
 private:
     void control_flow_transformations(lowered::LinearIR& linear_ir,
