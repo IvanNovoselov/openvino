@@ -73,7 +73,6 @@ bool InsertBroadcastMove::run(LinearIR& linear_ir) {
                 // Copy Loop identifies
                 broadcast_expr->set_loop_ids(expr->get_loop_ids());
 
-               //todo: What if expr is a loop entry point? Then we should update the loop entry point accordingly
                 modified = true;
             }
         }

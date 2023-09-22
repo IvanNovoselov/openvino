@@ -11,9 +11,6 @@
 namespace ov {
 namespace snippets {
 
-namespace {
-}  // namespace
-
 pass::Canonicalization::Canonicalization(const BlockedShapeVector& blocked_input_shapes) {
     m_in_shapes.reserve(blocked_input_shapes.size());
     m_in_layouts.reserve(blocked_input_shapes.size());

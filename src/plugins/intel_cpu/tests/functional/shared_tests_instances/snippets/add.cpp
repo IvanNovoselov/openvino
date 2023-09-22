@@ -87,7 +87,7 @@ INSTANTIATE_TEST_SUITE_P(smoke_Snippets_Eltwise, AddPair,
 std::vector<ov::test::InputShape> inShapesAddConst{{{}, {{1, 2, 3,  32}}},
                                                    {{}, {{1, 3, 17, 33}}},
                                                    {{-1, -1, -1, -1}, {{1, 3, 17, 33}, {1, 2, 1, 65}, {1, 3, 17, 33}}},
-                                                   };
+                                                   {{1, {1, 10}, {1, 8}, {1, 4}}, {{1, 2, 8, 4}, {1, 8, 1, 1}, {1, 2, 8, 4}}}};
 std::vector<PartialShape> inShapesConstAddConst{{1, 1, 1, 1}};
 
 INSTANTIATE_TEST_SUITE_P(smoke_Snippets_Eltwise, AddConst,

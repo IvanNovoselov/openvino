@@ -25,7 +25,7 @@ public:
     void emit_data() const override {}
 };
 
-struct DummyCompiledSnippet : public ov::snippets::ICompiledSnippet {
+struct DummyCompiledSnippet : public ov::snippets::CompiledSnippet {
     const uint8_t* get_code() const override { return nullptr; }
     size_t get_code_size() const override { return 0; }
     bool empty() const override { return true; }

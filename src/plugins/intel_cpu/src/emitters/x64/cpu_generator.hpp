@@ -13,7 +13,7 @@
 namespace ov {
 namespace intel_cpu {
 
-class CompiledSnippetCPU : public snippets::ICompiledSnippet {
+class CompiledSnippetCPU : public snippets::CompiledSnippet {
     const std::unique_ptr<const dnnl::impl::cpu::x64::jit_generator> h_compiled;
 public:
     const uint8_t* get_code() const override;

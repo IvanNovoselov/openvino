@@ -49,7 +49,6 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
             if (io_expr->get_type() == IOExpression::io_type::INPUT) {
                 const auto& out_connector = expr->get_output_port_connector(0);
                 manually_assigned_gprs[out_connector] = io_expr->get_index();
-                // todo: Discuss if it's better to bypass input tensor in RankNormalization Op
                 // Note: get_consumers() returns by value, so can't really use const reference here.
                 const auto first_consumer = out_connector->get_consumers().begin()->get_expr();
                 if (ov::is_type<op::RankNormalization>(first_consumer->get_node()))

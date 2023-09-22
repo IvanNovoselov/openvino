@@ -14,8 +14,8 @@ namespace pass {
 
 /**
  * @interface AlignElementTypes
- * @ingroup snippets
  * @brief Align body precision with expected input/output precision. Insert op::ConvertSaturation if necessary.
+ * @ingroup snippets
  */
 class AlignElementTypes: public ov::pass::ModelPass {
 public:

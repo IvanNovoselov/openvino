@@ -21,19 +21,6 @@ endif()
 
 if(X86_64)
     list(APPEND EXCLUDED_SOURCE_PATHS
-    # DEBUG CHANGES! UNROLL BEFORE MERGE (BEGIN)
-    ${CMAKE_CURRENT_SOURCE_DIR}/single_layer_tests/
-    ${CMAKE_CURRENT_SOURCE_DIR}/low_precision_transformations/
-    ${CMAKE_CURRENT_SOURCE_DIR}/subgraph_tests/
-    ${CMAKE_CURRENT_SOURCE_DIR}/behavior/
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared_test_instances/behavior/
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared_test_instances/execution_graph_tests/
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared_test_instances/low_precision_transformations/
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared_test_instances/multi
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared_test_instances/onnx
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared_test_instances/single_layer_tests
-    ${CMAKE_CURRENT_SOURCE_DIR}/shared_test_instances/subgraph_tests
-    # DEBUG CHANGES! UNROLL BEFORE MERGE (END)
     ${CMAKE_CURRENT_SOURCE_DIR}/single_layer_tests/instances/arm
     ${CMAKE_CURRENT_SOURCE_DIR}/subgraph_tests/src/arm)
 else()

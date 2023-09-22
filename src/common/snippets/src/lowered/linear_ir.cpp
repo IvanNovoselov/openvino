@@ -122,12 +122,6 @@ LinearIR::container LinearIR::deep_copy_range(LinearIR::container::const_iterato
     return result;
 }
 
-//LinearIR LinearIR::deep_copy(const std::shared_ptr<LinearIR>& linear_ir) {
-//    // Todo: it's not very difficult to implement a deep copy of loop_manager, but we don't need it yet
-//    OPENVINO_ASSERT(linear_ir->m_loop_manager->get_map().empty(), "deep_copy of linear IR with initialized loop manager is not supported yet");
-//    return {LinearIR::deep_copy_range(linear_ir->begin(), linear_ir->end()), linear_ir->get_config()};
-//}
-
 LinearIR LinearIR::deep_copy() const {
     // todo: implement the same functionality using standard copy constructor
     auto clone_ports_descriptors = [](std::vector<PortDescriptorPtr>& ports) {

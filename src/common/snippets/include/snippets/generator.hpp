@@ -33,7 +33,7 @@ class LoweringResult {
     std::vector<std::shared_ptr<Emitter>> m_saved_emitters{};
 
 public:
-    std::shared_ptr<ICompiledSnippet> compiled_snippet = nullptr;
+    std::shared_ptr<CompiledSnippet> compiled_snippet = nullptr;
     size_t buffer_scratchpad_size = 0;
 };
 
@@ -44,12 +44,12 @@ public:
  */
 class Schedule {
 public:
-    /**
-     * @brief Default to create schedule out of specific parameters
-     * @param wd work domain for kernel execution
-     * @param p pointer to generated code
-     */
     Schedule() = default;
+    /**
+     * @brief Create schedule out of specific parameters
+     * @param domain work domain for kernel execution
+     * @param lr lowering result produced during code generation
+     */
     Schedule(std::vector<size_t>&& domain, LoweringResult&& lr) : parallel_exec_domain(domain), lowering_result(lr) {}
     Schedule(std::vector<size_t> domain, LoweringResult&& lr) : parallel_exec_domain(std::move(domain)), lowering_result(lr) {}
     /**

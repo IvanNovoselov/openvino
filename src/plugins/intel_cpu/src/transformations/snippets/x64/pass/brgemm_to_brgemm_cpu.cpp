@@ -54,11 +54,9 @@ pass::BrgemmToBrgemmCPU::BrgemmToBrgemmCPU() {
         if (!brgemm || brgemm_plugin)
             OPENVINO_THROW("BrgemmCPU cannot be in body before BrgemmToBrgemmCPU pass");
 
-        // todo: debug changes. remove when tested
-        OPENVINO_ASSERT(!brgemm->is_dynamic(), "Dynamic shapes has never been tested BrgemmToBrgemmCPU");
-//        if (brgemm->is_dynamic()) {
-//            return false;
-//        }
+        if (brgemm->is_dynamic()) {
+            return false;
+        }
 
         const auto& brgemm_in0_desc = PortDescriptorUtils::get_port_descriptor_ptr(brgemm->input(0));
         const auto& brgemm_in1_desc = PortDescriptorUtils::get_port_descriptor_ptr(brgemm->input(1));

@@ -41,6 +41,7 @@ RankNormalization::ShapeInfer::ShapeInfer(const std::shared_ptr<ov::Node>& n) {
     m_num_append = rank_norm->m_num_append;
     m_num_prepend = rank_norm->m_num_prepend;
 }
+
 IShapeInferSnippets::Result
 RankNormalization::ShapeInfer::infer(const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes) {
     OPENVINO_ASSERT(input_shapes.size() == 1, "Invalid number of input shapes passed to RankNormalization::ShapeInfer::infer");

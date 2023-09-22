@@ -15,10 +15,10 @@ namespace pass {
 
 /**
  * @interface Canonicalization
- * @ingroup snippets
  * @brief Canonicalization inserts Unsqueeze operations to account for:
  *  - input ranks mismatch, then inputs with smaller ranks are prepeneded with 1
  *  - layouts mismatch (only planar + blocked is supported), plarar shapes are postpended with 1
+ *  @ingroup snippets
  */
 class Canonicalization: public ov::pass::ModelPass {
 public:

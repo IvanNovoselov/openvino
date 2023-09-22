@@ -338,8 +338,9 @@ VectorDims Subgraph::get_master_shape() {
         return output_dims.front();
 
     const auto& default_broadcasting = std::make_shared<NumpyBroadcastShapeInfer>();
+    // Note: we have to convert vector<VectorDims> to vector<reference_wrapper<const VectorDims>>
+    // because of shape inference interface
     std::vector<std::reference_wrapper<const VectorDims>> inputs;
-    // todo: can we convert to reference_wrapper in a more effective way?
     inputs.reserve(output_dims.size());
     for (const auto& d : output_dims)
         inputs.emplace_back(d);
@@ -488,7 +489,7 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const lowered::pass::PassPi
     NGRAPH_CHECK(m_generator != nullptr, "generate is called while generator is not set");
 
     // actual code emission
-    // todo: some transformations performed in the generator, e.g. tail insertion, can break shape propagation
+    // Note: some transformations performed in the generator, e.g. tail insertion, can break shape propagation
     //  until we fix this behavior, we have to make a copy of LIR before giving it to the generator.
     OPENVINO_ASSERT(m_linear_ir, "Attempt to call generate, when linear IR was not initialized");
     auto linear_ir = m_linear_ir->deep_copy();

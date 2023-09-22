@@ -55,7 +55,6 @@ public:
 
     std::vector<size_t> get_loop_ids() const;
     void set_loop_ids(const std::vector<size_t>& loops);
-//    virtual ExpressionPtr clone_with_new_inputs(const std::vector<PortConnectorPtr>& new_inputs) const;
 
 protected:
     // Note: The constructor initialization is private since an expression can be created only by Linear IR.

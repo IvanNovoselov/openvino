@@ -14,13 +14,13 @@
 namespace ov {
 namespace snippets {
 
-struct ICompiledSnippet {
+struct CompiledSnippet {
     virtual const uint8_t* get_code() const = 0;
     virtual size_t get_code_size() const = 0;
     virtual bool empty() const = 0;
-    virtual ~ICompiledSnippet() = default;
+    virtual ~CompiledSnippet() = default;
 };
-using CompiledSnippetPtr = std::shared_ptr<ICompiledSnippet>;
+using CompiledSnippetPtr = std::shared_ptr<CompiledSnippet>;
 
 typedef std::pair<std::function<std::shared_ptr<Emitter>(const lowered::ExpressionPtr&)>,
         std::function<std::set<ov::element::TypeVector>(const std::shared_ptr<ov::Node>&)>> jitters_value;

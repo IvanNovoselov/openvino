@@ -3,7 +3,6 @@
 //
 
 #include "snippets/op/serialization_node.hpp"
-#include "snippets/utils.hpp"
 
 
 namespace ov {

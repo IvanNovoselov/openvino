@@ -36,7 +36,6 @@ public:
     // Here we convert to canonical for & jit everything
     void prepareParams() override;
     bool needPrepareParams() const override;
-    //IShapeInfer::Result shapeInfer() const override;
 
     bool canBeInPlace() const override;
     bool created() const override;
