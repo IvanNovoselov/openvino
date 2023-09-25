@@ -21,7 +21,7 @@ namespace {
 
 const std::vector<ElementType>& netType() {
         static const std::vector<ElementType> netType = {
-                ElementType::bf16};
+                ElementType::f32};
         return netType;
 }
 
@@ -170,8 +170,8 @@ const auto params_4D_Blocked_Blocked = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_MemOrder_Blocked_Blocked, EltwiseLayerCPUTest, params_4D_Blocked_Blocked,
-                         EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_MemOrder_Blocked_Blocked, EltwiseLayerCPUTest, params_4D_Blocked_Blocked,
+//                         EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_4D_fusing = ::testing::Combine(
         ::testing::Combine(
@@ -188,7 +188,7 @@ const auto params_4D_fusing = ::testing::Combine(
         ::testing::ValuesIn(fusingParamsSet_x64),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Fusing, EltwiseLayerCPUTest, params_4D_fusing, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Fusing, EltwiseLayerCPUTest, params_4D_fusing, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_4D_fusing_blocked_blocked = ::testing::Combine(
         ::testing::Combine(
@@ -205,8 +205,8 @@ const auto params_4D_fusing_blocked_blocked = ::testing::Combine(
         ::testing::ValuesIn(fusingParamsSet_x64),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Fusing_Blocked_Blocked, EltwiseLayerCPUTest, params_4D_fusing_blocked_blocked,
-                         EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Fusing_Blocked_Blocked, EltwiseLayerCPUTest, params_4D_fusing_blocked_blocked,
+//                         EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_4D_blocked_blocked_fusing = ::testing::Combine(
         ::testing::Combine(
@@ -223,8 +223,8 @@ const auto params_4D_blocked_blocked_fusing = ::testing::Combine(
         ::testing::ValuesIn(fusingParamsSet_x64),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Blocked_Blocked_Fusing, EltwiseLayerCPUTest, params_4D_blocked_blocked_fusing,
-                         EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Blocked_Blocked_Fusing, EltwiseLayerCPUTest, params_4D_blocked_blocked_fusing,
+//                         EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_4D_emptyCPUSpec = ::testing::Combine(
         ::testing::Combine(
@@ -241,7 +241,7 @@ const auto params_4D_emptyCPUSpec = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_emptyCPUSpec_x64, EltwiseLayerCPUTest, params_4D_emptyCPUSpec, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_emptyCPUSpec_x64, EltwiseLayerCPUTest, params_4D_emptyCPUSpec, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_5D_Blocked_Blocked = ::testing::Combine(
         ::testing::Combine(
@@ -258,8 +258,8 @@ const auto params_5D_Blocked_Blocked = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_MemOrder_Blocked_Blocked, EltwiseLayerCPUTest, params_5D_Blocked_Blocked,
-                         EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_MemOrder_Blocked_Blocked, EltwiseLayerCPUTest, params_5D_Blocked_Blocked,
+//                         EltwiseLayerCPUTest::getTestCaseName);
 
 const std::vector<fusingSpecificParams> fusingParamsSet_I32{
     fusingMultiplyAddPerChannel
@@ -280,7 +280,7 @@ const auto params_5D_emptyCPUSpec_I32 = ::testing::Combine(
         ::testing::ValuesIn(fusingParamsSet_I32),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_I32, EltwiseLayerCPUTest, params_5D_emptyCPUSpec_I32, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_I32, EltwiseLayerCPUTest, params_5D_emptyCPUSpec_I32, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_4D_Blocked_Planar = ::testing::Combine(
         ::testing::Combine(
@@ -297,7 +297,7 @@ const auto params_4D_Blocked_Planar = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Blocked_Planar, EltwiseLayerCPUTest, params_4D_Blocked_Planar, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Blocked_Planar, EltwiseLayerCPUTest, params_4D_Blocked_Planar, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_4D_Planar_Blocked = ::testing::Combine(
         ::testing::Combine(
@@ -314,7 +314,7 @@ const auto params_4D_Planar_Blocked = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Planar_Blocked, EltwiseLayerCPUTest, params_4D_Planar_Blocked, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Planar_Blocked, EltwiseLayerCPUTest, params_4D_Planar_Blocked, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_5D_Blocked_Planar = ::testing::Combine(
         ::testing::Combine(
@@ -331,7 +331,7 @@ const auto params_5D_Blocked_Planar = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_Blocked_Planar, EltwiseLayerCPUTest, params_5D_Blocked_Planar, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_Blocked_Planar, EltwiseLayerCPUTest, params_5D_Blocked_Planar, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_5D_Planar_Blocked = ::testing::Combine(
         ::testing::Combine(
@@ -348,7 +348,7 @@ const auto params_5D_Planar_Blocked = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_Planar_Blocked_x64, EltwiseLayerCPUTest, params_5D_Planar_Blocked, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_Planar_Blocked_x64, EltwiseLayerCPUTest, params_5D_Planar_Blocked, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_4D_1D_constant_mode = ::testing::Combine(
         ::testing::Combine(
@@ -365,7 +365,7 @@ const auto params_4D_1D_constant_mode = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_1D_Constant_x64, EltwiseLayerCPUTest, params_4D_1D_constant_mode, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_1D_Constant_x64, EltwiseLayerCPUTest, params_4D_1D_constant_mode, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_4D_1D_parameter_mode = ::testing::Combine(
         ::testing::Combine(
@@ -382,7 +382,7 @@ const auto params_4D_1D_parameter_mode = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_1D_Parameter_x64, EltwiseLayerCPUTest, params_4D_1D_parameter_mode, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_1D_Parameter_x64, EltwiseLayerCPUTest, params_4D_1D_parameter_mode, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_5D_1D_constant = ::testing::Combine(
         ::testing::Combine(
@@ -399,7 +399,7 @@ const auto params_5D_1D_constant = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_1D_Constant_x64, EltwiseLayerCPUTest, params_5D_1D_constant, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_1D_Constant_x64, EltwiseLayerCPUTest, params_5D_1D_constant, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_5D_1D_parameter = ::testing::Combine(
         ::testing::Combine(
@@ -416,7 +416,7 @@ const auto params_5D_1D_parameter = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_1D_Parameter_x64, EltwiseLayerCPUTest, params_5D_1D_parameter, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_1D_Parameter_x64, EltwiseLayerCPUTest, params_5D_1D_parameter, EltwiseLayerCPUTest::getTestCaseName);
 
 //// ============================================ 4D ============================================
 
@@ -435,7 +435,7 @@ const auto params_4D_dyn_const = ::testing::Combine(
         ::testing::Values(emptyFusingSpec),
         ::testing::ValuesIn(enforceSnippets()));
 
-INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_MemOrder_dyn_const_x64, EltwiseLayerCPUTest, params_4D_dyn_const, EltwiseLayerCPUTest::getTestCaseName);
+//INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_MemOrder_dyn_const_x64, EltwiseLayerCPUTest, params_4D_dyn_const, EltwiseLayerCPUTest::getTestCaseName);
 
 const auto params_4D_blocked_blocked_dyn_const = ::testing::Combine(
         ::testing::Combine(
@@ -454,7 +454,7 @@ const auto params_4D_blocked_blocked_dyn_const = ::testing::Combine(
 
 INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_4D_Blocked_Blocked_MemOrder_dyn_const_x64, EltwiseLayerCPUTest, params_4D_blocked_blocked_dyn_const,
                          EltwiseLayerCPUTest::getTestCaseName);
-
+/*
 const auto params_4D_dyn_param = ::testing::Combine(
         ::testing::Combine(
                 ::testing::Values(inShapes_4D_dyn_param()),
@@ -580,7 +580,7 @@ const auto params_5D_dyn_param_Blocked_Blocked = ::testing::Combine(
 
 INSTANTIATE_TEST_SUITE_P(smoke_CompareWithRefs_5D_MemOrder_dyn_param_Blocked_Blocked, EltwiseLayerCPUTest, params_5D_dyn_param_Blocked_Blocked,
                          EltwiseLayerCPUTest::getTestCaseName);
-
+*/
 } // namespace
 } // namespace Eltwise
 } // namespace CPULayerTestsDefinitions

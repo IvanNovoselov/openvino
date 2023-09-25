@@ -54,7 +54,7 @@ bool pass::Canonicalization::run_on_model(const std::shared_ptr<ov::Model>& m) {
     const bool base_is_blocked = is_blocked_layout(base_layout);
 
     for (size_t i = 0; i < m_in_layouts.size(); i++) {
-        const auto& i_layout = m_in_layouts[i];
+        auto i_layout = m_in_layouts[i];
         const auto& i_shape = m_in_shapes[i];
         const auto i_rank = i_layout.size();
         const bool i_is_blocked = is_blocked_layout(i_layout);
@@ -68,6 +68,7 @@ bool pass::Canonicalization::run_on_model(const std::shared_ptr<ov::Model>& m) {
         if (i_is_blocked) {
             OPENVINO_ASSERT(base_is_blocked && i_rank == max_rank, "If this shape is blocked, base must also be blocked");
             params[i]->set_partial_shape(snippets::utils::vdims_to_pshape(i_shape));
+            std::iota(i_layout.begin(), i_layout.end(), 0);
             is_modified = true;
             validation_needed = true;
         } else if (i_rank < max_rank) {
@@ -94,6 +95,10 @@ bool pass::Canonicalization::run_on_model(const std::shared_ptr<ov::Model>& m) {
             //  * If the model is static, then shape inference is performed in validate_and_infer_types which ignores
             //    snippets layouts. So we need to set reordered shape to Parameters and re-validate the model.
             if (m_has_dynamic_inputs) {
+                // If input is blocked, we need to validate Param, so its output shape is updated in accordance with i_shape
+                if (i_is_blocked) {
+                    params[i]->validate_and_infer_types();
+                }
                 const auto& out = params[i]->output(0);
                 const auto& port_desc = std::make_shared<lowered::PortDescriptor>(out);
                 port_desc->set_layout(i_layout);

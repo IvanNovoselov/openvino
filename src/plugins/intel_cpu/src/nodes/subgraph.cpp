@@ -285,6 +285,8 @@ void Snippet::initOptimalPrimitiveDescriptor() {
     Node::initOptimalPrimitiveDescriptor();
     // memory order and precision is determined now, there is no need to prepare for each dynamic shapes.
     const auto config = getSelectedPrimitiveDescriptor()->getConfig();
+    auto a = std::dynamic_pointer_cast<SnippetShapeInfer>(shapeInference);
+    a->update_node_config(getSelectedPrimitiveDescriptor());
     inputNum = config.inConfs.size();
     snippets::op::Subgraph::BlockedShapeVector in_blocked_shapes;
     snippetAttrs.inMemPrecs.resize(inputNum);

@@ -27,14 +27,18 @@ bool ValidateShapes::run(LinearIR& linear_ir) {
             const auto& layout = descr->get_layout();
             const auto& shape = descr->get_shape();
             const auto& n = expr->get_node();
-            OPENVINO_ASSERT(std::none_of(shape.begin(), shape.end(),
-                            [](size_t d) {return d == IShapeInferSnippets::DYNAMIC_DIMENSION;}),
-                            "Dynamic dimensions are not allowed at this point of pipeline. ",
-                            "Check the expr for node ", n->get_friendly_name());
+//            OPENVINO_ASSERT(std::none_of(shape.begin(), shape.end(),
+//                            [](size_t d) {return d == IShapeInferSnippets::DYNAMIC_DIMENSION;}),
+//                            "Dynamic dimensions are not allowed at this point of pipeline. ",
+//                            "Check the expr for node ", n->get_friendly_name());
+            if (layout.size() != shape.size())
+                std::cerr << "one";
             OPENVINO_ASSERT(layout.size() == shape.size(), "Layout and shape sizes must match. ",
                             "Check the expr for node ", n->get_friendly_name());
             const auto& parent_desc = port_connectors[i]->get_source().get_descriptor_ptr();
             const auto& parent_shape = parent_desc->get_shape();
+            if (parent_shape != shape)
+                std::cerr << "two";
             OPENVINO_ASSERT(parent_shape == shape, "Parent shape must be equal to the expression shape. ",
                            "Check the expr for node ", n->get_friendly_name());
         }

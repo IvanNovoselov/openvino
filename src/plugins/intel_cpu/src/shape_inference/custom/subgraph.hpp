@@ -13,24 +13,53 @@ using Result = IShapeInfer::Result;
 
 class SnippetShapeInfer : public ShapeInferEmptyPads {
 public:
-    explicit SnippetShapeInfer(const std::shared_ptr<snippets::op::Subgraph>& s) : m_subgraph(s) {
+    explicit SnippetShapeInfer(const std::shared_ptr<snippets::op::Subgraph>& s)
+        : m_subgraph(s), m_input_blocked_descs{}, m_output_blocked_descs{} {
         m_status_map[snippets::ShapeInferStatus::success] = ov::intel_cpu::ShapeInferStatus::success;
         m_status_map[snippets::ShapeInferStatus::skip] = ov::intel_cpu::ShapeInferStatus::skip;
     }
     Result infer(
             const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes,
             const std::unordered_map<size_t, MemoryPtr>& data_dependency) override {
-        const auto& snippets_result = m_subgraph->shape_infer(input_shapes);
+        OPENVINO_ASSERT(!m_input_blocked_descs.empty() && !m_output_blocked_descs.empty(),
+                        "Shape infer can't be performed with uninitialized blocked memory descriptors");
+
+        std::vector<std::reference_wrapper<const VectorDims>> new_input_shapes;
+        for (auto i = 0; i < input_shapes.size(); i++) {
+            const auto& new_desc = m_input_blocked_descs[i]->cloneWithNewDims(input_shapes[i], true);
+            new_input_shapes.emplace_back(new_desc->as<BlockedMemoryDesc>()->getBlockDims());
+        }
+        const auto& snippets_result = m_subgraph->shape_infer(new_input_shapes);
         OPENVINO_ASSERT(m_status_map.count(snippets_result.status) != 0, "Failed to map snippets shapeInfer status to the plugin one");
+
+        const auto& output_shapes = snippets_result.dims;
+        std::vector<VectorDims> new_output_shapes;
+        for (auto i = 0; i < output_shapes.size(); i++) {
+            const auto& new_desc = m_output_blocked_descs[i]->cloneWithNewDims(output_shapes[i], true);
+            new_output_shapes.emplace_back(new_desc->as<BlockedMemoryDesc>()->getBlockDims());
+        }
+
         return {snippets_result.dims, m_status_map.at(snippets_result.status)};
     }
 
     port_mask_t get_port_mask() const override {
         return EMPTY_PORT_MASK;
     }
+    void update_node_config(NodeDesc* nd) {
+        OPENVINO_ASSERT(nd, "Valid node descriptor required to initialize i/o memory descriptors");
+        const auto config = nd->getConfig();
+        OPENVINO_ASSERT(m_subgraph->get_input_size() == config.inConfs.size(), "Incompatible subgraph's input number and config");
+        OPENVINO_ASSERT(m_subgraph->get_output_size() == config.outConfs.size(), "Incompatible subgraph's output number and config");
+        for (const auto& port_config : config.inConfs)
+            m_input_blocked_descs.emplace_back(port_config.getMemDesc()->as<BlockedMemoryDesc>());
+        for (const auto& port_config : config.outConfs)
+            m_output_blocked_descs.emplace_back(port_config.getMemDesc()->as<BlockedMemoryDesc>());
+    }
 
 private:
     std::shared_ptr<snippets::op::Subgraph> m_subgraph;
+    std::vector<BlockedMemoryDescPtr> m_input_blocked_descs;
+    std::vector<BlockedMemoryDescPtr> m_output_blocked_descs;
     std::map<snippets::ShapeInferStatus, ov::intel_cpu::ShapeInferStatus> m_status_map;
 };
 
