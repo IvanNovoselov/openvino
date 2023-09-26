@@ -38,8 +38,6 @@ void PortDescriptor::validate_arguments() {
 }
 
 PortDescriptorPtr PortDescriptor::clone() const {
-    if (m_layout.size() != m_tensor_shape.size())
-        std::cerr << "sssssss\n";
     auto desc = std::make_shared<PortDescriptor>(m_tensor_shape, m_subtensor_shape, m_layout);
     desc->set_reg(m_reg);
     return desc;
