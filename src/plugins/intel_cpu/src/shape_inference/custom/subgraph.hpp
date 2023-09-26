@@ -38,12 +38,10 @@ public:
 
         auto& output_shapes = snippets_result.dims;
         for (auto i = 0; i < output_shapes.size(); i++) {
-            const auto& blocked_dims =  m_output_blocked_descs[i]->as<BlockedMemoryDesc>()->getBlockDims();
+            const auto& order = m_output_blocked_descs[i]->as<BlockedMemoryDesc>()->getOrder();
             const auto& dims =  m_output_blocked_descs[i]->getShape().getDims();
-            if (dims.size() < blocked_dims.size()) {
-                const auto& order = m_output_blocked_descs[i]->as<BlockedMemoryDesc>()->getOrder();
+            if (dims.size() < order.size()) {
                 const auto block_idx = order.back();
-
                 auto& out_shape = output_shapes[i];
                 out_shape[block_idx] = dims[block_idx];
                 out_shape.pop_back();
@@ -72,6 +70,36 @@ private:
     std::vector<MemoryDescPtr> m_input_blocked_descs;
     std::vector<MemoryDescPtr> m_output_blocked_descs;
     std::map<snippets::ShapeInferStatus, ov::intel_cpu::ShapeInferStatus> m_status_map;
+
+    VectorDims reshape_blocked(const VectorDims& planar, const VectorDims& order, const VectorDims& blockedDims) {
+        VectorDims newBlockedDims(order.size());
+
+        for (size_t i = 0; i < planar.size(); ++i) {
+            newBlockedDims[i] = planar[order[i]];
+        }
+
+        for (size_t i = planar.size(); i < order.size(); ++i) {
+            if (newBlockedDims[order[i]] != Shape::UNDEFINED_DIM) {
+                newBlockedDims[order[i]] = div_up(newBlockedDims[order[i]], blockedDims[i]);
+                newBlockedDims[i] = blockedDims[i];
+            }
+        }
+    }
+
+    VectorDims blocked_to_planar(const VectorDims& planar, const VectorDims& order, const VectorDims& blockedDims) {
+        VectorDims newBlockedDims(order.size());
+
+        for (size_t i = 0; i < planar.size(); ++i) {
+            newBlockedDims[i] = planar[order[i]];
+        }
+
+        for (size_t i = planar.size(); i < order.size(); ++i) {
+            if (newBlockedDims[order[i]] != Shape::UNDEFINED_DIM) {
+                newBlockedDims[order[i]] = div_up(newBlockedDims[order[i]], blockedDims[i]);
+                newBlockedDims[i] = blockedDims[i];
+            }
+        }
+    }
 };
 
 class SnippetShapeInferFactory : public ShapeInferFactory {
