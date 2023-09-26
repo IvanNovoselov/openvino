@@ -359,7 +359,6 @@ Subgraph::convert_body_to_linear_ir(const std::shared_ptr<IShapeInferSnippetsFac
 
      m_linear_ir = std::make_shared<lowered::LinearIR>(body_ptr(), shape_infer_factory, lowering_config);
      m_shape_infer = m_linear_ir->get_shape_infer_instance();
-     std::cerr << __PRETTY_FUNCTION__ << " : " << lowered::pass::ValidateShapes().run(*m_linear_ir) << "\n" << std::flush;
     return m_linear_ir;
 }
 
@@ -493,8 +492,6 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const lowered::pass::PassPi
     // Note: some transformations performed in the generator, e.g. tail insertion, can break shape propagation
     //  until we fix this behavior, we have to make a copy of LIR before giving it to the generator.
     OPENVINO_ASSERT(m_linear_ir, "Attempt to call generate, when linear IR was not initialized");
-    std::cerr << __PRETTY_FUNCTION__ << " : " << lowered::pass::ValidateShapes().run(*m_linear_ir) << "\n" << std::flush;
-    m_linear_ir->serialize("snsdebug_after.xml", "snsdebug_after.bin");
     auto linear_ir = m_linear_ir->deep_copy();
     LoweringResult lowering_result;
     control_flow_transformations(linear_ir, lowering_result, backend_passes_pre_common, backend_passes_post_common);
