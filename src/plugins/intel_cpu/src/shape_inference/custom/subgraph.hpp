@@ -24,19 +24,30 @@ public:
         OPENVINO_ASSERT(!m_input_blocked_descs.empty() && !m_output_blocked_descs.empty(),
                         "Shape infer can't be performed with uninitialized blocked memory descriptors");
 
-        std::vector<std::reference_wrapper<const VectorDims>> new_input_shapes;
+        std::vector<VectorDims> new_input_shapes;
+        std::vector<std::reference_wrapper<const VectorDims>> new_input_shapes_ref;
         for (auto i = 0; i < input_shapes.size(); i++) {
             const auto& new_desc = m_input_blocked_descs[i]->cloneWithNewDims(input_shapes[i], true);
             new_input_shapes.emplace_back(new_desc->as<BlockedMemoryDesc>()->getBlockDims());
         }
-        const auto& snippets_result = m_subgraph->shape_infer(new_input_shapes);
+        for (auto i =0; i < input_shapes.size(); i++)
+            new_input_shapes_ref.emplace_back(new_input_shapes[i]);
+        auto snippets_result = m_subgraph->shape_infer(new_input_shapes_ref);
         OPENVINO_ASSERT(m_status_map.count(snippets_result.status) != 0, "Failed to map snippets shapeInfer status to the plugin one");
 
-        const auto& output_shapes = snippets_result.dims;
-        std::vector<VectorDims> new_output_shapes;
+
+        auto& output_shapes = snippets_result.dims;
         for (auto i = 0; i < output_shapes.size(); i++) {
-            const auto& new_desc = m_output_blocked_descs[i]->cloneWithNewDims(output_shapes[i], true);
-            new_output_shapes.emplace_back(new_desc->as<BlockedMemoryDesc>()->getBlockDims());
+            const auto& blocked_dims =  m_output_blocked_descs[i]->as<BlockedMemoryDesc>()->getBlockDims();
+            const auto& dims =  m_output_blocked_descs[i]->getShape().getDims();
+            if (dims.size() < blocked_dims.size()) {
+                const auto& order = m_output_blocked_descs[i]->as<BlockedMemoryDesc>()->getOrder();
+                const auto block_idx = order.back();
+
+                auto& out_shape = output_shapes[i];
+                out_shape[block_idx] = dims[block_idx];
+                out_shape.pop_back();
+            }
         }
 
         return {snippets_result.dims, m_status_map.at(snippets_result.status)};
@@ -51,15 +62,15 @@ public:
         OPENVINO_ASSERT(m_subgraph->get_input_size() == config.inConfs.size(), "Incompatible subgraph's input number and config");
         OPENVINO_ASSERT(m_subgraph->get_output_size() == config.outConfs.size(), "Incompatible subgraph's output number and config");
         for (const auto& port_config : config.inConfs)
-            m_input_blocked_descs.emplace_back(port_config.getMemDesc()->as<BlockedMemoryDesc>());
+            m_input_blocked_descs.push_back(port_config.getMemDesc()->clone());
         for (const auto& port_config : config.outConfs)
-            m_output_blocked_descs.emplace_back(port_config.getMemDesc()->as<BlockedMemoryDesc>());
+            m_output_blocked_descs.push_back(port_config.getMemDesc()->clone());
     }
 
 private:
     std::shared_ptr<snippets::op::Subgraph> m_subgraph;
-    std::vector<BlockedMemoryDescPtr> m_input_blocked_descs;
-    std::vector<BlockedMemoryDescPtr> m_output_blocked_descs;
+    std::vector<MemoryDescPtr> m_input_blocked_descs;
+    std::vector<MemoryDescPtr> m_output_blocked_descs;
     std::map<snippets::ShapeInferStatus, ov::intel_cpu::ShapeInferStatus> m_status_map;
 };
 

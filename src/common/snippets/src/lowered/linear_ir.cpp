@@ -407,20 +407,8 @@ LinearIR::LIRShapeInfer::LIRShapeInfer(container& body_exprs, io_container& io_e
 
 IShapeInferSnippets::Result LinearIR::LIRShapeInfer::infer(const std::vector<VectorDimsRef>& input_shapes) {
     OPENVINO_ASSERT(m_input_exprs.size() == input_shapes.size(), "Got invalid number of input shapes in LIR ShapeInfer");
-
-    auto is_blocked_layout = [](const std::vector<size_t>& l) {
-        return l.size() != std::set<size_t>(l.begin(), l.end()).size();
-    };
-
-    for (size_t i = 0; i < m_input_exprs.size(); i++) {
-        auto& port_desc = m_input_exprs[i]->get_output_port_descriptor(0);
-        auto is = input_shapes[i].get();
-        if (is_blocked_layout(port_desc->get_layout()) || true) {
-            is[1] = port_desc->get_shape()[1];
-            is.push_back(port_desc->get_shape().back());
-        }
-        port_desc->set_shape(is);
-    }
+    for (size_t i = 0; i < m_input_exprs.size(); i++)
+        m_input_exprs[i]->get_output_port_descriptor(0)->set_shape(input_shapes[i]);
 
     for (const auto& expr : *m_exprs) {
         if (expr->needShapeInfer())
@@ -430,11 +418,7 @@ IShapeInferSnippets::Result LinearIR::LIRShapeInfer::infer(const std::vector<Vec
     std::vector<VectorDims> outputDims;
     outputDims.reserve(m_output_exprs.size());
     for (const auto& expr : m_output_exprs) {
-        const auto& port_desc = expr->get_input_port_descriptor(0);
-        auto s = port_desc->get_shape();
-        s[1] = 2;
-        s.pop_back();
-        outputDims.push_back(s);
+        outputDims.push_back(expr->get_input_port_descriptor(0)->get_shape());
     }
     m_last_result = {outputDims, ShapeInferStatus::success};
     return m_last_result;
