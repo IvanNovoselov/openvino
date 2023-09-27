@@ -383,6 +383,7 @@ std::shared_ptr<Subgraph> Subgraph::clone() const {
 }
 
 void Subgraph::data_flow_shape_agnostic(const BlockedShapeVector& blocked_input_shapes,
+                                        const BlockedShapeVector& blocked_output_shapes,
                                         const std::vector<ov::element::Type>& input_precisions,
                                         const std::vector<ov::element::Type>& output_precisions,
                                         const std::vector<snippets::pass::Manager::PositionedPass>& backend_passes) {
@@ -391,7 +392,7 @@ void Subgraph::data_flow_shape_agnostic(const BlockedShapeVector& blocked_input_
 
     ov::snippets::pass::Manager manager;
     if (!blocked_input_shapes.empty())
-        manager.register_pass<snippets::pass::Canonicalization>(blocked_input_shapes);
+        manager.register_pass<snippets::pass::Canonicalization>(blocked_input_shapes, blocked_output_shapes);
     if (!input_precisions.empty() && !output_precisions.empty())
         manager.register_pass<snippets::pass::AlignElementTypes>(input_precisions, output_precisions);
 
@@ -469,6 +470,7 @@ void Subgraph::control_flow_transformations(lowered::LinearIR& linear_ir,
 }
 
 snippets::Schedule Subgraph::generate(const BlockedShapeVector& blocked_input_shapes,
+                                      const BlockedShapeVector& blocked_output_shapes,
                                       const std::vector<ov::element::Type>& input_precisions,
                                       const std::vector<ov::element::Type>& output_precisions,
                                       const std::vector<snippets::pass::Manager::PositionedPass>& data_flow_backend_passes,
@@ -476,7 +478,7 @@ snippets::Schedule Subgraph::generate(const BlockedShapeVector& blocked_input_sh
                                       const lowered::pass::PassPipeline& backend_passes_post_common,
                                       const std::shared_ptr<IShapeInferSnippetsFactory>& factory,
                                       const void* compile_params) {
-    data_flow_shape_agnostic(blocked_input_shapes, input_precisions, output_precisions, data_flow_backend_passes);
+    data_flow_shape_agnostic(blocked_input_shapes, blocked_output_shapes, input_precisions, output_precisions, data_flow_backend_passes);
     convert_body_to_linear_ir(factory);
     return generate_from_linear_ir(backend_passes_pre_common, backend_passes_post_common, compile_params);
 }

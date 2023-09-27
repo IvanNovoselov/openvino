@@ -10,43 +10,58 @@ namespace node {
 constexpr size_t SnippetShapeInfer::NO_BLOCKING;
 
 SnippetShapeInfer::SnippetShapeInfer(const std::shared_ptr<snippets::op::Subgraph>& s)
-    : m_subgraph(s), m_input_is_blocked{}, m_output_is_blocked{} {
+    : m_subgraph(s), m_input_order{}, m_output_order{} {
     m_status_map[snippets::ShapeInferStatus::success] = ov::intel_cpu::ShapeInferStatus::success;
     m_status_map[snippets::ShapeInferStatus::skip] = ov::intel_cpu::ShapeInferStatus::skip;
 }
 IShapeInfer::Result
 SnippetShapeInfer::infer(const std::vector<std::reference_wrapper<const VectorDims>>& input_shapes,
                          const std::unordered_map<size_t, MemoryPtr>& data_dependency) {
-    OPENVINO_ASSERT(m_input_is_blocked.size() == input_shapes.size() && !m_input_is_blocked.empty(),
+    OPENVINO_ASSERT(m_input_order.size() == input_shapes.size() && !m_output_order.empty(),
                     "Shape infer can't be performed with uninitialized blocked memory descriptors");
-    std::vector<std::reference_wrapper<const VectorDims>> unblocked_input_shapes;
+    std::vector<std::reference_wrapper<const VectorDims>> planar_input_shapes(input_shapes);
     // temporary container to keep references to unblocked shapes alive
     std::vector<VectorDims> tmp_input_shapes;
-    if (m_any_is_blocked) {
-        tmp_input_shapes.resize(input_shapes.size());
-        unblocked_input_shapes = input_shapes;
-        for (size_t i = 0; i < m_input_is_blocked.size(); i++) {
-            if (m_input_is_blocked[i]) {
-                VectorDims shape = input_shapes[i];
-                shape[m_blocked_dim_idx] = div_up(shape[m_blocked_dim_idx], m_block_size);
-                shape.push_back(m_block_size);
-                tmp_input_shapes[i] = shape;
-                unblocked_input_shapes[i] = tmp_input_shapes[i];
-            }
-        }
-    }
-    auto snippets_result = m_subgraph->shape_infer(m_any_is_blocked ? unblocked_input_shapes : input_shapes);
-    OPENVINO_ASSERT(m_status_map.count(snippets_result.status) != 0, "Failed to map snippets shapeInfer status to the plugin one");
+    tmp_input_shapes.resize(input_shapes.size());
+    for (size_t i = 0; i < m_input_order.size(); i++) {
+        const auto& order = m_input_order[i];
+        // Empty order is reserved for planar shapes
+        if (order.empty())
+            continue;
+        const auto& i_shape = input_shapes[i].get();
+        VectorDims shape(order.size());
+        for (size_t j = 0; j < i_shape.size(); ++j)
+            shape[j] = i_shape[order[j]];
 
-    if (m_any_is_blocked) {
-        auto& output_shapes = snippets_result.dims;
-        for (size_t i = 0; i < m_output_is_blocked.size(); i++) {
-            if (m_output_is_blocked[i]) {
-                auto& shape = output_shapes[i];
-                shape[m_blocked_dim_idx] = m_output_blocked_dim_size[i];
-                shape.pop_back();
-            }
+        if (order.size() > i_shape.size()) {
+            shape[m_blocked_dim_idx] = div_up(shape[m_blocked_dim_idx], m_block_size);
+            shape.push_back(m_block_size);
         }
+
+        tmp_input_shapes[i] = shape;
+        planar_input_shapes[i] = tmp_input_shapes[i];
+    }
+
+    auto snippets_result = m_subgraph->shape_infer(planar_input_shapes);
+    OPENVINO_ASSERT(m_status_map.count(snippets_result.status) != 0, "Failed to map snippets shapeInfer status to the plugin one");
+//    snippets_result.dims[0] = VectorDims {3, 2, 5, 1};
+    auto& output_shapes = snippets_result.dims;
+    for (size_t i = 0; i < m_output_order.size(); i++) {
+        const auto& order = m_output_order[i];
+        // Empty order is reserved for planar shapes
+        if (order.empty())
+            continue;
+
+        VectorDims shape(order.size());
+        const auto& i_shape = output_shapes[i];
+        for (size_t j = 0; j < i_shape.size(); ++j)
+            shape[j] = i_shape[order[j]];
+
+        if (order.size() > i_shape.size()) {
+            shape[m_blocked_dim_idx] = m_output_blocked_dim_size[i];
+            shape.pop_back();
+        }
+        output_shapes[i] = shape;
     }
 
     return {snippets_result.dims, m_status_map.at(snippets_result.status)};
@@ -61,38 +76,56 @@ void SnippetShapeInfer::update_node_config(NodeDesc* nd) {
     const auto config = nd->getConfig();
     OPENVINO_ASSERT(m_subgraph->get_input_size() == config.inConfs.size(), "Incompatible subgraph's input number and config");
     OPENVINO_ASSERT(m_subgraph->get_output_size() == config.outConfs.size(), "Incompatible subgraph's output number and config");
-    init_blocked_params(m_input_is_blocked, config.inConfs);
-    m_output_blocked_dim_size = init_blocked_params(m_output_is_blocked, config.outConfs);
+    m_input_blocked_dim_size = init_blocked_params(m_input_order, config.inConfs);
+    std::vector<VectorDims> output_order;
+    m_output_blocked_dim_size = init_blocked_params(output_order, config.outConfs);
+    m_output_order.reserve(output_order.size());
+    for (const auto& order : output_order) {
+        VectorDims reversed_order(order.size());
+        for (size_t i = 0; i < order.size(); i++) {
+            OPENVINO_ASSERT(order[i] < order.size(), "Invalid order value detected");
+            reversed_order[order[i]] = i;
+        }
+        m_output_order.emplace_back(reversed_order);
+    }
 }
 
-VectorDims SnippetShapeInfer::init_blocked_params(std::vector<bool>& is_blocked, const std::vector<PortConfig>& configs) {
-    is_blocked.resize(configs.size(), false);
+VectorDims SnippetShapeInfer::init_blocked_params(std::vector<VectorDims>& io_order, const std::vector<PortConfig>& configs) {
+    io_order.resize(configs.size());
     VectorDims blocked_dim_size(configs.size(), NO_BLOCKING);
+    auto is_planar = [](const VectorDims& order) {
+        for (size_t i = 0; i < order.size(); i++)
+            if (order[i] != i)
+                return false;
+        return true;
+    };
+
     for (size_t i = 0; i < configs.size(); i++) {
         const auto& blocked_desc = configs[i].getMemDesc()->as<BlockedMemoryDesc>();
         const auto& order = blocked_desc->getOrder();
         const auto& dims = blocked_desc->getShape().getDims();
         const auto& blocked_dims = blocked_desc->getBlockDims();
-        if (order.size() > dims.size()) {
-            // If shape is blocked than there must be only one extra dim in order
-            OPENVINO_ASSERT(dims.size() + 1 == order.size(), "Invalid dims and order combination in Snippets shape infer");
-            // Subgraph presently supports only NCHW8c or NCHW16c, so it's always channels that must be blocked,
-            // but this algorithm is a little more generic, so we allow blocking over any dim
-            OPENVINO_ASSERT(std::count(order.begin(), order.end() - 1, order.back()) == 1,
-                            "Blocking is supported with respect to the last dimension only");
+        if (!is_planar(order)) {
+            io_order[i] = order;
+            if (order.size() > dims.size()) {
+                // If shape is blocked than there must be only one extra dim in order
+                OPENVINO_ASSERT(dims.size() + 1 == order.size(), "Invalid dims and order combination in Snippets shape infer");
+                // Subgraph presently supports only NCHW8c or NCHW16c, so it's always channels that must be blocked,
+                // but this algorithm is a little more generic, so we allow blocking over any dim
+                OPENVINO_ASSERT(std::count(order.begin(), order.end() - 1, order.back()) == 1,
+                                "Blocking is supported with respect to the last dimension only");
 
-            if (m_blocked_dim_idx == NO_BLOCKING)
-                m_blocked_dim_idx = order.back();
-            else if (m_blocked_dim_idx != order.back())
-                OPENVINO_THROW("All blocked dims must have the same blocked dim idx");
+                if (m_blocked_dim_idx == NO_BLOCKING)
+                    m_blocked_dim_idx = order.back();
+                else if (m_blocked_dim_idx != order.back())
+                    OPENVINO_THROW("All blocked dims must have the same blocked dim idx");
 
-            if (m_block_size == NO_BLOCKING)
-                m_block_size = blocked_dims.back();
-            else if (m_block_size != blocked_dims.back())
-                OPENVINO_THROW("All blocked dims must have the same block size");
-            is_blocked[i] = true;
-            m_any_is_blocked = true;
-            blocked_dim_size[i] = dims[m_blocked_dim_idx];
+                if (m_block_size == NO_BLOCKING)
+                    m_block_size = blocked_dims.back();
+                else if (m_block_size != blocked_dims.back())
+                    OPENVINO_THROW("All blocked dims must have the same block size");
+                blocked_dim_size[i] = dims[m_blocked_dim_idx];
+            }
         }
     }
     return blocked_dim_size;

@@ -101,6 +101,7 @@ public:
     bool has_domain_sensitive_ops() const { return config.m_has_domain_sensitive_ops; }
 
     snippets::Schedule generate(const BlockedShapeVector& blocked_input_shapes = {},
+                                const BlockedShapeVector& blocked_output_shapes = {},
                                 const std::vector<ov::element::Type>& input_precisions = {},
                                 const std::vector<ov::element::Type>& output_precisions = {},
                                 const std::vector<pass::Manager::PositionedPass>& data_flow_passes = {},
@@ -141,6 +142,7 @@ public:
     static auto is_domain_sensitive_op(const std::shared_ptr<ov::Node>& op) -> bool;
 
     void data_flow_shape_agnostic(const BlockedShapeVector& blocked_input_shapes = {},
+                                  const BlockedShapeVector& blocked_output_shapes = {},
                                   const std::vector<ov::element::Type>& input_precisions = {},
                                   const std::vector<ov::element::Type>& output_precisions = {},
                                   const std::vector<snippets::pass::Manager::PositionedPass>& = {});

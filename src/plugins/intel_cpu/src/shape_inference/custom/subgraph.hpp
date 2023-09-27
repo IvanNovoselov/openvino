@@ -23,15 +23,17 @@ public:
 private:
     static constexpr size_t NO_BLOCKING = SIZE_MAX;
     std::shared_ptr<snippets::op::Subgraph> m_subgraph;
-    std::vector<bool> m_input_is_blocked;
-    std::vector<bool> m_output_is_blocked;
-    bool m_any_is_blocked = false;
+    bool m_any_is_reordered = false;
+    std::vector<VectorDims> m_input_order;
+    std::vector<VectorDims> m_output_order;
+
     size_t m_block_size = NO_BLOCKING;
     size_t m_blocked_dim_idx = NO_BLOCKING;
+    VectorDims m_input_blocked_dim_size;
     VectorDims m_output_blocked_dim_size;
     std::map<snippets::ShapeInferStatus, ov::intel_cpu::ShapeInferStatus> m_status_map;
 
-    VectorDims init_blocked_params(std::vector<bool>& is_blocked, const std::vector<PortConfig>& configs);
+    VectorDims init_blocked_params(std::vector<VectorDims>& is_blocked, const std::vector<PortConfig>& configs);
 };
 
 class SnippetShapeInferFactory : public ShapeInferFactory {

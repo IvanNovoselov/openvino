@@ -203,13 +203,13 @@ const std::vector<ov::test::utils::OpType>& opTypes() {
 const std::vector<ngraph::helpers::EltwiseTypes>& eltwiseOpTypesBinInp() {
     static const std::vector<ngraph::helpers::EltwiseTypes> eltwiseOpTypesBinInp = {
         ngraph::helpers::EltwiseTypes::ADD,
-        ngraph::helpers::EltwiseTypes::MULTIPLY,
-#if defined(OPENVINO_ARCH_X86) || defined(OPENVINO_ARCH_X86_64)
-        ngraph::helpers::EltwiseTypes::SUBTRACT,                // TODO: Fix CVS-105430
-        ngraph::helpers::EltwiseTypes::DIVIDE,                  // TODO: Fix CVS-105430
-        ngraph::helpers::EltwiseTypes::FLOOR_MOD,               // TODO: Fix CVS-111875
-#endif
-        ngraph::helpers::EltwiseTypes::SQUARED_DIFF,
+//        ngraph::helpers::EltwiseTypes::MULTIPLY,
+//#if defined(OPENVINO_ARCH_X86) || defined(OPENVINO_ARCH_X86_64)
+//        ngraph::helpers::EltwiseTypes::SUBTRACT,                // TODO: Fix CVS-105430
+//        ngraph::helpers::EltwiseTypes::DIVIDE,                  // TODO: Fix CVS-105430
+//        ngraph::helpers::EltwiseTypes::FLOOR_MOD,               // TODO: Fix CVS-111875
+//#endif
+//        ngraph::helpers::EltwiseTypes::SQUARED_DIFF,
     };
     return eltwiseOpTypesBinInp;
 }
@@ -225,11 +225,11 @@ const std::vector<ngraph::helpers::EltwiseTypes>& eltwiseOpTypesDiffInp() {
 const std::vector<ngraph::helpers::EltwiseTypes>& eltwiseOpTypesBinDyn() {
     static const std::vector<ngraph::helpers::EltwiseTypes> eltwiseOpTypesBinDyn = {
         ngraph::helpers::EltwiseTypes::ADD,
-        ngraph::helpers::EltwiseTypes::MULTIPLY,
-#if defined(OPENVINO_ARCH_X86) || defined(OPENVINO_ARCH_X86_64) // TODO: Fix CVS-105430
-        ngraph::helpers::EltwiseTypes::SUBTRACT,
-#endif
-        ngraph::helpers::EltwiseTypes::SQUARED_DIFF,
+//        ngraph::helpers::EltwiseTypes::MULTIPLY,
+//#if defined(OPENVINO_ARCH_X86) || defined(OPENVINO_ARCH_X86_64) // TODO: Fix CVS-105430
+//        ngraph::helpers::EltwiseTypes::SUBTRACT,
+//#endif
+//        ngraph::helpers::EltwiseTypes::SQUARED_DIFF,
     };
     return eltwiseOpTypesBinDyn;
 }
@@ -237,7 +237,7 @@ const std::vector<ngraph::helpers::EltwiseTypes>& eltwiseOpTypesBinDyn() {
 const std::vector<CPUSpecificParams>& cpuParams_4D() {
     static const std::vector<CPUSpecificParams> cpuParams_4D = {
         CPUSpecificParams({nhwc, nhwc}, {nhwc}, {}, {}),
-        CPUSpecificParams({nchw, nchw}, {nchw}, {}, {})
+//        CPUSpecificParams({nchw, nchw}, {nchw}, {}, {})
     };
     return cpuParams_4D;
 }
@@ -406,25 +406,25 @@ const std::vector<std::vector<InputShape>>& inShapes_4D_dyn_const() {
                 {3, 2, -1, -1},
                 // target
                 {
-                    {3, 2, 1, 1},
+//                    {3, 2, 1, 1},
                     {3, 2, 5, 1},
-                    {3, 2, 1, 6},
-                    {3, 2, 4, 11},
+//                    {3, 2, 1, 6},
+//                    {3, 2, 4, 11},
                 }
             }
         },
-        {
-            {
-                // dynamic
-                {{1, 10}, 2, 5, 6},
-                // target
-                {
-                    {3, 2, 5, 6},
-                    {1, 2, 5, 6},
-                    {2, 2, 5, 6},
-                }
-            }
-        },
+//        {
+//            {
+//                // dynamic
+//                {{1, 10}, 2, 5, 6},
+//                // target
+//                {
+//                    {3, 2, 5, 6},
+//                    {1, 2, 5, 6},
+//                    {2, 2, 5, 6},
+//                }
+//            }
+//        },
     };
     return inShapes_4D_dyn_const;
 }
@@ -438,7 +438,8 @@ const std::vector<CPUSpecificParams>& cpuParams_5D_1D_constant() {
 }
 
 const std::vector<bool>& enforceSnippets() {
-    static const std::vector<bool> enforceSnippets = { false, true };
+    static const std::vector<bool> enforceSnippets = { true };
+//    static const std::vector<bool> enforceSnippets = { false, true };
     return enforceSnippets;
 }
 

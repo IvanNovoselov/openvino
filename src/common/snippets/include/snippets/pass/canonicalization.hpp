@@ -25,12 +25,14 @@ public:
     OPENVINO_RTTI("Canonicalization");
     using BlockedShapeVector = op::Subgraph::BlockedShapeVector;
     using Layout = std::vector<size_t>;
-    explicit Canonicalization(const BlockedShapeVector& blocked_input_shapes);
+    explicit Canonicalization(const BlockedShapeVector& blocked_input_shapes,
+                              const BlockedShapeVector& blocked_output_shapes);
     bool run_on_model(const std::shared_ptr<ov::Model>& m) override;
 
 private:
     std::vector<VectorDims> m_in_shapes;
     std::vector<Layout> m_in_layouts;
+    std::vector<Layout> m_out_layouts;
     bool m_has_dynamic_inputs = false;
 };
 

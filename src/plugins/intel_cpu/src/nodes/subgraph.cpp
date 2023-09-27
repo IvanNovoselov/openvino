@@ -301,11 +301,16 @@ void Snippet::initOptimalPrimitiveDescriptor() {
         in_blocked_shapes.emplace_back(blockedDesc->getBlockDims(), blockedDesc->getOrder());
     }
     outputNum = config.outConfs.size();
+    snippets::op::Subgraph::BlockedShapeVector out_blocked_shapes;
     snippetAttrs.outMemPrecs.resize(outputNum);
     snippetAttrs.outMemOrders.resize(outputNum);
+    out_blocked_shapes.reserve(outputNum);
     for (size_t i = 0; i < outputNum; i++) {
-        snippetAttrs.outMemPrecs[i] = config.outConfs[i].getMemDesc()->getPrecision();
-        snippetAttrs.outMemOrders[i] = config.outConfs[i].getMemDesc()->as<BlockedMemoryDesc>()->getOrder();
+        const auto& memDesc = config.outConfs[i].getMemDesc();
+        snippetAttrs.outMemPrecs[i] = memDesc->getPrecision();
+        const auto& blockedDesc = memDesc->as<BlockedMemoryDesc>();
+        snippetAttrs.outMemOrders[i] = blockedDesc->getOrder();
+        out_blocked_shapes.emplace_back(blockedDesc->getBlockDims(), blockedDesc->getOrder());
     }
     // reserve fixed size.
     snippetAttrs.inMemBlockedDims.resize(inputNum);
@@ -345,7 +350,6 @@ void Snippet::initOptimalPrimitiveDescriptor() {
     std::vector<ov::element::Type> input_precisions;
     std::vector<ov::element::Type> output_precisions;
     input_precisions.reserve(inputNum);
-    in_blocked_shapes.reserve(inputNum);
     for (const auto& p :  snippetAttrs.inMemPrecs) {
         input_precisions.push_back(InferenceEngine::details::convertPrecision(p));
     }
@@ -353,7 +357,7 @@ void Snippet::initOptimalPrimitiveDescriptor() {
     for (const auto& p :  snippetAttrs.outMemPrecs)
         output_precisions.push_back(InferenceEngine::details::convertPrecision(p));
 
-    snippetAttrs.snippet->data_flow_shape_agnostic(in_blocked_shapes, input_precisions, output_precisions, backend_passes);
+    snippetAttrs.snippet->data_flow_shape_agnostic(in_blocked_shapes, out_blocked_shapes, input_precisions, output_precisions, backend_passes);
     snippetAttrs.snippet->convert_body_to_linear_ir(std::make_shared<snippets::CPUShapeInferSnippetsFactory>());
 }
 
@@ -481,9 +485,14 @@ void Snippet::SnippetJitExecutor::update_ptrs(jit_snippets_call_args& call_args,
 }
 
 void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {
-    const auto& dom = exec_domain;
+//    const auto& dom = exec_domain;
+    std::vector<size_t> dom {1, 1, 3, 5, 1};
     // < N, C, H, W > < 1, 1, N, C*H*W>
     const auto& callable = schedule.get_callable<kernel>();
+//    int64_t indexes[] = {0, 0, 0, 0, 0};
+//    jit_snippets_call_args call_args;
+//    update_ptrs(call_args, inMemPtrs, outMemPtrs);
+//    callable(indexes, &call_args);
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
         [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
             int64_t indexes[] = {d0, d1, d2, d3, d4};
