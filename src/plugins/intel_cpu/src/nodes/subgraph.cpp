@@ -320,7 +320,7 @@ void Snippet::initOptimalPrimitiveDescriptor() {
     dstMemPtrs.resize(outputNum);
 
     // here we should perform all shape-agnostic snippets passes
-    // * canonicalization (Unsquese insert)
+    // * canonicalization (RankNormalization insert)
     // * precision propagation & align element types
     // * data flow optimizations
     // The result of these transformations will be reused by all shapes
@@ -542,7 +542,7 @@ Snippet::SnippetJitExecutor::SnippetJitExecutor(SnippetAttrs attrs, bool is_dyna
             in_shapes.emplace_back(s);
         snippetAttrs.snippet->shape_infer(in_shapes);
     }
-    const VectorDims& canonicalShape = snippetAttrs.snippet->get_master_shape();
+    const VectorDims& canonicalShape = snippetAttrs.snippet->infer_master_shape();
 
     // initialize by maximum output dimension. Dimensions of outputs should be broadcastable
     tensorRank = std::max(static_cast<size_t>(rank6D), canonicalShape.size());
