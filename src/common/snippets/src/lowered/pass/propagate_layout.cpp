@@ -41,7 +41,7 @@ bool PropagateLayout::run(lowered::LinearIR& linear_ir, lowered::LinearIR::const
                 const auto& child = child_input.get_expr();
                 const auto port = child_input.get_index();
                 const auto& n = child->get_node();
-                const auto ma = ov::as_type_ptr<op::MemoryAccess>(n);
+                const auto ma = std::dynamic_pointer_cast<modifier::MemoryAccess>(n);
                 if (ma && ma->is_memory_access_input_port(port)) {
                     child_layouts.insert(child_input.get_descriptor_ptr()->get_layout());
                 }

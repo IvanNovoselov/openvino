@@ -7,6 +7,7 @@
 #include "snippets/lowered/linear_ir.hpp"
 #include "snippets/lowered/loop_manager.hpp"
 #include "snippets/op/memory_access.hpp"
+#include "snippets/op/buffer.hpp"
 #include "snippets/itt.hpp"
 
 namespace ov {
@@ -15,6 +16,7 @@ namespace lowered {
 namespace pass {
 
 using LoopPort = LinearIR::LoopManager::LoopPort;
+using MemoryAccess = ov::snippets::modifier::MemoryAccess;
 
 namespace {
 int64_t get_input_stride(size_t dim, const std::vector<size_t>& layout, const VectorDims& shape) {
@@ -38,13 +40,45 @@ int64_t get_output_stride(size_t dim, const VectorDims& shape) {
 
 InitLoops::InitLoops() : Pass() {}
 
-void InitLoops::init_is_incremented(const LinearIR::LoopManager::LoopInfoPtr& loop_info) {
+void InitLoops::init_is_incremented(const LinearIR::LoopManager::LoopInfoPtr& loop_info, size_t loop_id) {
     auto loop_entries = loop_info->get_entry_points();
     auto loop_exits = loop_info->get_exit_points();
-    auto update = [](std::vector<LoopPort>& ports) {
+    auto update = [=](std::vector<LoopPort>& ports) {
         for (auto& port : ports) {
-            if (!ov::is_type<op::MemoryAccess>(port.expr_port->get_expr()->get_node())) {
+            const auto& expr = port.expr_port->get_expr();
+            if (!std::dynamic_pointer_cast<modifier::MemoryAccess>((expr->get_node()))) {
                 port.is_incremented = false;
+            } else if (expr->get_loop_ids().back() != loop_id) {
+                // Note: LoopPort connected to Buffer between two loops should not be incremented in the outermost loop
+                // Consider the example below:
+                //     Store; Loop ids [1,2,3]
+                //     IntermediateMemoryBuffer; Loop ids [1]
+                //     Load; Loop ids [1, 4, 5]
+                // Store is exit port of Loop-1, but it should be incremented only in Loop-2 and Loop-3. Similar with Load.
+                auto is_ignored = [=](const ExpressionPtr& expr){
+                    if (ov::is_type<op::IntermediateMemoryBuffer>(expr->get_node())) {
+                        const auto& expr_loops = expr->get_loop_ids();
+                        if (!expr_loops.empty() && expr_loops.back() == loop_id) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                if (port.expr_port->get_type() == ExpressionPort::Type::Output) {
+                    const auto& out_connector = expr->get_output_port_connector(port.expr_port->get_index());
+                    for (const auto& consumer : out_connector->get_consumers()) {
+                        if (is_ignored(consumer.get_expr())) {
+                            port.is_incremented = false;
+                            return;
+                        }
+                    }
+                } else if (port.expr_port->get_type() == ExpressionPort::Type::Input) {
+                    const auto& in_connector = expr->get_input_port_connector(port.expr_port->get_index());
+                    if (is_ignored(in_connector->get_source().get_expr())) {
+                        port.is_incremented = false;
+                        return;
+                    }
+                }
             }
         }
     };
@@ -126,7 +160,7 @@ bool InitLoops::run(LinearIR& linear_ir) {
     const auto& loops = loop_manager->get_map();
     for (const auto& loop : loops) {
         const auto loop_info = loop.second;
-        init_is_incremented(loop_info);
+        init_is_incremented(loop_info, loop.first);
         init_ptr_increments(loop_info);
         init_finalization_offsets(loop_info);
         init_element_type_sizes(loop_info);
