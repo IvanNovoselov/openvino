@@ -13,6 +13,7 @@
 #include "transformations/snippets/x64/op/brgemm_copy_b.hpp"
 #include "transformations/snippets/x64/op//brgemm_cpu.hpp"
 #include "snippets/op/rank_normalization.hpp"
+#include "libxsmm.h"
 
 using namespace InferenceEngine;
 using namespace Xbyak;
