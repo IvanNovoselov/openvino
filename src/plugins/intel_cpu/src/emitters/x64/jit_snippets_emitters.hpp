@@ -388,13 +388,19 @@ private:
         float beta;
     };
     static void initBrgemm(brgemmCtx& ctx, std::unique_ptr<dnnl::impl::cpu::x64::brgemm_kernel_t>& brgKernel, bool use_amx);
+    static void initBrgemmXsmm(brgemmCtx& ctx, libxsmm_xmmfunction *brgKernel);
     static size_t getBrgIdx(size_t kIdx, size_t nIdx);
 
     void emit_brgemm_kernel_call(const dnnl::impl::cpu::x64::brgemm_kernel_t* brg_kernel, const brgemmCtx& ctx,
                                  Xbyak::Reg64 addr_A, Xbyak::Reg64 addr_B, Xbyak::Reg64 scratch, Xbyak::Reg64 addr_C,
                                  size_t in0_kernel_offset = 0, size_t in1_kernel_offset = 0,
                                  size_t in2_kernel_offset = 0, size_t out0_kernel_offset = 0) const;
+    void emit_brgemm_kernel_call_libxsmm(const libxsmm_xmmfunction *xsmm_func, const brgemmCtx& ctx,
+                                 Xbyak::Reg64 addr_A, Xbyak::Reg64 addr_B, Xbyak::Reg64 scratch, Xbyak::Reg64 addr_C,
+                                 size_t in0_kernel_offset = 0, size_t in1_kernel_offset = 0,
+                                 size_t in2_kernel_offset = 0, size_t out0_kernel_offset = 0) const;
     static void kernel_execute(const dnnl::impl::cpu::x64::brgemm_kernel_t *brg_kernel, const void *A, const void *B, void *C, void *scratch, int with_comp);
+    static void kernel_execute_libxsmm(libxsmm_xmmfunction *brg_kernel, void *A, void *B, void *C);
     void emit_N_blocking_loops(size_t k_kernel_id,
                                const Xbyak::Reg64& input_0, const Xbyak::Reg64& input_1,
                                const Xbyak::Reg64& input_2, const Xbyak::Reg64& output_0,
@@ -405,6 +411,7 @@ private:
     static constexpr size_t BRGEMM_N_KERNEL_NUM = 2;
     std::array<brgemmCtx, BRGEMM_K_KERNEL_NUM * BRGEMM_N_KERNEL_NUM> m_brgCtxs;
     std::array<std::unique_ptr<dnnl::impl::cpu::x64::brgemm_kernel_t>, BRGEMM_K_KERNEL_NUM * BRGEMM_N_KERNEL_NUM> m_brgKernels;
+    std::array<libxsmm_xmmfunction, BRGEMM_K_KERNEL_NUM * BRGEMM_N_KERNEL_NUM> m_brgKernelsXsmm;
 
     size_t m_M;
     size_t m_K, m_K_blk, m_K_tail;
