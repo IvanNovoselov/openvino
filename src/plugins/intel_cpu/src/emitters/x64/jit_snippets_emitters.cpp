@@ -772,6 +772,7 @@ BrgemmEmitter::BrgemmEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPt
     std::generate(m_brgKernels.begin(), m_brgKernels.end(), [](){ return nullptr; });
     for (unsigned long int _i = 0; _i < BRGEMM_K_KERNEL_NUM * BRGEMM_N_KERNEL_NUM; _i++) {
       m_brgKernelsXsmm[_i].gemm = NULL;
+      m_brgKernelsXsmmTileCfg[_i].gemm = NULL;
     }
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
     const auto& brgemm_node = as_type_ptr<ov::intel_cpu::BrgemmCPU>(expr->get_node());
@@ -885,8 +886,14 @@ BrgemmEmitter::BrgemmEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPt
             if (brgemmCtx.N == 0 || brgemmCtx.N > m_N ||
                 brgemmCtx.K == 0 || brgemmCtx.K > m_K)
                 continue;
-            if ((use_xsmm > 0) && (brgemmCtx.dt_in0 == dnnl_data_type_t::dnnl_f32) && (brgemmCtx.dt_in1 == dnnl_data_type_t::dnnl_f32)) {
-              initBrgemmXsmm(brgemmCtx, &m_brgKernelsXsmm[kernel_idx]);
+
+            unsigned int is_f32_gemm = ((brgemmCtx.dt_in0 == dnnl_data_type_t::dnnl_f32) && (brgemmCtx.dt_in1 == dnnl_data_type_t::dnnl_f32)) ? 1 : 0;
+            unsigned int is_bf16_gemm = ((brgemmCtx.dt_in0 == dnnl_data_type_t::dnnl_bf16) && (brgemmCtx.dt_in1 == dnnl_data_type_t::dnnl_bf16)) ? 1 : 0;
+            unsigned int is_i8_gemm = ((brgemmCtx.dt_in0 == dnnl_data_type_t::dnnl_u8) || (brgemmCtx.dt_in0 == dnnl_data_type_t::dnnl_s8)) ? 1 : 0;
+            unsigned int isKvnniDiv = (is_f32_gemm > 0) ? 1
+              : ((is_bf16_gemm > 0) ? ((brgemmCtx.K % 2 == 0) ? 1 : 0) : ((is_i8_gemm > 0) ? ((brgemmCtx.K % 4 == 0) ? 1 : 0) : 0));
+            if ((use_xsmm > 0) && (m_with_comp == 0) && (isKvnniDiv > 0)) {
+              initBrgemmXsmm(brgemmCtx, &m_brgKernelsXsmm[kernel_idx], &m_brgKernelsXsmmTileCfg[kernel_idx], brgWithAMX);
             } else {
               initBrgemm(brgemmCtx, m_brgKernels[kernel_idx], brgWithAMX);
             }
@@ -973,14 +980,57 @@ void BrgemmEmitter::initBrgemm(brgemmCtx& ctx, std::unique_ptr<brgemm_kernel_t>&
     brgKernel.reset(brgKernel_);
 }
 
-void BrgemmEmitter::initBrgemmXsmm(brgemmCtx& ctx, libxsmm_xmmfunction *brgKernel) {
-  auto l_flags = (ctx.beta == 0.0f) ? LIBXSMM_GEMM_FLAGS('N', 'N') | LIBXSMM_GEMM_FLAG_BETA_0 : LIBXSMM_GEMM_FLAGS('N', 'N');
-  auto l_shape = libxsmm_create_gemm_shape(ctx.N, ctx.M, ctx.K, ctx.LDB, ctx.LDA, ctx.LDC,
-      LIBXSMM_DATATYPE_F32, LIBXSMM_DATATYPE_F32, LIBXSMM_DATATYPE_F32, LIBXSMM_DATATYPE_F32);
+libxsmm_datatype BrgemmEmitter::xsmm_dtype(dnnl_data_type_t dnnl_dtype) {
+  libxsmm_datatype result = LIBXSMM_DATATYPE_IMPLICIT;
+  if (dnnl_dtype == dnnl_data_type_t::dnnl_f32) {
+    result = LIBXSMM_DATATYPE_F32;
+  } else if (dnnl_dtype == dnnl_data_type_t::dnnl_bf16) {
+    result = LIBXSMM_DATATYPE_BF16;
+  } else if (dnnl_dtype == dnnl_data_type_t::dnnl_s8) {
+    result = LIBXSMM_DATATYPE_I8;
+  } else if (dnnl_dtype == dnnl_data_type_t::dnnl_u8) {
+    result = LIBXSMM_DATATYPE_U8;
+  } else {
+    printf("WARNING: Using implicit datatype...\n");
+  }
+  return result;
+}
+
+void BrgemmEmitter::initBrgemmXsmm(brgemmCtx& ctx, libxsmm_xmmfunction *brgKernel, libxsmm_xmmfunction *brgKernelTileCfg, bool use_amx) {
+  unsigned int is_f32_gemm = ((ctx.dt_in0 == dnnl_data_type_t::dnnl_f32) && (ctx.dt_in1 == dnnl_data_type_t::dnnl_f32)) ? 1 : 0;
+  auto l_flags_init = (is_f32_gemm > 0) ? LIBXSMM_GEMM_FLAGS('N', 'N')
+                                        : LIBXSMM_GEMM_VNNI_FLAGS('N', 'N', 'V', 'N') |
+                                          LIBXSMM_GEMM_FLAG_NO_SETUP_TILECONFIG |
+                                          LIBXSMM_GEMM_FLAG_NO_RESET_TILECONFIG;
+  auto l_flags = (ctx.beta == 0.0f) ? l_flags_init | LIBXSMM_GEMM_FLAG_BETA_0 : l_flags_init;
+  auto l_flags_cfg = (is_f32_gemm > 0) ? LIBXSMM_GEMM_FLAGS('N', 'N') :
+    LIBXSMM_GEMM_VNNI_FLAGS('N', 'N', 'V', 'N') | LIBXSMM_GEMM_FLAG_NO_RESET_TILECONFIG;
+  auto dtype0 = xsmm_dtype(ctx.dt_in1);
+  auto dtype1 = xsmm_dtype(ctx.dt_in0);
+  auto comp_dtype = (dtype0 == LIBXSMM_DATATYPE_I8 || dtype0 == LIBXSMM_DATATYPE_U8) ? LIBXSMM_DATATYPE_I32 : LIBXSMM_DATATYPE_F32;
+  auto out_dtype = (comp_dtype == LIBXSMM_DATATYPE_I32) ? LIBXSMM_DATATYPE_I32 : LIBXSMM_DATATYPE_F32;
+  if (dtype0 == LIBXSMM_DATATYPE_U8) {
+    dtype0 = LIBXSMM_DATATYPE_I8;
+    l_flags |= LIBXSMM_GEMM_FLAG_A_UNSIGNED;
+  }
+  if (dtype1 == LIBXSMM_DATATYPE_U8) {
+    dtype1 = LIBXSMM_DATATYPE_I8;
+    l_flags |= LIBXSMM_GEMM_FLAG_B_UNSIGNED;
+  }
+  auto l_shape = libxsmm_create_gemm_shape(ctx.N, ctx.M, ctx.K, ctx.LDB, ctx.LDA, ctx.LDC, dtype0, dtype1, out_dtype, comp_dtype);
   auto l_prefetch_flags = LIBXSMM_GEMM_PREFETCH_NONE;
   (*brgKernel).gemm = libxsmm_dispatch_gemm_v2(l_shape, l_flags, l_prefetch_flags);
   if ((*brgKernel).gemm == NULL) {
+        printf("K is %d\n", ctx.K);
         IE_THROW() << "LIBXSMM BrgemmEmitter cannot create brgemm kernel due to invalid params";
+  }
+  ctx.is_with_amx = use_amx;
+  ctx.is_with_comp = ctx.dt_in0 == dnnl_data_type_t::dnnl_s8 && !ctx.is_with_amx;
+  if (use_amx) {
+    (*brgKernelTileCfg).gemm = libxsmm_dispatch_gemm_v2(l_shape, l_flags_cfg, l_prefetch_flags);
+    if ((*brgKernelTileCfg).gemm == NULL) {
+          IE_THROW() << "LIBXSMM BrgemmEmitter cannot create brgemm tile config kernel due to invalid params";
+    }
   }
 }
 
@@ -1002,8 +1052,8 @@ void BrgemmEmitter::emit_N_blocking_loops(size_t k_kernel_id,
             h->L(N_loop_begin);
         }
 
-        if ((use_xsmm > 0) && (brgemmCtx.dt_in0 == dnnl_data_type_t::dnnl_f32) && (brgemmCtx.dt_in1 == dnnl_data_type_t::dnnl_f32)) {
-          emit_brgemm_kernel_call_libxsmm(&m_brgKernelsXsmm[kernel_idx], brgemmCtx, input_0, input_1, input_2, output_0);
+        if ((use_xsmm > 0) && (m_with_comp == 0) && m_brgKernelsXsmm[kernel_idx].gemm) {
+          emit_brgemm_kernel_call_libxsmm(&m_brgKernelsXsmm[kernel_idx], &m_brgKernelsXsmmTileCfg[kernel_idx], brgemmCtx, input_0, input_1, input_2, output_0);
         } else {
           emit_brgemm_kernel_call(m_brgKernels[kernel_idx].get(), brgemmCtx, input_0, input_1, input_2, output_0);
         }
@@ -1025,7 +1075,7 @@ void BrgemmEmitter::emit_N_blocking_loops(size_t k_kernel_id,
     kernel_idx = getBrgIdx(k_kernel_id, 1);
     const auto& brgemmCtxTail = m_brgCtxs[kernel_idx];
     if (m_brgKernelsXsmm[kernel_idx].gemm) {
-      emit_brgemm_kernel_call_libxsmm(&m_brgKernelsXsmm[kernel_idx], brgemmCtxTail, input_0, input_1, input_2, output_0);
+      emit_brgemm_kernel_call_libxsmm(&m_brgKernelsXsmm[kernel_idx], &m_brgKernelsXsmmTileCfg[kernel_idx], brgemmCtxTail, input_0, input_1, input_2, output_0);
     }
     if (m_brgKernels[kernel_idx]) {
       emit_brgemm_kernel_call(m_brgKernels[kernel_idx].get(), brgemmCtxTail, input_0, input_1, input_2, output_0);
@@ -1256,11 +1306,10 @@ void BrgemmEmitter::emit_brgemm_kernel_call(const brgemm_kernel_t *brg_kernel, c
     h->add(h->rsp, n_gprs_to_save * gpr_size);
 }
 
-void BrgemmEmitter::emit_brgemm_kernel_call_libxsmm(const libxsmm_xmmfunction *xsmm_func, const brgemmCtx& ctx,
+void BrgemmEmitter::emit_brgemm_kernel_call_libxsmm(const libxsmm_xmmfunction *xsmm_func, const libxsmm_xmmfunction *xsmm_tile_cfg, const brgemmCtx& ctx,
                                             Reg64 addr_A, Reg64 addr_B, Reg64 scratch, Reg64 addr_C,
                                             const size_t in0_kernel_offset, const size_t in1_kernel_offset,
                                             const size_t in2_kernel_offset, const size_t out0_kernel_offset) const {
-#if 0
     if (ctx.is_with_amx) {
         Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->rax,
                                          h->rcx, h->rdx, h->rdi, h->rsi, h->rbp, h->rbx};
@@ -1271,10 +1320,9 @@ void BrgemmEmitter::emit_brgemm_kernel_call_libxsmm(const libxsmm_xmmfunction *x
             h->mov(h->ptr[h->rsp + i * gpr_size], gprs_to_save[i]);
 
         // save function address in gpr to pass in call instruction
-        const auto& overload = static_cast<status_t(*)(const char*)>(amx_tile_configure);
+        const auto& overload = static_cast<void (*)(libxsmm_xmmfunction*)>(libxsmm_amx_tile_configure);
         h->mov(h->rbp, reinterpret_cast<uintptr_t>(overload));
-        h->mov(abi_param1, reinterpret_cast<uintptr_t>(ctx.palette));
-
+        h->mov(abi_param1, reinterpret_cast<uintptr_t>(xsmm_tile_cfg));
         // align stack on 16-byte as ABI requires
         // note that RBX must not be changed by the callee
         h->mov(h->rbx, h->rsp);
@@ -1289,7 +1337,6 @@ void BrgemmEmitter::emit_brgemm_kernel_call_libxsmm(const libxsmm_xmmfunction *x
             h->mov(gprs_to_save[i], h->ptr[h->rsp + i * gpr_size]);
         h->add(h->rsp, n_gprs_to_save * gpr_size);
     }
-#endif
 
     Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->r12, h->r13, h->r14, h->r15,
                                      h->rax, h->rcx, h->rdx, h->rdi, h->rsi, h->rbp, h->rbx};
@@ -1433,6 +1480,15 @@ void BrgemmEmitter::kernel_execute_libxsmm(libxsmm_xmmfunction *brg_kernel,
     gemm_p.c.primary = reinterpret_cast<void*>(C);
     assert(brg_kernel);
     (*brg_kernel).gemm(&gemm_p);
+}
+
+void BrgemmEmitter::libxsmm_amx_tile_configure(libxsmm_xmmfunction *cfg_kernel) {
+    libxsmm_gemm_param gemm_p;
+    gemm_p.a.primary = reinterpret_cast<void*>(NULL);
+    gemm_p.b.primary = reinterpret_cast<void*>(NULL);
+    gemm_p.c.primary = reinterpret_cast<void*>(NULL);
+    assert(cfg_kernel);
+    (*cfg_kernel).gemm(&gemm_p);
 }
 
 BrgemmCopyBEmitter::BrgemmCopyBEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)
