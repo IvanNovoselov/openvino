@@ -30,11 +30,6 @@ namespace {
 constexpr size_t gpr_size = 8;
 } // namespace
 
-inline static void transform_idxs_to_regs(const std::vector<size_t>& idxs, std::vector<Reg64>& regs) {
-    regs.resize(idxs.size());
-    std::transform(idxs.begin(), idxs.end(), regs.begin(), [](size_t idx){return Reg64(static_cast<int>(idx));});
-}
-
 jit_container_emitter::jit_container_emitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)
     : jit_emitter(h, isa) {
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
@@ -101,7 +96,7 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
 KernelEmitter::KernelEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)
     : jit_container_emitter(h, isa, expr),
       reg_indexes_idx(abi_param1.getIdx()),
-      reg_const_params_idx(abi_param2.getIdx()) {
+      reg_runtime_params_idx(abi_param2.getIdx()) {
     const auto kernel = ov::as_type_ptr<snippets::op::Kernel>(expr->get_node());
     if (!kernel)
         IE_THROW() << "KernelEmitter invoked with invalid op argument";
@@ -168,7 +163,7 @@ KernelEmitter::KernelEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPt
     // Reserve stack base and pointer for push(...) and pop(...) operations
     // Reserve abi_param1 and abi_param2, since they'll be used to pass runtime call args to kernel
     remove_regs_from_pool(gp_regs_pool, {Xbyak::Operand::RSP, Xbyak::Operand::RBP,
-                                         reg_indexes_idx, reg_const_params_idx});
+                                         reg_indexes_idx, reg_runtime_params_idx});
 
     mapping_info gpr_map_pool({}, gp_regs_pool);
     mapping_info vec_map_pool({}, vec_regs_pool);
@@ -193,15 +188,15 @@ KernelEmitter::KernelEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPt
     }
     num_unique_buffers = unique_buffers.size();
 
-    // Note that we can't use reg_indexes_idx or reg_const_params_idx to store data pointers because these two
+    // Note that we can't use reg_indexes_idx or reg_runtime_params_idx to store data pointers because these two
     // regs are used to calculate offsets for the data pointers
     map_abstract_registers(gpr_map_pool, vec_map_pool, mem_access_exprs);
     for (const auto& abstract_to_physical : gpr_map_pool.first)
         data_ptr_regs_idx.push_back(abstract_to_physical.second);
-    // However we can use reg_indexes_idx and reg_const_params_idx for other operations since we won't need them
+    // However we can use reg_indexes_idx and reg_runtime_params_idx for other operations since we won't need them
     // after offsets calculation
     gpr_map_pool.second.push_back(reg_indexes_idx);
-    gpr_map_pool.second.push_back(reg_const_params_idx);
+    gpr_map_pool.second.push_back(reg_runtime_params_idx);
     map_abstract_registers(gpr_map_pool, vec_map_pool, general_exprs);
 }
 
@@ -280,7 +275,7 @@ void KernelEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, const Xb
     };
     const auto spare_corruptable_gpr = std::find_if(gp_regs_pool.begin(), gp_regs_pool.end(),
                                                    [this](size_t reg) {
-                                                        return reg != reg_indexes_idx && reg != reg_const_params_idx;
+                                                        return reg != reg_indexes_idx && reg != reg_runtime_params_idx;
                                                    });
     const bool last_iter_explicitly = spare_corruptable_gpr == gp_regs_pool.end();
     Reg64 reg_tmp = last_iter_explicitly ? data_ptr_regs[num_params - 1] : Reg64(static_cast<int>(*spare_corruptable_gpr));
@@ -317,7 +312,7 @@ void KernelEmitter::emit_impl(const std::vector<size_t>& in,
     h->preamble();
 
     Reg64 reg_indexes = Reg64(static_cast<int>(reg_indexes_idx));
-    Reg64 reg_const_params = Reg64(static_cast<int>(reg_const_params_idx));
+    Reg64 reg_const_params = Reg64(static_cast<int>(reg_runtime_params_idx));
     std::vector<Reg64> data_ptr_regs;
     transform_idxs_to_regs(data_ptr_regs_idx, data_ptr_regs);
 

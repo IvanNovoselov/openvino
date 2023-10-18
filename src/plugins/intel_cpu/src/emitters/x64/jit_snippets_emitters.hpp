@@ -37,6 +37,11 @@ struct jit_snippets_call_args {
 struct jit_snippets_compile_args {
     size_t parallel_executor_ndims = 1;
 };
+
+inline static void transform_idxs_to_regs(const std::vector<size_t>& idxs, std::vector<Xbyak::Reg64>& regs) {
+    regs.resize(idxs.size());
+    std::transform(idxs.begin(), idxs.end(), regs.begin(), [](size_t idx){return Xbyak::Reg64(static_cast<int>(idx));});
+}
 ///
 /// \brief jit_container_emitter designed to wrap Emitters that contain other Emitters (for example, KernelEmitter)
 ///  This is needed to provide common interface for register mapping
@@ -83,13 +88,13 @@ public:
     void emit_code(const std::vector<size_t> &in,
                    const std::vector<size_t> &out) const;
 
-private:
+protected:
     using jit_emitter::emit_code;
     void validate_arguments(const std::vector<size_t> &in,
                             const std::vector<size_t> &out) const override;
     void emit_impl(const std::vector<size_t>& in,
                    const std::vector<size_t>& out) const override;
-    void init_data_pointers(const Xbyak::Reg64&, const Xbyak::Reg64&, const std::vector<Xbyak::Reg64>&) const;
+    virtual void init_data_pointers(const Xbyak::Reg64&, const Xbyak::Reg64&, const std::vector<Xbyak::Reg64>&) const;
 
     jit_snippets_compile_args jcp;
     std::vector<size_t> gp_regs_pool;
@@ -109,7 +114,7 @@ private:
     std::vector<size_t> vec_regs_pool;
 
     const size_t reg_indexes_idx;
-    const size_t reg_const_params_idx;
+    const size_t reg_runtime_params_idx;
 };
 
 class LoopBeginEmitter : public jit_emitter {

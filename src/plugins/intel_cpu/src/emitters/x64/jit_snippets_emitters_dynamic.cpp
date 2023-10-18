@@ -1,0 +1,200 @@
+// Copyright (C) 2020-2022 Intel Corporation
+// SPDX-License-Identifier: Apache-2.0
+//
+
+#pragma once
+
+#include "jit_snippets_emitters_dynamic.hpp"
+
+using namespace InferenceEngine;
+using namespace Xbyak;
+using namespace dnnl::impl;
+using namespace dnnl::impl::cpu::x64;
+
+namespace ov {
+namespace intel_cpu {
+
+using jit_generator = dnnl::impl::cpu::x64::jit_generator;
+using cpu_isa_t = dnnl::impl::cpu::x64::cpu_isa_t;
+using ExpressionPtr = ov::snippets::lowered::ExpressionPtr;
+
+KernelDynamicEmitter::KernelDynamicEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)
+        : KernelEmitter(h, isa, expr), SnippetsDynamicEmitter() {
+    // Dynamic Kernel emitter should do essentially the same thing: collects
+    // io_data_layouts / io_data_sizes / io_shapes (that we ignore, since they are dynamic) and maps registers,
+    // so we just derive from static Kernel for now. Note that we may want to change this inheritance in the future.
+}
+
+
+void KernelDynamicEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, const Xbyak::Reg64& reg_const_params,
+                                       const std::vector<Xbyak::Reg64>& data_ptr_regs) const {
+    const auto num_params = num_inputs + num_outputs;
+    // Note that we don't need offset for the last dim, since it's handled directly by Tile emitter
+    const size_t offset_rank = master_shape.size() - 1;
+    // master_shape size must be valid in both static and dynamic cases
+    std::function<void(Reg64, const int64_t, Reg64)> init_ptr_with_offset;
+    init_ptr_with_offset = [&](Reg64 pointer, const int64_t data_offset_idx, Reg64 reg_tmp) {
+        for (size_t j = 0; j < offset_rank; j++) {
+            if (master_shape[j] != 1) {
+                h->mov(reg_tmp, h->ptr[reg_const_params + data_offset_idx + j * sizeof(int64_t)]);
+                h->imul(reg_tmp, h->ptr[reg_indexes + j * sizeof(size_t)]);
+                h->add(pointer, reg_tmp);
+            }
+        }
+    };
+    const auto spare_corruptable_gpr = std::find_if(gp_regs_pool.begin(), gp_regs_pool.end(),
+                                                    [this](size_t reg) {
+                                                        return reg != reg_indexes_idx && reg != reg_runtime_params_idx;
+                                                    });
+    // todo: this limitation could be relaxed by spilling appropriate reg on the stack
+    OPENVINO_ASSERT(spare_corruptable_gpr != gp_regs_pool.end(), "Failed to find spare register for offset calculation");
+    Reg64 reg_tmp = Reg64(static_cast<int>(*spare_corruptable_gpr));
+    for (size_t i = 0; i < num_unique_buffers; ++i) {
+        h->mov(data_ptr_regs[num_params + i], h->ptr[reg_runtime_params_idx + GET_OFF_DYN(buffer_scratchpad_ptr)]);
+    }
+    for (size_t i = 0; i < num_params; i++) {
+        if (i < num_inputs)
+            h->mov(data_ptr_regs[i], h->ptr[reg_const_params + GET_OFF_DYN(src_ptrs) + i * sizeof(void*)]);
+        else
+            h->mov(data_ptr_regs[i], h->ptr[reg_const_params + GET_OFF_DYN(dst_ptrs) + (i - num_inputs) * sizeof(void*)]);
+        // Offset to appropriate data_offset entry
+        int64_t data_offset_idx = GET_OFF_DYN(data_offsets) + i * SNIPPETS_DYNAMIC_MASTER_SHAPE_RANK * sizeof(int64_t);
+        init_ptr_with_offset(data_ptr_regs[i], data_offset_idx, reg_tmp);
+    }
+}
+void KernelDynamicEmitter::emit_impl(const std::vector<size_t>& in,
+                              const std::vector<size_t>& out) const {
+    h->preamble();
+
+    Reg64 reg_indexes = Reg64(static_cast<int>(reg_indexes_idx));
+    Reg64 reg_const_params = Reg64(static_cast<int>(reg_runtime_params_idx));
+    std::vector<Reg64> data_ptr_regs;
+    transform_idxs_to_regs(data_ptr_regs_idx, data_ptr_regs);
+
+    init_data_pointers(reg_indexes, reg_const_params, data_ptr_regs);
+    for (const auto& expression : body) {
+        const auto& emitter = expression->get_emitter();
+        std::vector<size_t> in_regs, out_regs;
+        std::tie(in_regs, out_regs) = expression->get_reg_info();
+        // Note all DynamicEmitters should have access to the runtime_params argument,
+        // since parameters computed by configurator are stored there.
+        if (std::dynamic_pointer_cast<SnippetsDynamicEmitter>(emitter))
+            in_regs.push_back(reg_runtime_params_idx);
+        emitter->emit_code(in_regs, out_regs, vec_regs_pool, gp_regs_pool);
+    }
+    h->postamble();
+}
+
+LoopBeginEmitter::LoopBeginEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr) : jit_emitter(h, isa) {
+    loop_begin = ov::as_type_ptr<snippets::op::LoopBegin>(expr->get_node());
+    if (!loop_begin)
+        IE_THROW() << "LoopBeginEmitter invoked with invalid op argument";
+    const auto& target_inputs = loop_begin->output(loop_begin->get_output_size() - 1).get_target_inputs();
+    // todo: this check could be excessive, since we check for it in validate_and_infer_types()
+    if (target_inputs.size() != 1)
+        IE_THROW() << "LoopBeginEmitter invoked with invalid configuration: the last output must have exactly one input attached";
+    const auto loop_end = ov::as_type_ptr<snippets::op::LoopEnd>(target_inputs.begin()->get_node()->shared_from_this());
+    if (!loop_end)
+        IE_THROW() << "LoopBeginEmitter invoked with invalid configuration: the last output must be LoopEnd";
+    work_amount = loop_end->get_work_amount();
+    evaluate_once = loop_end->get_evaluate_once();
+    in_out_type_ = emitter_in_out_map::gpr_to_gpr;
+}
+
+void LoopBeginEmitter::emit_code(const std::vector<size_t> &in,
+                                 const std::vector<size_t> &out) const {
+    validate_arguments(in, out);
+    emit_impl(in, out);
+}
+
+void LoopBeginEmitter::validate_arguments(const std::vector<size_t> &in,
+                                          const std::vector<size_t> &out) const {
+    if (!in.empty())
+        IE_THROW() << "Invalid inputs size: expected 0 got " << in.size();
+    if (out.size() != 1)
+        IE_THROW() << "Invalid outputs size: expected 1 got " << out.size();
+}
+
+void LoopBeginEmitter::emit_impl(const std::vector<size_t>& in,
+                                 const std::vector<size_t>& out) const {
+    // todo: In dynamic case we will also need to set broadcasting info here
+    Reg64 reg_work_amount = Reg64(static_cast<int>(out.back()));
+    Label for_body;
+    // save previous register state (if there is an outer loop that uses this reg for example)
+    if (!evaluate_once) {
+        h->mov(reg_work_amount, work_amount);
+    }
+    // Note: loop address is not calculated at this point, so need to call calcJmpAddress() which is protected
+    // or ready(), but they both set internal flags and that's not a desired way to use them.
+    // So the most obvious WA is just to use current address manually
+    loop_begin->begin_address = h->getCurr();
+}
+
+LoopEndEmitter::LoopEndEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr) : jit_emitter(h, isa) {
+    loop_end = ov::as_type_ptr<snippets::op::LoopEnd>(expr->get_node());
+    if (!loop_end)
+        IE_THROW() << "LoopEndEmitter invoked with invalid op argument";
+    loop_begin = loop_end->get_loop_begin();
+    // todo: this check could be excessive, since we check for it in validate_and_infer_types()
+    if (!loop_begin)
+        IE_THROW() << "LoopEndEmitter invoked with invalid configuration: the last arg must be LoopBegin";
+    // Note that 1 edge connects LoopBegin and LoopEnd
+    num_inputs = loop_end->get_input_num();
+    num_outputs = loop_end->get_output_num();
+    wa_increment = static_cast<int64_t>(loop_end->get_increment());
+    work_amount = static_cast<int64_t>(loop_end->get_work_amount());
+    ptr_increments = loop_end->get_ptr_increments();
+    finalization_offsets = loop_end->get_finalization_offsets();
+    evaluate_once = loop_end->get_evaluate_once();
+    io_data_size = loop_end->get_element_type_sizes();
+    in_out_type_ = emitter_in_out_map::gpr_to_gpr;
+}
+
+void LoopEndEmitter::emit_code(const std::vector<size_t> &in,
+                               const std::vector<size_t> &out) const {
+    validate_arguments(in, out);
+    emit_impl(in, out);
+}
+
+
+void LoopEndEmitter::validate_arguments(const std::vector<size_t> &in,
+                                        const std::vector<size_t> &out) const {
+    if (out.size() != num_outputs)
+        IE_THROW() << "Invalid number of out arguments: expected " << num_outputs << " got " << out.size();
+    if (in.size() != num_inputs)
+        IE_THROW() << "Invalid number of in arguments: expected " << num_inputs  << " got " << in.size();
+    const auto io_size = num_inputs - 1;
+    if (ptr_increments.size() != io_size)
+        IE_THROW() << "Invalid ptr_increments size: expected " << io_size << " got " << ptr_increments.size();
+    if (finalization_offsets.size() != io_size)
+        IE_THROW() << "Invalid finalization_offsets size: expected: " << io_size << " got " << finalization_offsets.size();
+}
+
+void LoopEndEmitter::emit_impl(const std::vector<size_t>& in,
+                               const std::vector<size_t>& out) const {
+    std::vector<size_t> data_ptr_reg_idxs;
+    // the last input is actually a work_amount reg
+    data_ptr_reg_idxs.reserve(num_inputs - 1);
+    std::copy(in.begin(), in.end() - 1, std::back_inserter(data_ptr_reg_idxs));
+    std::vector<Reg64> data_ptr_regs;
+    transform_idxs_to_regs(data_ptr_reg_idxs, data_ptr_regs);
+    Reg64 reg_work_amount = Reg64(in.back());
+    if (!evaluate_once) {
+        for (size_t idx = 0; idx < data_ptr_regs.size(); idx++) {
+            if (ptr_increments[idx] != 0)
+                h->add(data_ptr_regs[idx], ptr_increments[idx] * wa_increment * io_data_size[idx]);
+        }
+        h->sub(reg_work_amount, wa_increment);
+        h->cmp(reg_work_amount, wa_increment);
+        h->jge(loop_begin->begin_address);
+    }
+
+    for (size_t idx = 0; idx < data_ptr_regs.size(); idx++) {
+        if (finalization_offsets[idx] != 0)
+            h->add(data_ptr_regs[idx], finalization_offsets[idx] * io_data_size[idx]);
+    }
+}
+
+
+}   // namespace intel_cpu
+}   // namespace ov
