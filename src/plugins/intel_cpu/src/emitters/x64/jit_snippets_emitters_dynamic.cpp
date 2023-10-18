@@ -26,7 +26,7 @@ KernelDynamicEmitter::KernelDynamicEmitter(jit_generator* h, cpu_isa_t isa, cons
 }
 
 
-void KernelDynamicEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, const Xbyak::Reg64& reg_const_params,
+void KernelDynamicEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, const Xbyak::Reg64& reg_runtime_params,
                                        const std::vector<Xbyak::Reg64>& data_ptr_regs) const {
     const auto num_params = num_inputs + num_outputs;
     // Note that we don't need offset for the last dim, since it's handled directly by Tile emitter
@@ -36,7 +36,7 @@ void KernelDynamicEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, c
     init_ptr_with_offset = [&](Reg64 pointer, const int64_t data_offset_idx, Reg64 reg_tmp) {
         for (size_t j = 0; j < offset_rank; j++) {
             if (master_shape[j] != 1) {
-                h->mov(reg_tmp, h->ptr[reg_const_params + data_offset_idx + j * sizeof(int64_t)]);
+                h->mov(reg_tmp, h->ptr[reg_runtime_params + data_offset_idx + j * sizeof(int64_t)]);
                 h->imul(reg_tmp, h->ptr[reg_indexes + j * sizeof(size_t)]);
                 h->add(pointer, reg_tmp);
             }
@@ -50,13 +50,13 @@ void KernelDynamicEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, c
     OPENVINO_ASSERT(spare_corruptable_gpr != gp_regs_pool.end(), "Failed to find spare register for offset calculation");
     Reg64 reg_tmp = Reg64(static_cast<int>(*spare_corruptable_gpr));
     for (size_t i = 0; i < num_unique_buffers; ++i) {
-        h->mov(data_ptr_regs[num_params + i], h->ptr[reg_runtime_params_idx + GET_OFF_DYN(buffer_scratchpad_ptr)]);
+        h->mov(data_ptr_regs[num_params + i], h->ptr[reg_runtime_params + GET_OFF_DYN(buffer_scratchpad_ptr)]);
     }
     for (size_t i = 0; i < num_params; i++) {
         if (i < num_inputs)
-            h->mov(data_ptr_regs[i], h->ptr[reg_const_params + GET_OFF_DYN(src_ptrs) + i * sizeof(void*)]);
+            h->mov(data_ptr_regs[i], h->ptr[reg_runtime_params + GET_OFF_DYN(src_ptrs) + i * sizeof(void*)]);
         else
-            h->mov(data_ptr_regs[i], h->ptr[reg_const_params + GET_OFF_DYN(dst_ptrs) + (i - num_inputs) * sizeof(void*)]);
+            h->mov(data_ptr_regs[i], h->ptr[reg_runtime_params + GET_OFF_DYN(dst_ptrs) + (i - num_inputs) * sizeof(void*)]);
         // Offset to appropriate data_offset entry
         int64_t data_offset_idx = GET_OFF_DYN(data_offsets) + i * SNIPPETS_DYNAMIC_MASTER_SHAPE_RANK * sizeof(int64_t);
         init_ptr_with_offset(data_ptr_regs[i], data_offset_idx, reg_tmp);
@@ -67,11 +67,11 @@ void KernelDynamicEmitter::emit_impl(const std::vector<size_t>& in,
     h->preamble();
 
     Reg64 reg_indexes = Reg64(static_cast<int>(reg_indexes_idx));
-    Reg64 reg_const_params = Reg64(static_cast<int>(reg_runtime_params_idx));
+    Reg64 reg_runtime_params = Reg64(static_cast<int>(reg_runtime_params_idx));
     std::vector<Reg64> data_ptr_regs;
     transform_idxs_to_regs(data_ptr_regs_idx, data_ptr_regs);
 
-    init_data_pointers(reg_indexes, reg_const_params, data_ptr_regs);
+    init_data_pointers(reg_indexes, reg_runtime_params, data_ptr_regs);
     for (const auto& expression : body) {
         const auto& emitter = expression->get_emitter();
         std::vector<size_t> in_regs, out_regs;
@@ -85,48 +85,40 @@ void KernelDynamicEmitter::emit_impl(const std::vector<size_t>& in,
     h->postamble();
 }
 
-LoopBeginEmitter::LoopBeginEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr) : jit_emitter(h, isa) {
+LoopBeginDynamicEmitter::LoopBeginDynamicEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr) : jit_emitter(h, isa) {
     loop_begin = ov::as_type_ptr<snippets::op::LoopBegin>(expr->get_node());
-    if (!loop_begin)
-        IE_THROW() << "LoopBeginEmitter invoked with invalid op argument";
-    const auto& target_inputs = loop_begin->output(loop_begin->get_output_size() - 1).get_target_inputs();
-    // todo: this check could be excessive, since we check for it in validate_and_infer_types()
-    if (target_inputs.size() != 1)
-        IE_THROW() << "LoopBeginEmitter invoked with invalid configuration: the last output must have exactly one input attached";
-    const auto loop_end = ov::as_type_ptr<snippets::op::LoopEnd>(target_inputs.begin()->get_node()->shared_from_this());
-    if (!loop_end)
-        IE_THROW() << "LoopBeginEmitter invoked with invalid configuration: the last output must be LoopEnd";
-    work_amount = loop_end->get_work_amount();
-    evaluate_once = loop_end->get_evaluate_once();
+    OPENVINO_ASSERT(loop_begin && loop_begin->is_dynamic(), "LoopBeginDynamicEmitter invoked with invalid op argument");
+    const auto& out_connectors = expr->get_output_port_connectors();
+    const auto& consumers = out_connectors[0]->get_consumers();
+    const auto loop_end = ov::as_type_ptr<snippets::op::LoopEnd>(consumers.begin()->get_expr()->get_node());
+    OPENVINO_ASSERT(out_connectors.size() == 1 && consumers.size() == 1 && loop_end,
+                    "LoopBeginDynamicEmitter invoked with invalid configuration");
+    loop_id = loop_end->get_id();
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
 }
 
-void LoopBeginEmitter::emit_code(const std::vector<size_t> &in,
-                                 const std::vector<size_t> &out) const {
+void LoopBeginDynamicEmitter::emit_code(const std::vector<size_t> &in, const std::vector<size_t> &out,
+                                        const std::vector<size_t> &pool_vec, const std::vector<size_t> &pool_gpr) const {
     validate_arguments(in, out);
-    emit_impl(in, out);
+    jit_emitter::emit_code(in, out, pool_vec, pool_gpr);
 }
 
-void LoopBeginEmitter::validate_arguments(const std::vector<size_t> &in,
-                                          const std::vector<size_t> &out) const {
-    if (!in.empty())
-        IE_THROW() << "Invalid inputs size: expected 0 got " << in.size();
+void LoopBeginDynamicEmitter::validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const {
+    // Note: the only expected input is the reg_runtime_params_idx
+    if (in.size() == 1)
+        IE_THROW() << "Invalid inputs size: expected 1 got " << in.size();
     if (out.size() != 1)
         IE_THROW() << "Invalid outputs size: expected 1 got " << out.size();
 }
 
-void LoopBeginEmitter::emit_impl(const std::vector<size_t>& in,
-                                 const std::vector<size_t>& out) const {
-    // todo: In dynamic case we will also need to set broadcasting info here
+void LoopBeginDynamicEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size_t>& out) const {
     Reg64 reg_work_amount = Reg64(static_cast<int>(out.back()));
+    Reg64 reg_runtime_params = Reg64(static_cast<int>(in.back()));
+    Reg64 reg_loop_args_ptr = Reg64(static_cast<int>(aux_gpr_idxs[0]));
+    h->mov(reg_loop_args_ptr, h->ptr[reg_runtime_params + GET_OFF_DYN(loop_args) + loop_id * sizeof(void*)]);
+
     Label for_body;
-    // save previous register state (if there is an outer loop that uses this reg for example)
-    if (!evaluate_once) {
-        h->mov(reg_work_amount, work_amount);
-    }
-    // Note: loop address is not calculated at this point, so need to call calcJmpAddress() which is protected
-    // or ready(), but they both set internal flags and that's not a desired way to use them.
-    // So the most obvious WA is just to use current address manually
+    h->mov(reg_work_amount, h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(work_amount)]);
     loop_begin->begin_address = h->getCurr();
 }
 

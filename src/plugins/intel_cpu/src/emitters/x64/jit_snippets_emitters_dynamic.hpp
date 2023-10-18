@@ -10,16 +10,16 @@ namespace ov {
 namespace intel_cpu {
 
 #define GET_OFF_DYN(field) offsetof(jit_snippets_dynamic_call_args, field)
-class jit_snippets_dynamic_call_args {
-public:
-    class loop_args {
+#define GET_OFF_LOOP_ARGS(field) offsetof(jit_snippets_dynamic_call_args::loop_args_t, field)
+struct jit_snippets_dynamic_call_args {
+    struct loop_args_t {
         int32_t work_amount = 0;
         int32_t num_data_ptrs = 0;
         int32_t* ptr_increments = nullptr;
         int32_t* finalization_offsets = nullptr;
     };
     int32_t num_loops = 0;
-    loop_args* loop_args = nullptr;
+    loop_args_t* loop_args = nullptr;
     const void *src_ptrs[SNIPPETS_MAX_SNIPPETS_DIMS] = {};
     void *dst_ptrs[SNIPPETS_MAX_SNIPPETS_DIMS] = {};
     // Src and dst offsets calculated once for every set of input shapes,
@@ -72,9 +72,11 @@ public:
     LoopBeginDynamicEmitter(dnnl::impl::cpu::x64::jit_generator* h,
                             dnnl::impl::cpu::x64::cpu_isa_t isa,
                             const ov::snippets::lowered::ExpressionPtr& expr);
-    void emit_code(const std::vector<size_t> &in,
-                   const std::vector<size_t> &out) const;
-    size_t get_inputs_num() const override {return 0;}
+
+    void emit_code(const std::vector<size_t> &in_idxs, const std::vector<size_t> &out_idxs,
+                   const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const override;
+    size_t get_inputs_num() const override {return 1;}
+    size_t aux_gprs_count() const override {return 1;}
 
 private:
     using jit_emitter::emit_code;
@@ -84,7 +86,7 @@ private:
                    const std::vector<size_t>& out) const override;
 
     std::shared_ptr<snippets::op::LoopBegin> loop_begin;
-    size_t work_amount = 0; // need to store work_amount explicitly, since two loops can work on the same dim (e.g. vector + scalar)
+    size_t loop_id;
 };
 
 class LoopEndDynamicEmitter : public jit_emitter {
