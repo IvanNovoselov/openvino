@@ -86,7 +86,7 @@ void KernelDynamicEmitter::emit_impl(const std::vector<size_t>& in,
 }
 
 LoopBeginDynamicEmitter::LoopBeginDynamicEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr) : jit_emitter(h, isa) {
-    loop_begin = ov::as_type_ptr<snippets::op::LoopBegin>(expr->get_node());
+    const auto& loop_begin = ov::as_type_ptr<snippets::op::LoopBegin>(expr->get_node());
     OPENVINO_ASSERT(loop_begin && loop_begin->is_dynamic(), "LoopBeginDynamicEmitter invoked with invalid op argument");
     const auto& out_connectors = expr->get_output_port_connectors();
     const auto& consumers = out_connectors[0]->get_consumers();
@@ -117,73 +117,79 @@ void LoopBeginDynamicEmitter::emit_impl(const std::vector<size_t>& in, const std
     Reg64 reg_loop_args_ptr = Reg64(static_cast<int>(aux_gpr_idxs[0]));
     h->mov(reg_loop_args_ptr, h->ptr[reg_runtime_params + GET_OFF_DYN(loop_args) + loop_id * sizeof(void*)]);
 
-    Label for_body;
     h->mov(reg_work_amount, h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(work_amount)]);
-    loop_begin->begin_address = h->getCurr();
+    h->L(*loop_begin_label);
+//    loop_begin->begin_address = h->getCurr();
 }
 
-LoopEndEmitter::LoopEndEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr) : jit_emitter(h, isa) {
-    loop_end = ov::as_type_ptr<snippets::op::LoopEnd>(expr->get_node());
-    if (!loop_end)
-        IE_THROW() << "LoopEndEmitter invoked with invalid op argument";
-    loop_begin = loop_end->get_loop_begin();
-    // todo: this check could be excessive, since we check for it in validate_and_infer_types()
-    if (!loop_begin)
-        IE_THROW() << "LoopEndEmitter invoked with invalid configuration: the last arg must be LoopBegin";
+LoopEndDynamicEmitter::LoopEndDynamicEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr) : jit_emitter(h, isa) {
+    const auto& loop_end = ov::as_type_ptr<snippets::op::LoopEnd>(expr->get_node());
+    OPENVINO_ASSERT(loop_end, "LoopEndDynamicEmitter invoked with invalid op argument");
+    // todo: can we rely on the fact that LoopBegin connected to the last port / uses the last connector?
+    for (const auto& in_conn : expr->get_input_port_connectors()) {
+        const auto& begin_expr = in_conn->get_source().get_expr();
+        if (ov::is_type<snippets::op::LoopBegin>(begin_expr->get_node())) {
+            const auto& loop_begin_emitter = std::dynamic_pointer_cast<LoopBeginDynamicEmitter>(begin_expr->get_emitter());
+            OPENVINO_ASSERT(loop_begin_emitter, "Invalid emitter detected for LoopBegin operation");
+            loop_begin_label = loop_begin_emitter->get_begin_label();
+            break;
+        }
+    }
+    OPENVINO_ASSERT(loop_begin_label, "LoopEndDynamicEmitter couldn't find connected LoopEndDynamicEmitter");
     // Note that 1 edge connects LoopBegin and LoopEnd
-    num_inputs = loop_end->get_input_num();
-    num_outputs = loop_end->get_output_num();
+    num_inputs = expr->get_input_count();
+    num_outputs = expr->get_output_count();
     wa_increment = static_cast<int64_t>(loop_end->get_increment());
-    work_amount = static_cast<int64_t>(loop_end->get_work_amount());
-    ptr_increments = loop_end->get_ptr_increments();
-    finalization_offsets = loop_end->get_finalization_offsets();
-    evaluate_once = loop_end->get_evaluate_once();
     io_data_size = loop_end->get_element_type_sizes();
+    OPENVINO_ASSERT(io_data_size.size() == num_inputs, "LoopEndDynamicEmitter detected invalid number of io_data_size elements");
+    loop_id = loop_end->get_id();
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
 }
 
-void LoopEndEmitter::emit_code(const std::vector<size_t> &in,
-                               const std::vector<size_t> &out) const {
+void LoopEndDynamicEmitter::emit_code(const std::vector<size_t> &in, const std::vector<size_t> &out,
+                                      const std::vector<size_t> &pool_vec, const std::vector<size_t> &pool_gpr) const {
     validate_arguments(in, out);
-    emit_impl(in, out);
+    jit_emitter::emit_code(in, out, pool_vec, pool_gpr);
 }
 
 
-void LoopEndEmitter::validate_arguments(const std::vector<size_t> &in,
+void LoopEndDynamicEmitter::validate_arguments(const std::vector<size_t> &in,
                                         const std::vector<size_t> &out) const {
-    if (out.size() != num_outputs)
-        IE_THROW() << "Invalid number of out arguments: expected " << num_outputs << " got " << out.size();
-    if (in.size() != num_inputs)
-        IE_THROW() << "Invalid number of in arguments: expected " << num_inputs  << " got " << in.size();
-    const auto io_size = num_inputs - 1;
-    if (ptr_increments.size() != io_size)
-        IE_THROW() << "Invalid ptr_increments size: expected " << io_size << " got " << ptr_increments.size();
-    if (finalization_offsets.size() != io_size)
-        IE_THROW() << "Invalid finalization_offsets size: expected: " << io_size << " got " << finalization_offsets.size();
+    // Note: there must be additional input argument for runtime parameters
+    OPENVINO_ASSERT(in.size() == num_inputs + 1, "Invalid number of in arguments.");
+    OPENVINO_ASSERT(out.size() == num_outputs, "Invalid number of out arguments.");
 }
 
-void LoopEndEmitter::emit_impl(const std::vector<size_t>& in,
+void LoopEndDynamicEmitter::emit_impl(const std::vector<size_t>& in,
                                const std::vector<size_t>& out) const {
-    std::vector<size_t> data_ptr_reg_idxs;
-    // the last input is actually a work_amount reg
-    data_ptr_reg_idxs.reserve(num_inputs - 1);
-    std::copy(in.begin(), in.end() - 1, std::back_inserter(data_ptr_reg_idxs));
+
+    Reg64 reg_runtime_params = Reg64(static_cast<int>(in[in.size() - 1]));
+    Reg64 reg_work_amount = Reg64(static_cast<int>(in[in.size() - 2]));
+    Reg64 reg_loop_args_ptr = Reg64(static_cast<int>(aux_gpr_idxs[0]));
+    Reg64 reg_tmp = Reg64(static_cast<int>(aux_gpr_idxs[1]));
+    h->mov(reg_loop_args_ptr, h->ptr[reg_runtime_params + GET_OFF_DYN(loop_args) + loop_id * sizeof(void*)]);
+
     std::vector<Reg64> data_ptr_regs;
-    transform_idxs_to_regs(data_ptr_reg_idxs, data_ptr_regs);
-    Reg64 reg_work_amount = Reg64(in.back());
-    if (!evaluate_once) {
-        for (size_t idx = 0; idx < data_ptr_regs.size(); idx++) {
-            if (ptr_increments[idx] != 0)
-                h->add(data_ptr_regs[idx], ptr_increments[idx] * wa_increment * io_data_size[idx]);
-        }
-        h->sub(reg_work_amount, wa_increment);
-        h->cmp(reg_work_amount, wa_increment);
-        h->jge(loop_begin->begin_address);
-    }
+    transform_idxs_to_regs(std::vector<size_t>(in.begin(), in.end() - 2), data_ptr_regs);
 
     for (size_t idx = 0; idx < data_ptr_regs.size(); idx++) {
-        if (finalization_offsets[idx] != 0)
-            h->add(data_ptr_regs[idx], finalization_offsets[idx] * io_data_size[idx]);
+        // todo: wa_increment and io_data_size[idx] are known in compile time, ptr_increments are calculated in runtime.
+        //  If we perform this multiplication in the Configurator, we won't need reg_tmp in this emitter.
+        //  The same is true for finalization_offsets
+        h->imul(reg_tmp,
+                h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(ptr_increments) + idx * sizeof(int64_t)],
+                static_cast<int>(wa_increment * io_data_size[idx]));
+        h->add(data_ptr_regs[idx], reg_tmp);
+    }
+    h->sub(reg_work_amount, wa_increment);
+    h->cmp(reg_work_amount, wa_increment);
+    h->jge(*loop_begin_label);
+
+    for (size_t idx = 0; idx < data_ptr_regs.size(); idx++) {
+        h->imul(reg_tmp,
+                h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(finalization_offsets) + idx * sizeof(int64_t)],
+                static_cast<int>(io_data_size[idx]));
+            h->add(data_ptr_regs[idx], reg_tmp);
     }
 }
 

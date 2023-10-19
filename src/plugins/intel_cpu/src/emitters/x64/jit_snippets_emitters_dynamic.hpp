@@ -13,10 +13,11 @@ namespace intel_cpu {
 #define GET_OFF_LOOP_ARGS(field) offsetof(jit_snippets_dynamic_call_args::loop_args_t, field)
 struct jit_snippets_dynamic_call_args {
     struct loop_args_t {
-        int32_t work_amount = 0;
-        int32_t num_data_ptrs = 0;
-        int32_t* ptr_increments = nullptr;
-        int32_t* finalization_offsets = nullptr;
+        //todo: can we use smaller data types?
+        int64_t work_amount = 0;
+        int64_t num_data_ptrs = 0;
+        int64_t* ptr_increments = nullptr;
+        int64_t* finalization_offsets = nullptr;
     };
     int32_t num_loops = 0;
     loop_args_t* loop_args = nullptr;
@@ -75,8 +76,10 @@ public:
 
     void emit_code(const std::vector<size_t> &in_idxs, const std::vector<size_t> &out_idxs,
                    const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const override;
+    // Todo: do we use get_inputs_num anywhere? Can we get rig of it?
     size_t get_inputs_num() const override {return 1;}
     size_t aux_gprs_count() const override {return 1;}
+    std::shared_ptr<const Xbyak::Label> get_begin_label() {return loop_begin_label;}
 
 private:
     using jit_emitter::emit_code;
@@ -85,7 +88,7 @@ private:
     void emit_impl(const std::vector<size_t>& in,
                    const std::vector<size_t>& out) const override;
 
-    std::shared_ptr<snippets::op::LoopBegin> loop_begin;
+    std::shared_ptr<Xbyak::Label> loop_begin_label;
     size_t loop_id;
 };
 
@@ -94,9 +97,10 @@ public:
     LoopEndDynamicEmitter(dnnl::impl::cpu::x64::jit_generator* h,
                           dnnl::impl::cpu::x64::cpu_isa_t isa,
                           const ov::snippets::lowered::ExpressionPtr& expr);
-    void emit_code(const std::vector<size_t> &in,
-                   const std::vector<size_t> &out) const;
+    void emit_code(const std::vector<size_t> &in_idxs, const std::vector<size_t> &out_idxs,
+                   const std::vector<size_t> &pool_vec_idxs, const std::vector<size_t> &pool_gpr_idxs) const override;
     size_t get_inputs_num() const override {return 0;}
+    size_t aux_gprs_count() const override {return 2;}
 
 private:
     using jit_emitter::emit_code;
@@ -106,18 +110,14 @@ private:
     void emit_impl(const std::vector<size_t>& in,
                    const std::vector<size_t>& out) const override;
 
-    std::shared_ptr<snippets::op::LoopBegin> loop_begin;
-    std::shared_ptr<snippets::op::LoopEnd> loop_end;
+    std::shared_ptr<const Xbyak::Label> loop_begin_label;
 
     size_t num_inputs = 0;
     size_t num_outputs = 0;
+    size_t loop_id;
     // keep data_size int64_t to avoid conversion to size_t (and overflow) when multiplied by negative increments or offsets
     std::vector<int64_t> io_data_size {};
     int64_t wa_increment = 0;
-    int64_t work_amount = 0;
-    bool evaluate_once = false;
-    std::vector<int64_t> ptr_increments;
-    std::vector<int64_t> finalization_offsets;
 };
 
 }   // namespace intel_cpu
