@@ -43,6 +43,7 @@ public:
                          const ov::snippets::lowered::ExpressionPtr& expr);
 
     size_t get_inputs_num() const override {return 0;}
+//    std::vector<std::vector<size_t>> calculate_data_offsets(const std::vector<std::vector<size_t>>& runtime_io_shapes) const override;
 
 private:
     using jit_emitter::emit_code;

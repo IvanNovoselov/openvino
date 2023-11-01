@@ -93,6 +93,38 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
     }
 }
 
+std::vector<size_t> KernelEmitter::offset_calculation(const std::vector<size_t>& shape, const std::vector<size_t>& layout, const size_t data_size, bool is_input) {
+    // Strides represent distance between consecutive elements of corresponding dimension.
+    // If a dim size == 1, then the next dim starts immediately and the stride is 0
+    // case 1:
+    //    shape:         s0,    s1, s2, s3
+    //    strides: s1*s2*s3, s2*s3, s3,  1
+    // case 2:
+    //    shape:      s0, s1, s2 == 1, s3
+    //    strides: s1*s3, s3,       0,  1
+    std::vector<size_t> strides(shape.size());
+    size_t dim_step = 1;
+    strides[shape.size() - 1] = 1;
+    for (int k = static_cast<int>(shape.size()) - 2; k >= 0; k--) {
+        dim_step *= shape[k+1];
+        strides[k] = shape[k] != 1 ? dim_step * data_size : 0;
+    }
+    // Note: this is an extra copy, but let's keep it for clarity
+    if (!layout.empty()) {
+        std::vector<size_t> reordered_strides(strides.size());
+        for (size_t i = 0; i < layout.size(); i++) {
+            const auto& src_idx = is_input ? layout[i] : i;
+            const auto& dst_idx = is_input ? i : layout[i];
+            reordered_strides[dst_idx] = strides[src_idx];
+        }
+        strides = std::move(reordered_strides);
+    }
+    // the last stride is ignored, since the entire last dim is processed by kernel
+    // and no parallel_for data_ptr offsets can be applied in this case
+    strides.pop_back();
+    return strides;
+}
+
 KernelEmitter::KernelEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)
     : jit_container_emitter(h, isa, expr),
       reg_indexes_idx(abi_param1.getIdx()),
@@ -219,49 +251,25 @@ void KernelEmitter::validate_arguments(const std::vector<size_t> &in,
         << num_params << " data_ptr_regs_idx.size() = " << data_ptr_regs_idx.size();
 }
 
+std::vector<std::vector<size_t>> KernelEmitter::calculate_data_offsets(const std::vector<std::vector<size_t>>& runtime_io_shapes) const {
+    const auto num_params = num_inputs + num_outputs;
+    const size_t offset_rank = master_shape.size() - 1;
+    std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>{});
+    for (size_t i = 0; i < num_params; i++) {
+        auto strides = offset_calculation(runtime_io_shapes[i],  io_data_layouts[i], io_data_sizes[i], i < num_inputs);
+        // actual offset size might be larger that the shape size due to 6D scheduling
+        strides.insert(strides.begin(), offset_rank - strides.size(), 0);
+        data_offsets[i] = strides;
+    }
+    return data_offsets;
+}
+
 void KernelEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, const Xbyak::Reg64& reg_const_params,
                                        const std::vector<Xbyak::Reg64>& data_ptr_regs) const {
     const auto num_params = num_inputs + num_outputs;
     // Note that we don't need offset for the last dim, since it's handled directly by Tile emitter
     const size_t offset_rank = master_shape.size() - 1;
-    std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>{});
-    auto offset_calculation = [=](const std::vector<size_t>& shape, const std::vector<size_t>& layout, const size_t data_size, bool is_input) {
-        // Strides represent distance between consecutive elements of corresponding dimension.
-        // If a dim size == 1, then the next dim starts immediately and the stride is 0
-        // case 1:
-        //    shape:         s0,    s1, s2, s3
-        //    strides: s1*s2*s3, s2*s3, s3,  1
-        // case 2:
-        //    shape:      s0, s1, s2 == 1, s3
-        //    strides: s1*s3, s3,       0,  1
-        std::vector<size_t> strides(shape.size());
-        size_t dim_step = 1;
-        strides[shape.size() - 1] = 1;
-        for (int k = static_cast<int>(shape.size()) - 2; k >= 0; k--) {
-            dim_step *= shape[k+1];
-            strides[k] = shape[k] != 1 ? dim_step * data_size : 0;
-        }
-        // Note: this is an extra copy, but let's keep it for clarity
-        if (!layout.empty()) {
-            std::vector<size_t> reordered_strides(strides.size());
-            for (size_t i = 0; i < layout.size(); i++) {
-                const auto& src_idx = is_input ? layout[i] : i;
-                const auto& dst_idx = is_input ? i : layout[i];
-                reordered_strides[dst_idx] = strides[src_idx];
-            }
-            strides = std::move(reordered_strides);
-        }
-        // the last stride is ignored, since the entire last dim is processed by kernel
-        // and no parallel_for data_ptr offsets can be applied in this case
-        strides.pop_back();
-        // actual offset size might be larger that the shape size due to 6D scheduling
-        strides.insert(strides.begin(), offset_rank - strides.size(), 0);
-
-        return strides;
-    };
-    for (size_t i = 0; i < num_params; i++) {
-        data_offsets[i] = offset_calculation(io_shapes[i],  io_data_layouts[i], io_data_sizes[i], i < num_inputs);
-    }
+    std::vector<std::vector<size_t>> data_offsets = calculate_data_offsets(io_shapes);
     // master_shape size must be valid in both static and dynamic cases
     std::function<void(Reg64, const std::vector<size_t>&, Reg64)> init_ptr_with_offset;
     init_ptr_with_offset = [&](Reg64 pointer, const std::vector<size_t>& offsets, Reg64 reg_tmp) {

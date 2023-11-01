@@ -27,12 +27,12 @@ class Generator;
  * Must be allocated and freed by the backend.
  */
 class LoweringResult {
+public:
     friend class Generator;
     // Some emitters rely on other precompiled kernels.
     // We need to keep the pointers to such emitters alive, so the kernels would still be accessible at runtime.
     std::vector<std::shared_ptr<Emitter>> m_saved_emitters{};
 
-public:
     std::shared_ptr<CompiledSnippet> compiled_snippet = nullptr;
     size_t buffer_scratchpad_size = 0;
 };

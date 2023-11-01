@@ -490,14 +490,47 @@ void Snippet::SnippetJitExecutor::update_ptrs(jit_snippets_call_args& call_args,
     }
 }
 
+void Snippet::SnippetJitExecutor::update_ptrs(jit_snippets_dynamic_call_args& call_args,
+                                              const int64_t indexes[5],
+                                              const std::vector<MemoryPtr>& inMemPtrs,
+                                              const std::vector<MemoryPtr>& outMemPtrs) {
+
+    for (size_t i = 0; i < outMemPtrs.size(); i++)
+        call_args.dst_ptrs[i] = reinterpret_cast<uint8_t*>(outMemPtrs[i]->getData()) + start_offset_out[i];
+
+    const auto& dynamic_kernel = std::dynamic_pointer_cast<KernelDynamicEmitter>(schedule.lowering_result.m_saved_emitters.back());
+    OPENVINO_ASSERT(dynamic_kernel, "KernelDynamicEmitter is expected but not found");
+
+    // todo: avoid this repacking. Either store io_shapes in snippetAttrs or make calculate_data_offsets take in and out args separately
+    std::vector<std::vector<size_t>> io_shapes = snippetAttrs.inMemBlockedDims;
+    io_shapes.insert(io_shapes.end(), snippetAttrs.outMemBlockedDims.begin(), snippetAttrs.outMemBlockedDims.end());
+
+    auto data_offsets = dynamic_kernel->calculate_data_offsets(io_shapes);
+    OPENVINO_ASSERT(data_offsets.front().size() == tensorRank, "Data offsets with invalid ranks detected");
+
+    for (size_t i = 0; i < inMemPtrs.size(); i++) {
+        const auto& i_offset = call_args.data_offsets[i];
+        auto i_ptr = reinterpret_cast<uint8_t*>(inMemPtrs[i]->getData()) + start_offset_in[i];
+        // todo: offset_rank is always 5, since we have 5 indexes?
+        for (size_t j = 0; j < tensorRank - 1; j++) {
+            if (parallel_exec_domain[j] != 1)
+                i_ptr += (i_offset[j] * indexes[j]);
+        }
+        call_args.src_ptrs[i] = i_ptr;
+    }
+    // todo: update dst ptrs
+}
+
+
 void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {
     const auto& dom = parallel_exec_domain;
     // < N, C, H, W > < 1, 1, N, C*H*W>
     const auto& callable = schedule.get_callable<kernel>();
-    int64_t indexes[] = {0, 0, 0, 0, 0};
-    jit_snippets_call_args call_args;
-    update_ptrs(call_args, inMemPtrs, outMemPtrs);
-    callable(indexes, &call_args);
+    int64_t indexes[] = {0, 0, 0, 0, 1};
+    jit_snippets_dynamic_call_args dynamic_call_args;
+    update_ptrs(dynamic_call_args, indexes, inMemPtrs, outMemPtrs);
+
+    callable(indexes, &dynamic_call_args);
 //    parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
 //        [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
 //            int64_t indexes[] = {d0, d1, d2, d3, d4};

@@ -52,6 +52,10 @@ void Generator::generate(lowered::LinearIR& linear_ir, LoweringResult& result, c
                 result.m_saved_emitters.emplace_back(emitter);
         }
     }
+    // todo: we need to save Kernel for dynamic case to have access to the offset calculation method.
+    //  Revise this implementation when the Configurator is implemented.
+    //  An alternative solution is to create offset calculation method in LIR/Subgraph or plugin node
+    result.m_saved_emitters.emplace_back(kernel);
     result.compiled_snippet = target->get_snippet();
 }
 

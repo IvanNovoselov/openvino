@@ -5,6 +5,7 @@
 #pragma once
 
 #include "jit_snippets_emitters_dynamic.hpp"
+#include "emitters/utils.hpp"
 
 using namespace InferenceEngine;
 using namespace Xbyak;
@@ -72,6 +73,20 @@ void KernelDynamicEmitter::emit_impl(const std::vector<size_t>& in,
     transform_idxs_to_regs(data_ptr_regs_idx, data_ptr_regs);
 
     init_data_pointers(reg_indexes, reg_runtime_params, data_ptr_regs);
+
+    RegPrinter::print<int>(*h,  data_ptr_regs[0], "data_ptr_regs_0");
+    auto Vmm = Xbyak::Zmm(0);
+    h->uni_vmovups(Vmm, h->ptr[data_ptr_regs[0]]);
+    RegPrinter::print<float>(*h,  Vmm, "data_ptr_regs_val_0");
+
+    RegPrinter::print<int>(*h,  data_ptr_regs[1], "data_ptr_regs_1");
+    h->uni_vmovups(Vmm, h->ptr[data_ptr_regs[1]]);
+    RegPrinter::print<float>(*h,  Vmm, "data_ptr_regs_val_1");
+
+    RegPrinter::print<int>(*h,  data_ptr_regs[2], "data_ptr_regs_2");
+    h->uni_vmovups(Vmm, h->ptr[data_ptr_regs[2]]);
+    RegPrinter::print<float>(*h,  Vmm, "data_ptr_regs_val_2");
+
     for (const auto& expression : body) {
         const auto& emitter = expression->get_emitter();
         std::vector<size_t> in_regs, out_regs;
