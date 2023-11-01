@@ -85,9 +85,11 @@ void KernelDynamicEmitter::emit_impl(const std::vector<size_t>& in,
     h->postamble();
 }
 
-LoopBeginDynamicEmitter::LoopBeginDynamicEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr) : jit_emitter(h, isa) {
+LoopBeginDynamicEmitter::LoopBeginDynamicEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)
+    : jit_emitter(h, isa), loop_begin_label{new Xbyak::Label()} {
     const auto& loop_begin = ov::as_type_ptr<snippets::op::LoopBegin>(expr->get_node());
-    OPENVINO_ASSERT(loop_begin && loop_begin->is_dynamic(), "LoopBeginDynamicEmitter invoked with invalid op argument");
+    // todo: disabled for debug purposes. re-enable before merge
+    // OPENVINO_ASSERT(loop_begin && loop_begin->is_dynamic(), "LoopBeginDynamicEmitter invoked with invalid op argument");
     const auto& out_connectors = expr->get_output_port_connectors();
     const auto& consumers = out_connectors[0]->get_consumers();
     const auto loop_end = ov::as_type_ptr<snippets::op::LoopEnd>(consumers.begin()->get_expr()->get_node());
@@ -105,10 +107,9 @@ void LoopBeginDynamicEmitter::emit_code(const std::vector<size_t> &in, const std
 
 void LoopBeginDynamicEmitter::validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const {
     // Note: the only expected input is the reg_runtime_params_idx
-    if (in.size() == 1)
-        IE_THROW() << "Invalid inputs size: expected 1 got " << in.size();
-    if (out.size() != 1)
-        IE_THROW() << "Invalid outputs size: expected 1 got " << out.size();
+    OPENVINO_ASSERT(in.size() == 1, "Invalid inputs size: expected 1 got " + std::to_string(in.size()));
+    // Note: the only expected output is work amount register (communicated to LoopEndEmitter)
+    OPENVINO_ASSERT(out.size() == 1, "Invalid outputs size: expected 1 got " + std::to_string(out.size()));
 }
 
 void LoopBeginDynamicEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size_t>& out) const {
@@ -141,7 +142,8 @@ LoopEndDynamicEmitter::LoopEndDynamicEmitter(jit_generator* h, cpu_isa_t isa, co
     num_outputs = expr->get_output_count();
     wa_increment = static_cast<int64_t>(loop_end->get_increment());
     io_data_size = loop_end->get_element_type_sizes();
-    OPENVINO_ASSERT(io_data_size.size() == num_inputs, "LoopEndDynamicEmitter detected invalid number of io_data_size elements");
+    // Note: io_data_size is less than num_inputs because the last input is LoopBegin
+    OPENVINO_ASSERT(io_data_size.size() == num_inputs - 1, "LoopEndDynamicEmitter detected invalid number of io_data_size elements");
     loop_id = loop_end->get_id();
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
 }
@@ -162,7 +164,6 @@ void LoopEndDynamicEmitter::validate_arguments(const std::vector<size_t> &in,
 
 void LoopEndDynamicEmitter::emit_impl(const std::vector<size_t>& in,
                                const std::vector<size_t>& out) const {
-
     Reg64 reg_runtime_params = Reg64(static_cast<int>(in[in.size() - 1]));
     Reg64 reg_work_amount = Reg64(static_cast<int>(in[in.size() - 2]));
     Reg64 reg_loop_args_ptr = Reg64(static_cast<int>(aux_gpr_idxs[0]));

@@ -49,23 +49,6 @@ private:
     void emit_impl(const std::vector<size_t>& in,
                    const std::vector<size_t>& out) const override;
     void init_data_pointers(const Xbyak::Reg64&, const Xbyak::Reg64&, const std::vector<Xbyak::Reg64>&) const;
-
-    jit_snippets_compile_args jcp;
-    std::vector<size_t> gp_regs_pool;
-    std::vector<size_t> master_shape;
-    size_t num_inputs;
-    size_t num_outputs;
-    size_t num_unique_buffers;
-    // Vector of indices (lenght = input tensor rank) per every input and output that describes in which order
-    // corresponding tensor dimensions are accessed (default: consecutive dense, e.g. 0,1,2,3 for 4D tensor).
-    // Needed to calc i/o offsets.
-    std::vector<std::vector<size_t>> io_data_layouts;
-    std::vector<size_t> io_data_sizes {};
-
-    // gpr's used to store data pointers, track them to apply offsets in Kernel
-    std::vector<size_t> data_ptr_regs_idx;
-    std::vector<size_t> vec_regs_pool;
-
 };
 
 class LoopBeginDynamicEmitter : public jit_emitter, public SnippetsDynamicEmitter {
@@ -92,7 +75,7 @@ private:
     size_t loop_id;
 };
 
-class LoopEndDynamicEmitter : public jit_emitter {
+class LoopEndDynamicEmitter : public jit_emitter, public SnippetsDynamicEmitter {
 public:
     LoopEndDynamicEmitter(dnnl::impl::cpu::x64::jit_generator* h,
                           dnnl::impl::cpu::x64::cpu_isa_t isa,
