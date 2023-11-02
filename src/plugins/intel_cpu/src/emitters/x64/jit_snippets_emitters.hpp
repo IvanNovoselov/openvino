@@ -88,6 +88,7 @@ public:
     void emit_code(const std::vector<size_t> &in,
                    const std::vector<size_t> &out) const;
     virtual std::vector<std::vector<size_t>> calculate_data_offsets(const std::vector<std::vector<size_t>>& runtime_io_shapes) const;
+
 protected:
     using jit_emitter::emit_code;
     static std::vector<size_t> offset_calculation(const std::vector<size_t>& shape, const std::vector<size_t>& layout, const size_t data_size, bool is_input);

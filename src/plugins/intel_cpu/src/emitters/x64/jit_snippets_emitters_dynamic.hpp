@@ -13,11 +13,36 @@ namespace intel_cpu {
 #define GET_OFF_LOOP_ARGS(field) offsetof(jit_snippets_dynamic_call_args::loop_args_t, field)
 struct jit_snippets_dynamic_call_args {
     struct loop_args_t {
-        //todo: can we use smaller data types?
-        int64_t work_amount = 0;
-        int64_t num_data_ptrs = 0;
-        int64_t* ptr_increments = nullptr;
-        int64_t* finalization_offsets = nullptr;
+        friend class LoopBeginDynamicEmitter;
+        friend class LoopEndDynamicEmitter;
+        loop_args_t(int64_t work_amount,
+                    const std::vector<int64_t>& ptr_increments,
+                    const std::vector<int64_t>& finalization_offsets) :
+                    m_work_amount(work_amount) {
+            OPENVINO_ASSERT(ptr_increments.size() == finalization_offsets.size() ||
+                            finalization_offsets.empty(),
+                            "Inconsistent sizes of ptr_increments and finalization_offsets");
+            m_num_data_ptrs = static_cast<int64_t>(ptr_increments.size());
+            m_ptr_increments = new int64_t[m_num_data_ptrs];
+            const size_t chunk_size = m_num_data_ptrs * sizeof(int64_t);
+            std::memcpy(m_ptr_increments, ptr_increments.data(), chunk_size);
+            m_finalization_offsets = new int64_t[m_num_data_ptrs];
+            if (finalization_offsets.empty())
+                std::memset(m_finalization_offsets, 0, chunk_size);
+            else
+                std::memcpy(m_finalization_offsets, finalization_offsets.data(), chunk_size);
+        }
+        ~loop_args_t() {
+            delete[] m_ptr_increments;
+            delete[] m_finalization_offsets;
+        }
+
+        private:
+            //todo: can we use smaller data types?
+            int64_t m_work_amount = 0;
+            int64_t m_num_data_ptrs = 0;
+            int64_t* m_ptr_increments = nullptr;
+            int64_t* m_finalization_offsets = nullptr;
     };
     int32_t num_loops = 0;
     loop_args_t* loop_args = nullptr;

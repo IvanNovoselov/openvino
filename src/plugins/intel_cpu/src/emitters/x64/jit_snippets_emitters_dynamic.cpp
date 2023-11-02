@@ -59,8 +59,8 @@ void KernelDynamicEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, c
         else
             h->mov(data_ptr_regs[i], h->ptr[reg_runtime_params + GET_OFF_DYN(dst_ptrs) + (i - num_inputs) * sizeof(void*)]);
         // Offset to appropriate data_offset entry
-        int64_t data_offset_idx = GET_OFF_DYN(data_offsets) + i * SNIPPETS_DYNAMIC_MASTER_SHAPE_RANK * sizeof(int64_t);
-        init_ptr_with_offset(data_ptr_regs[i], data_offset_idx, reg_tmp);
+//        int64_t data_offset_idx = GET_OFF_DYN(data_offsets) + i * SNIPPETS_DYNAMIC_MASTER_SHAPE_RANK * sizeof(int64_t);
+//        init_ptr_with_offset(data_ptr_regs[i], data_offset_idx, reg_tmp);
     }
 }
 void KernelDynamicEmitter::emit_impl(const std::vector<size_t>& in,
@@ -74,18 +74,18 @@ void KernelDynamicEmitter::emit_impl(const std::vector<size_t>& in,
 
     init_data_pointers(reg_indexes, reg_runtime_params, data_ptr_regs);
 
-    RegPrinter::print<int>(*h,  data_ptr_regs[0], "data_ptr_regs_0");
-    auto Vmm = Xbyak::Zmm(0);
-    h->uni_vmovups(Vmm, h->ptr[data_ptr_regs[0]]);
-    RegPrinter::print<float>(*h,  Vmm, "data_ptr_regs_val_0");
-
-    RegPrinter::print<int>(*h,  data_ptr_regs[1], "data_ptr_regs_1");
-    h->uni_vmovups(Vmm, h->ptr[data_ptr_regs[1]]);
-    RegPrinter::print<float>(*h,  Vmm, "data_ptr_regs_val_1");
-
-    RegPrinter::print<int>(*h,  data_ptr_regs[2], "data_ptr_regs_2");
-    h->uni_vmovups(Vmm, h->ptr[data_ptr_regs[2]]);
-    RegPrinter::print<float>(*h,  Vmm, "data_ptr_regs_val_2");
+//    RegPrinter::print<int>(*h,  data_ptr_regs[0], "data_ptr_regs_0");
+//    auto Vmm = Xbyak::Zmm(0);
+//    h->uni_vmovups(Vmm, h->ptr[data_ptr_regs[0]]);
+//    RegPrinter::print<float>(*h,  Vmm, "data_ptr_regs_val_0");
+//
+//    RegPrinter::print<int>(*h,  data_ptr_regs[1], "data_ptr_regs_1");
+//    h->uni_vmovups(Vmm, h->ptr[data_ptr_regs[1]]);
+//    RegPrinter::print<float>(*h,  Vmm, "data_ptr_regs_val_1");
+//
+//    RegPrinter::print<int>(*h,  data_ptr_regs[2], "data_ptr_regs_2");
+//    h->uni_vmovups(Vmm, h->ptr[data_ptr_regs[2]]);
+//    RegPrinter::print<float>(*h,  Vmm, "data_ptr_regs_val_2");
 
     for (const auto& expression : body) {
         const auto& emitter = expression->get_emitter();
@@ -133,7 +133,7 @@ void LoopBeginDynamicEmitter::emit_impl(const std::vector<size_t>& in, const std
     Reg64 reg_loop_args_ptr = Reg64(static_cast<int>(aux_gpr_idxs[0]));
     h->mov(reg_loop_args_ptr, h->ptr[reg_runtime_params + GET_OFF_DYN(loop_args) + loop_id * sizeof(void*)]);
 
-    h->mov(reg_work_amount, h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(work_amount)]);
+    h->mov(reg_work_amount, h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(m_work_amount)]);
     h->L(*loop_begin_label);
 //    loop_begin->begin_address = h->getCurr();
 }
@@ -193,7 +193,7 @@ void LoopEndDynamicEmitter::emit_impl(const std::vector<size_t>& in,
         //  If we perform this multiplication in the Configurator, we won't need reg_tmp in this emitter.
         //  The same is true for finalization_offsets
         h->imul(reg_tmp,
-                h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(ptr_increments) + idx * sizeof(int64_t)],
+                h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(m_ptr_increments) + idx * sizeof(int64_t)],
                 static_cast<int>(wa_increment * io_data_size[idx]));
         h->add(data_ptr_regs[idx], reg_tmp);
     }
@@ -203,7 +203,7 @@ void LoopEndDynamicEmitter::emit_impl(const std::vector<size_t>& in,
 
     for (size_t idx = 0; idx < data_ptr_regs.size(); idx++) {
         h->imul(reg_tmp,
-                h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(finalization_offsets) + idx * sizeof(int64_t)],
+                h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(m_finalization_offsets) + idx * sizeof(int64_t)],
                 static_cast<int>(io_data_size[idx]));
             h->add(data_ptr_regs[idx], reg_tmp);
     }

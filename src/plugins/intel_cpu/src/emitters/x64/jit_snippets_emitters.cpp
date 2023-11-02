@@ -13,6 +13,8 @@
 #include "transformations/snippets/x64/op/brgemm_copy_b.hpp"
 #include "transformations/snippets/x64/op//brgemm_cpu.hpp"
 #include "snippets/op/rank_normalization.hpp"
+// todo: for reg printing. remove before merge
+#include "emitters/utils.hpp"
 
 using namespace InferenceEngine;
 using namespace Xbyak;
@@ -93,7 +95,10 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
     }
 }
 
-std::vector<size_t> KernelEmitter::offset_calculation(const std::vector<size_t>& shape, const std::vector<size_t>& layout, const size_t data_size, bool is_input) {
+std::vector<size_t> KernelEmitter::offset_calculation(const std::vector<size_t>& shape,
+                                                      const std::vector<size_t>& layout,
+                                                      const size_t data_size,
+                                                      bool is_input) {
     // Strides represent distance between consecutive elements of corresponding dimension.
     // If a dim size == 1, then the next dim starts immediately and the stride is 0
     // case 1:
@@ -605,6 +610,9 @@ void LoadEmitter::emit_isa(const std::vector<size_t> &in, const std::vector<size
     if (!load_emitter)
         IE_THROW() << "Load CPU emitter isn't initialized for LoadEmitter!";
     load_emitter->emit_code({in[0], byte_offset}, {out[0]}, aux_vec_idxs, aux_gpr_idxs);
+
+    // todo: remove reg printing
+    RegPrinter::print<float>(*h,  Xbyak::Zmm(out[0]), "LoadEmitter_result");
 }
 
 void LoadEmitter::emit_data() const {

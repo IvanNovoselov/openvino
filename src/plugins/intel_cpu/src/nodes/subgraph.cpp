@@ -494,7 +494,6 @@ void Snippet::SnippetJitExecutor::update_ptrs(jit_snippets_dynamic_call_args& ca
                                               const int64_t indexes[5],
                                               const std::vector<MemoryPtr>& inMemPtrs,
                                               const std::vector<MemoryPtr>& outMemPtrs) {
-
     for (size_t i = 0; i < outMemPtrs.size(); i++)
         call_args.dst_ptrs[i] = reinterpret_cast<uint8_t*>(outMemPtrs[i]->getData()) + start_offset_out[i];
 
@@ -506,19 +505,44 @@ void Snippet::SnippetJitExecutor::update_ptrs(jit_snippets_dynamic_call_args& ca
     io_shapes.insert(io_shapes.end(), snippetAttrs.outMemBlockedDims.begin(), snippetAttrs.outMemBlockedDims.end());
 
     auto data_offsets = dynamic_kernel->calculate_data_offsets(io_shapes);
-    OPENVINO_ASSERT(data_offsets.front().size() == tensorRank, "Data offsets with invalid ranks detected");
+    OPENVINO_ASSERT(data_offsets.front().size() == tensorRank - 1, "Data offsets with invalid ranks detected");
 
     for (size_t i = 0; i < inMemPtrs.size(); i++) {
-        const auto& i_offset = call_args.data_offsets[i];
         auto i_ptr = reinterpret_cast<uint8_t*>(inMemPtrs[i]->getData()) + start_offset_in[i];
-        // todo: offset_rank is always 5, since we have 5 indexes?
         for (size_t j = 0; j < tensorRank - 1; j++) {
-            if (parallel_exec_domain[j] != 1)
-                i_ptr += (i_offset[j] * indexes[j]);
+           // todo: do we need to skip empty dimensions like in static case? Same true for dst_ptrs
+          //if (master_shape[j] != 1)
+                i_ptr += (data_offsets[i][j] * indexes[j]);
         }
         call_args.src_ptrs[i] = i_ptr;
     }
-    // todo: update dst ptrs
+    for (size_t i = 0; i < outMemPtrs.size(); i++) {
+        auto i_ptr = reinterpret_cast<uint8_t*>(outMemPtrs[i]->getData()) + start_offset_out[i];
+        for (size_t j = 0; j < tensorRank - 1; j++) {
+            i_ptr += (data_offsets[i + inMemPtrs.size()][j] * indexes[j]);
+        }
+        call_args.dst_ptrs[i] = i_ptr;
+    }
+    call_args.num_loops = 2;
+    OPENVINO_ASSERT(std::is_standard_layout<jit_snippets_dynamic_call_args>::value, "JIT dynamic call args are not standard-layout class");
+    OPENVINO_THROW("Assert passed!!!!!!!!!!!!!!!!!!");
+//    call_args.loop_args = new jit_snippets_dynamic_call_args::loop_args_t[call_args.num_loops];
+//    jit_snippets_dynamic_call_args::loop_args_t inner_loop;
+//    inner_loop.work_amount = 16;
+//    inner_loop.num_data_ptrs = 3;
+//    inner_loop.ptr_increments = new int64_t[inner_loop.]
+//
+//    call_args.loop_args[0] = {16, 3, };
+
+    struct loop_args_t {
+        //todo: can we use smaller data types?
+        int64_t work_amount = 0;
+        int64_t num_data_ptrs = 0;
+        int64_t* ptr_increments = nullptr;
+        int64_t* finalization_offsets = nullptr;
+    };
+    int32_t num_loops = 0;
+    loop_args_t* loop_args = nullptr;
 }
 
 
@@ -526,7 +550,7 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
     const auto& dom = parallel_exec_domain;
     // < N, C, H, W > < 1, 1, N, C*H*W>
     const auto& callable = schedule.get_callable<kernel>();
-    int64_t indexes[] = {0, 0, 0, 0, 1};
+    int64_t indexes[] = {0, 0, 0, 0, 0};
     jit_snippets_dynamic_call_args dynamic_call_args;
     update_ptrs(dynamic_call_args, indexes, inMemPtrs, outMemPtrs);
 
@@ -538,6 +562,7 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
 //            update_ptrs(call_args, inMemPtrs, outMemPtrs);
 //            callable(indexes, &call_args);
 //        });
+    delete[] dynamic_call_args.loop_args;
 }
 
 void Snippet::SnippetJitExecutor::schedule_nt(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {
