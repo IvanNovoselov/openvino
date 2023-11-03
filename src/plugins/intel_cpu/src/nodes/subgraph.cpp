@@ -523,26 +523,13 @@ void Snippet::SnippetJitExecutor::update_ptrs(jit_snippets_dynamic_call_args& ca
         }
         call_args.dst_ptrs[i] = i_ptr;
     }
-    call_args.num_loops = 2;
     OPENVINO_ASSERT(std::is_standard_layout<jit_snippets_dynamic_call_args>::value, "JIT dynamic call args are not standard-layout class");
-    OPENVINO_THROW("Assert passed!!!!!!!!!!!!!!!!!!");
-//    call_args.loop_args = new jit_snippets_dynamic_call_args::loop_args_t[call_args.num_loops];
-//    jit_snippets_dynamic_call_args::loop_args_t inner_loop;
-//    inner_loop.work_amount = 16;
-//    inner_loop.num_data_ptrs = 3;
-//    inner_loop.ptr_increments = new int64_t[inner_loop.]
-//
-//    call_args.loop_args[0] = {16, 3, };
+//    OPENVINO_THROW("Assert passed!!!!!!!!!!!!!!!!!!");
 
-    struct loop_args_t {
-        //todo: can we use smaller data types?
-        int64_t work_amount = 0;
-        int64_t num_data_ptrs = 0;
-        int64_t* ptr_increments = nullptr;
-        int64_t* finalization_offsets = nullptr;
-    };
-    int32_t num_loops = 0;
-    loop_args_t* loop_args = nullptr;
+//    std::vector<jit_snippets_dynamic_call_args::loop_args_t> loop_args;
+//    loop_args.emplace_back(16, std::vector<int64_t>{1, 1, 1}, std::vector<int64_t>{16, 16, 16});
+//    loop_args.emplace_back(29, std::vector<int64_t>{0, 0, 0}, std::vector<int64_t>{0, 0, 0});
+//    call_args.register_loops(loop_args);
 }
 
 
@@ -553,6 +540,19 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
     int64_t indexes[] = {0, 0, 0, 0, 0};
     jit_snippets_dynamic_call_args dynamic_call_args;
     update_ptrs(dynamic_call_args, indexes, inMemPtrs, outMemPtrs);
+    std::vector<jit_snippets_dynamic_call_args::loop_args_t> loop_args;
+    loop_args.reserve(2);
+    // Note: we need to multiply ptr_increments by wa_increment and data_size here, in Configurator
+    loop_args.emplace_back(16,
+                           std::vector<int64_t>{1 * 16 * 4, 1 * 16 * 4, 1 * 16 * 4},
+                           std::vector<int64_t>{0, 0, 0});
+    loop_args.emplace_back(29,
+                           std::vector<int64_t>{0, 0, 0},
+                           std::vector<int64_t>{0, 0, 0});
+    dynamic_call_args.register_loops(loop_args);
+    std::cerr << offsetof(jit_snippets_dynamic_call_args, loop_args) << "\n";
+    std::cerr << offsetof(jit_snippets_dynamic_call_args::loop_args_t, m_work_amount) << "\n";
+    std::cerr << dynamic_call_args.loop_args[0].m_work_amount << "\n";
 
     callable(indexes, &dynamic_call_args);
 //    parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
@@ -562,7 +562,7 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
 //            update_ptrs(call_args, inMemPtrs, outMemPtrs);
 //            callable(indexes, &call_args);
 //        });
-    delete[] dynamic_call_args.loop_args;
+    std::cerr << loop_args[0].m_work_amount << "\n";
 }
 
 void Snippet::SnippetJitExecutor::schedule_nt(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {

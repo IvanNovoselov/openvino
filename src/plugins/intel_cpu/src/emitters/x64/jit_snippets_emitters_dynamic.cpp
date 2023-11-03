@@ -131,9 +131,9 @@ void LoopBeginDynamicEmitter::emit_impl(const std::vector<size_t>& in, const std
     Reg64 reg_work_amount = Reg64(static_cast<int>(out.back()));
     Reg64 reg_runtime_params = Reg64(static_cast<int>(in.back()));
     Reg64 reg_loop_args_ptr = Reg64(static_cast<int>(aux_gpr_idxs[0]));
-    h->mov(reg_loop_args_ptr, h->ptr[reg_runtime_params + GET_OFF_DYN(loop_args) + loop_id * sizeof(void*)]);
-
-    h->mov(reg_work_amount, h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(m_work_amount)]);
+    const auto id_offset = loop_id * sizeof(jit_snippets_dynamic_call_args::loop_args_t);
+    h->mov(reg_loop_args_ptr, h->ptr[reg_runtime_params + GET_OFF_DYN(loop_args)]);
+    h->mov(reg_work_amount, h->ptr[reg_loop_args_ptr + id_offset + GET_OFF_LOOP_ARGS(m_work_amount)]);
     h->L(*loop_begin_label);
 //    loop_begin->begin_address = h->getCurr();
 }
@@ -181,31 +181,32 @@ void LoopEndDynamicEmitter::emit_impl(const std::vector<size_t>& in,
                                const std::vector<size_t>& out) const {
     Reg64 reg_runtime_params = Reg64(static_cast<int>(in[in.size() - 1]));
     Reg64 reg_work_amount = Reg64(static_cast<int>(in[in.size() - 2]));
-    Reg64 reg_loop_args_ptr = Reg64(static_cast<int>(aux_gpr_idxs[0]));
-    Reg64 reg_tmp = Reg64(static_cast<int>(aux_gpr_idxs[1]));
-    h->mov(reg_loop_args_ptr, h->ptr[reg_runtime_params + GET_OFF_DYN(loop_args) + loop_id * sizeof(void*)]);
+    Reg64 reg_increments = Reg64(static_cast<int>(aux_gpr_idxs[0]));
+    const auto id_offset = loop_id * sizeof(jit_snippets_dynamic_call_args::loop_args_t);
+    std::cerr << "id_offset: " << id_offset << "\n";
+    std::cerr << "id_offset: " << id_offset + GET_OFF_LOOP_ARGS(m_ptr_increments) << "\n";
 
     std::vector<Reg64> data_ptr_regs;
     transform_idxs_to_regs(std::vector<size_t>(in.begin(), in.end() - 2), data_ptr_regs);
 
+    // todo: Note that we can pre-save reg_loop_args_ptr in LoopBeginEmitter and pass it here like work_amount_reg
+    //  this would save us one dereferencing here and in finalization offsets
+    h->mov(reg_increments, h->ptr[reg_runtime_params + GET_OFF_DYN(loop_args)]);
+    h->mov(reg_increments, h->ptr[reg_increments + id_offset + GET_OFF_LOOP_ARGS(m_ptr_increments)]);
     for (size_t idx = 0; idx < data_ptr_regs.size(); idx++) {
         // todo: wa_increment and io_data_size[idx] are known in compile time, ptr_increments are calculated in runtime.
         //  If we perform this multiplication in the Configurator, we won't need reg_tmp in this emitter.
         //  The same is true for finalization_offsets
-        h->imul(reg_tmp,
-                h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(m_ptr_increments) + idx * sizeof(int64_t)],
-                static_cast<int>(wa_increment * io_data_size[idx]));
-        h->add(data_ptr_regs[idx], reg_tmp);
+        h->add(data_ptr_regs[idx], h->ptr[reg_increments + idx * sizeof(int64_t)]);
     }
     h->sub(reg_work_amount, wa_increment);
     h->cmp(reg_work_amount, wa_increment);
     h->jge(*loop_begin_label);
 
+    h->mov(reg_increments, h->ptr[reg_runtime_params + GET_OFF_DYN(loop_args)]);
+    h->mov(reg_increments, h->ptr[reg_increments + id_offset + GET_OFF_LOOP_ARGS(m_finalization_offsets)]);
     for (size_t idx = 0; idx < data_ptr_regs.size(); idx++) {
-        h->imul(reg_tmp,
-                h->ptr[reg_loop_args_ptr + GET_OFF_LOOP_ARGS(m_finalization_offsets) + idx * sizeof(int64_t)],
-                static_cast<int>(io_data_size[idx]));
-            h->add(data_ptr_regs[idx], reg_tmp);
+            h->add(data_ptr_regs[idx], h->ptr[reg_increments + idx * sizeof(int64_t)]);
     }
 }
 

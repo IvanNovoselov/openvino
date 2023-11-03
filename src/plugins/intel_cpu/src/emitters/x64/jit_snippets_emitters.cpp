@@ -233,7 +233,7 @@ KernelEmitter::KernelEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPt
     // However we can use reg_indexes_idx and reg_runtime_params_idx for other operations since we won't need them
     // after offsets calculation
     gpr_map_pool.second.push_back(reg_indexes_idx);
-    gpr_map_pool.second.push_back(reg_runtime_params_idx);
+//    gpr_map_pool.second.push_back(reg_runtime_params_idx);
     map_abstract_registers(gpr_map_pool, vec_map_pool, general_exprs);
 }
 
@@ -611,8 +611,8 @@ void LoadEmitter::emit_isa(const std::vector<size_t> &in, const std::vector<size
         IE_THROW() << "Load CPU emitter isn't initialized for LoadEmitter!";
     load_emitter->emit_code({in[0], byte_offset}, {out[0]}, aux_vec_idxs, aux_gpr_idxs);
 
-    // todo: remove reg printing
-    RegPrinter::print<float>(*h,  Xbyak::Zmm(out[0]), "LoadEmitter_result");
+//     todo: remove reg printing
+//    RegPrinter::print<float>(*h,  Xbyak::Zmm(out[0]), "LoadEmitter_result");
 }
 
 void LoadEmitter::emit_data() const {

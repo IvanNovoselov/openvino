@@ -23,9 +23,9 @@ namespace {
 //                                                  {{}, {{1, 16, 1, 1}}},
 //                                                  {{}, {{1, 1, 1, 1}}}};
 
-std::vector<ov::test::InputShape> inShapesStatic1{{{}, {{1, 16, 29, 16}}}
+std::vector<ov::test::InputShape> inShapesStatic1{{{}, {{1, 1, 29, 16}}}
                                                   };
-std::vector<ov::test::InputShape> inShapesStatic2{{{}, {{1, 16, 29, 16}}}
+std::vector<ov::test::InputShape> inShapesStatic2{{{}, {{1, 1, 29, 16}}}
                                                  };
 
 INSTANTIATE_TEST_SUITE_P(smoke_Snippets_Eltwise, Add,
