@@ -97,7 +97,8 @@ private:
     using jit_emitter::emit_code;
     void emit_impl(const std::vector<size_t>& in,
                    const std::vector<size_t>& out) const override;
-    void init_data_pointers(const Xbyak::Reg64&, const Xbyak::Reg64&, const std::vector<Xbyak::Reg64>&) const;
+    void init_data_pointers(const Xbyak::Reg64&, const std::vector<Xbyak::Reg64>&) const;
+    const size_t reg_runtime_params_idx;
 };
 
 class LoopBeginDynamicEmitter : public jit_emitter, public SnippetsDynamicEmitter {

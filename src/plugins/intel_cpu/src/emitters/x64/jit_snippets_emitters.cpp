@@ -32,7 +32,7 @@ namespace {
 constexpr size_t gpr_size = 8;
 } // namespace
 
-jit_container_emitter::jit_container_emitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)
+jit_container_emitter::jit_container_emitter(jit_generator* h, cpu_isa_t isa)
     : jit_emitter(h, isa) {
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
 }
@@ -95,63 +95,17 @@ void jit_container_emitter::map_abstract_registers(mapping_info& gpr_map_pool,  
     }
 }
 
-std::vector<size_t> KernelEmitter::offset_calculation(const std::vector<size_t>& shape,
-                                                      const std::vector<size_t>& layout,
-                                                      const size_t data_size,
-                                                      bool is_input) {
-    // Strides represent distance between consecutive elements of corresponding dimension.
-    // If a dim size == 1, then the next dim starts immediately and the stride is 0
-    // case 1:
-    //    shape:         s0,    s1, s2, s3
-    //    strides: s1*s2*s3, s2*s3, s3,  1
-    // case 2:
-    //    shape:      s0, s1, s2 == 1, s3
-    //    strides: s1*s3, s3,       0,  1
-    std::vector<size_t> strides(shape.size());
-    size_t dim_step = 1;
-    strides[shape.size() - 1] = 1;
-    for (int k = static_cast<int>(shape.size()) - 2; k >= 0; k--) {
-        dim_step *= shape[k+1];
-        strides[k] = shape[k] != 1 ? dim_step * data_size : 0;
-    }
-    // Note: this is an extra copy, but let's keep it for clarity
-    if (!layout.empty()) {
-        std::vector<size_t> reordered_strides(strides.size());
-        for (size_t i = 0; i < layout.size(); i++) {
-            const auto& src_idx = is_input ? layout[i] : i;
-            const auto& dst_idx = is_input ? i : layout[i];
-            reordered_strides[dst_idx] = strides[src_idx];
-        }
-        strides = std::move(reordered_strides);
-    }
-    // the last stride is ignored, since the entire last dim is processed by kernel
-    // and no parallel_for data_ptr offsets can be applied in this case
-    strides.pop_back();
-    return strides;
-}
-
-KernelEmitter::KernelEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)
-    : jit_container_emitter(h, isa, expr),
-      reg_indexes_idx(abi_param1.getIdx()),
-      reg_runtime_params_idx(abi_param2.getIdx()) {
+void KernelEmitter::init_body_parameters(const ExpressionPtr& expr) {
     const auto kernel = ov::as_type_ptr<snippets::op::Kernel>(expr->get_node());
-    if (!kernel)
-        IE_THROW() << "KernelEmitter invoked with invalid op argument";
-    if (kernel->region.empty())
-        IE_THROW() << "KernelEmitter invoked with empty body";
-    if (kernel->compile_params == nullptr)
-        IE_THROW() << "KernelEmitter invoked with op::Kernel that contains no compile_params";
+    OPENVINO_ASSERT(kernel, "KernelEmitter invoked with invalid op argument");
+    OPENVINO_ASSERT(!kernel->region.empty(), "KernelEmitter invoked with empty body");
     body = kernel->region;
-    jcp = *reinterpret_cast<const jit_snippets_compile_args*>(kernel->compile_params);
-    master_shape = body.get_master_shape();
-    // Note: plugin can prepend master shape with 1 to facilitate parallel execution (usually up to 6D tensor)
-    //       so we have to reproduce this behavior here
-    master_shape.insert(master_shape.begin(), jcp.parallel_executor_ndims - master_shape.size(), 1);
     const auto& io_exprs = body.get_IO_ops();
     num_inputs = 0;
     num_outputs = 0;
     for (const auto& expr : io_exprs) {
         snippets::lowered::PortDescriptorPtr desc = nullptr;
+        mem_access_exprs.emplace_back(expr);
         element::Type etype;
         switch (expr->get_type()) {
             case snippets::lowered::IOExpression::io_type::INPUT: {
@@ -182,48 +136,66 @@ KernelEmitter::KernelEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPt
         io_shapes.push_back(shape);
         io_data_layouts.push_back(layout);
         io_data_sizes.push_back(etype.size());
-    }
 
-    // Initialize pools of gp and vec registers
+        std::set<size_t> unique_buffers;
+        for (const auto& expr : body) {
+            // Brgemm is a special case since it incorporates input and output (we use onednn kernel)
+            // Just like Load & Store it requires offsets calculation
+            if (const auto buffer = ov::as_type_ptr<snippets::op::Buffer>(expr->get_node())) {
+                const auto buffer_id = buffer->get_id();
+                if (unique_buffers.count(buffer_id) == 0) {
+                    mem_access_exprs.push_back(expr);
+                    unique_buffers.insert(buffer_id);
+                }
+            } else {
+                general_exprs.emplace_back(expr);
+            }
+        }
+        num_unique_buffers = unique_buffers.size();
+    }
+    OPENVINO_ASSERT(kernel->compile_params, "KernelEmitter invoked with op::Kernel that contains no compile_params");
+    jcp = *reinterpret_cast<const jit_snippets_compile_args*>(kernel->compile_params);
+    // Note that master_shape could be dynamic in a general case
+    master_shape = body.get_master_shape();
+    // Note: plugin can prepend master shape with 1 to facilitate parallel execution (usually up to 6D tensor)
+    //       so we have to reproduce this behavior here
+    master_shape.insert(master_shape.begin(), jcp.parallel_executor_ndims - master_shape.size(), 1);
+}
+
+void KernelEmitter::init_reg_pools(const std::set<size_t>& gpr_blacklist, const std::set<size_t>& vec_blacklist) {
     gp_regs_pool.resize(16);
     vec_regs_pool.resize(16);
     // It's easier to remove the last item during mapping, so fill descending to map ascending
     for (size_t i = 0; i < 16; i++)
         gp_regs_pool[i] = vec_regs_pool[i] = 15 - i;
-    // todo: it's more convenient to use std::set as a pool container (unique and always sorted),
-    //  but pools are vectors to align with emit_code signature. Change signature?
     auto remove_regs_from_pool = [](std::vector<size_t>& pool, const std::set<size_t>& to_remove) {
         // It's important to keep the order of other elements
         pool.erase(std::remove_if(pool.begin(), pool.end(),
-                                       [&](size_t x) {return to_remove.count(x) != 0;}), pool.end());
+                                  [&](size_t x) {return to_remove.count(x) != 0;}), pool.end());
     };
     // Reserve stack base and pointer for push(...) and pop(...) operations
+    std::set<size_t> gprs_blacklist_extended{Xbyak::Operand::RSP, Xbyak::Operand::RBP};
+    gprs_blacklist_extended.insert(gpr_blacklist.begin(), gpr_blacklist.end());
     // Reserve abi_param1 and abi_param2, since they'll be used to pass runtime call args to kernel
-    remove_regs_from_pool(gp_regs_pool, {Xbyak::Operand::RSP, Xbyak::Operand::RBP,
-                                         reg_indexes_idx, reg_runtime_params_idx});
+    remove_regs_from_pool(gp_regs_pool, gprs_blacklist_extended);
+    remove_regs_from_pool(vec_regs_pool, vec_blacklist);
+}
+
+KernelEmitter::KernelEmitter(dnnl::impl::cpu::x64::jit_generator* h, dnnl::impl::cpu::x64::cpu_isa_t isa)
+    : jit_container_emitter(h, isa) {
+}
+
+KernelEmitter::KernelEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)
+    : jit_container_emitter(h, isa),
+      reg_indexes_idx(abi_param1.getIdx()),
+      reg_runtime_params_idx(abi_param2.getIdx()) {
+    init_body_parameters(expr);
+    // Initialize pools of gp and vec registers
+    // Reserve abi_param1 and abi_param2, since they'll be used to pass runtime call args to kernel
+    init_reg_pools({reg_indexes_idx, reg_runtime_params_idx}, {});
 
     mapping_info gpr_map_pool({}, gp_regs_pool);
     mapping_info vec_map_pool({}, vec_regs_pool);
-    snippets::lowered::LinearIR::container mem_access_exprs;
-    snippets::lowered::LinearIR::container general_exprs;
-    std::set<size_t> unique_buffers;
-
-    for (const auto& expr : body) {
-        // Brgemm is a special case since it incorporates input and output (we use onednn kernel)
-        // Just like Load & Store it requires offsets calculation
-        if (std::dynamic_pointer_cast<snippets::lowered::IOExpression>(expr)) {
-            mem_access_exprs.emplace_back(expr);
-        } else if (const auto buffer = ov::as_type_ptr<snippets::op::Buffer>(expr->get_node())) {
-            const auto buffer_id = buffer->get_id();
-            if (unique_buffers.count(buffer_id) == 0) {
-                mem_access_exprs.push_back(expr);
-                unique_buffers.insert(buffer_id);
-            }
-        } else {
-            general_exprs.emplace_back(expr);
-        }
-    }
-    num_unique_buffers = unique_buffers.size();
 
     // Note that we can't use reg_indexes_idx or reg_runtime_params_idx to store data pointers because these two
     // regs are used to calculate offsets for the data pointers
@@ -233,7 +205,7 @@ KernelEmitter::KernelEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPt
     // However we can use reg_indexes_idx and reg_runtime_params_idx for other operations since we won't need them
     // after offsets calculation
     gpr_map_pool.second.push_back(reg_indexes_idx);
-//    gpr_map_pool.second.push_back(reg_runtime_params_idx);
+    gpr_map_pool.second.push_back(reg_runtime_params_idx);
     map_abstract_registers(gpr_map_pool, vec_map_pool, general_exprs);
 }
 
@@ -258,13 +230,45 @@ void KernelEmitter::validate_arguments(const std::vector<size_t> &in,
 
 std::vector<std::vector<size_t>> KernelEmitter::calculate_data_offsets(const std::vector<std::vector<size_t>>& runtime_io_shapes) const {
     const auto num_params = num_inputs + num_outputs;
+    // Note that we don't need offset for the last dim, since it's handled directly by Tile emitter
     const size_t offset_rank = master_shape.size() - 1;
     std::vector<std::vector<size_t>> data_offsets(num_params, std::vector<size_t>{});
-    for (size_t i = 0; i < num_params; i++) {
-        auto strides = offset_calculation(runtime_io_shapes[i],  io_data_layouts[i], io_data_sizes[i], i < num_inputs);
+    auto offset_calculation = [=](const std::vector<size_t>& shape, const std::vector<size_t>& layout, const size_t data_size, bool is_input) {
+        // Strides represent distance between consecutive elements of corresponding dimension.
+        // If a dim size == 1, then the next dim starts immediately and the stride is 0
+        // case 1:
+        //    shape:         s0,    s1, s2, s3
+        //    strides: s1*s2*s3, s2*s3, s3,  1
+        // case 2:
+        //    shape:      s0, s1, s2 == 1, s3
+        //    strides: s1*s3, s3,       0,  1
+        std::vector<size_t> strides(shape.size());
+        size_t dim_step = 1;
+        strides[shape.size() - 1] = 1;
+        for (int k = static_cast<int>(shape.size()) - 2; k >= 0; k--) {
+            dim_step *= shape[k+1];
+            strides[k] = shape[k] != 1 ? dim_step * data_size : 0;
+        }
+        // Note: this is an extra copy, but let's keep it for clarity
+        if (!layout.empty()) {
+            std::vector<size_t> reordered_strides(strides.size());
+            for (size_t i = 0; i < layout.size(); i++) {
+                const auto& src_idx = is_input ? layout[i] : i;
+                const auto& dst_idx = is_input ? i : layout[i];
+                reordered_strides[dst_idx] = strides[src_idx];
+            }
+            strides = std::move(reordered_strides);
+        }
+        // the last stride is ignored, since the entire last dim is processed by kernel
+        // and no parallel_for data_ptr offsets can be applied in this case
+        strides.pop_back();
         // actual offset size might be larger that the shape size due to 6D scheduling
         strides.insert(strides.begin(), offset_rank - strides.size(), 0);
-        data_offsets[i] = strides;
+
+        return strides;
+    };
+    for (size_t i = 0; i < num_params; i++) {
+        data_offsets[i] = offset_calculation(io_shapes[i],  io_data_layouts[i], io_data_sizes[i], i < num_inputs);
     }
     return data_offsets;
 }

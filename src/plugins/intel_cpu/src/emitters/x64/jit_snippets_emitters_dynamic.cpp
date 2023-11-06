@@ -20,36 +20,21 @@ using cpu_isa_t = dnnl::impl::cpu::x64::cpu_isa_t;
 using ExpressionPtr = ov::snippets::lowered::ExpressionPtr;
 
 KernelDynamicEmitter::KernelDynamicEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)
-        : KernelEmitter(h, isa, expr), SnippetsDynamicEmitter() {
-    // Dynamic Kernel emitter should do essentially the same thing: collects
-    // io_data_layouts / io_data_sizes / io_shapes (that we ignore, since they are dynamic) and maps registers,
-    // so we just derive from static Kernel for now. Note that we may want to change this inheritance in the future.
+        : KernelEmitter(h, isa), SnippetsDynamicEmitter(), reg_runtime_params_idx(abi_param1.getIdx()) {
+    init_body_parameters(expr);
+    init_reg_pools({reg_runtime_params_idx}, {});
+
+    mapping_info gpr_map_pool({}, gp_regs_pool);
+    mapping_info vec_map_pool({}, vec_regs_pool);
+    map_abstract_registers(gpr_map_pool, vec_map_pool, mem_access_exprs);
+    for (const auto& abstract_to_physical : gpr_map_pool.first)
+        data_ptr_regs_idx.push_back(abstract_to_physical.second);
+    map_abstract_registers(gpr_map_pool, vec_map_pool, general_exprs);
 }
 
 
-void KernelDynamicEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, const Xbyak::Reg64& reg_runtime_params,
-                                       const std::vector<Xbyak::Reg64>& data_ptr_regs) const {
+void KernelDynamicEmitter::init_data_pointers(const Xbyak::Reg64& reg_runtime_params, const std::vector<Xbyak::Reg64>& data_ptr_regs) const {
     const auto num_params = num_inputs + num_outputs;
-    // Note that we don't need offset for the last dim, since it's handled directly by Tile emitter
-    const size_t offset_rank = master_shape.size() - 1;
-    // master_shape size must be valid in both static and dynamic cases
-    std::function<void(Reg64, const int64_t, Reg64)> init_ptr_with_offset;
-    init_ptr_with_offset = [&](Reg64 pointer, const int64_t data_offset_idx, Reg64 reg_tmp) {
-        for (size_t j = 0; j < offset_rank; j++) {
-            if (master_shape[j] != 1) {
-                h->mov(reg_tmp, h->ptr[reg_runtime_params + data_offset_idx + j * sizeof(int64_t)]);
-                h->imul(reg_tmp, h->ptr[reg_indexes + j * sizeof(size_t)]);
-                h->add(pointer, reg_tmp);
-            }
-        }
-    };
-    const auto spare_corruptable_gpr = std::find_if(gp_regs_pool.begin(), gp_regs_pool.end(),
-                                                    [this](size_t reg) {
-                                                        return reg != reg_indexes_idx && reg != reg_runtime_params_idx;
-                                                    });
-    // todo: this limitation could be relaxed by spilling appropriate reg on the stack
-    OPENVINO_ASSERT(spare_corruptable_gpr != gp_regs_pool.end(), "Failed to find spare register for offset calculation");
-    Reg64 reg_tmp = Reg64(static_cast<int>(*spare_corruptable_gpr));
     for (size_t i = 0; i < num_unique_buffers; ++i) {
         h->mov(data_ptr_regs[num_params + i], h->ptr[reg_runtime_params + GET_OFF_DYN(buffer_scratchpad_ptr)]);
     }
@@ -58,21 +43,17 @@ void KernelDynamicEmitter::init_data_pointers(const Xbyak::Reg64& reg_indexes, c
             h->mov(data_ptr_regs[i], h->ptr[reg_runtime_params + GET_OFF_DYN(src_ptrs) + i * sizeof(void*)]);
         else
             h->mov(data_ptr_regs[i], h->ptr[reg_runtime_params + GET_OFF_DYN(dst_ptrs) + (i - num_inputs) * sizeof(void*)]);
-        // Offset to appropriate data_offset entry
-//        int64_t data_offset_idx = GET_OFF_DYN(data_offsets) + i * SNIPPETS_DYNAMIC_MASTER_SHAPE_RANK * sizeof(int64_t);
-//        init_ptr_with_offset(data_ptr_regs[i], data_offset_idx, reg_tmp);
     }
 }
 void KernelDynamicEmitter::emit_impl(const std::vector<size_t>& in,
                               const std::vector<size_t>& out) const {
     h->preamble();
 
-    Reg64 reg_indexes = Reg64(static_cast<int>(reg_indexes_idx));
     Reg64 reg_runtime_params = Reg64(static_cast<int>(reg_runtime_params_idx));
     std::vector<Reg64> data_ptr_regs;
     transform_idxs_to_regs(data_ptr_regs_idx, data_ptr_regs);
 
-    init_data_pointers(reg_indexes, reg_runtime_params, data_ptr_regs);
+    init_data_pointers(reg_runtime_params, data_ptr_regs);
 
 //    RegPrinter::print<int>(*h,  data_ptr_regs[0], "data_ptr_regs_0");
 //    auto Vmm = Xbyak::Zmm(0);
@@ -183,8 +164,6 @@ void LoopEndDynamicEmitter::emit_impl(const std::vector<size_t>& in,
     Reg64 reg_work_amount = Reg64(static_cast<int>(in[in.size() - 2]));
     Reg64 reg_increments = Reg64(static_cast<int>(aux_gpr_idxs[0]));
     const auto id_offset = loop_id * sizeof(jit_snippets_dynamic_call_args::loop_args_t);
-    std::cerr << "id_offset: " << id_offset << "\n";
-    std::cerr << "id_offset: " << id_offset + GET_OFF_LOOP_ARGS(m_ptr_increments) << "\n";
 
     std::vector<Reg64> data_ptr_regs;
     transform_idxs_to_regs(std::vector<size_t>(in.begin(), in.end() - 2), data_ptr_regs);
@@ -194,9 +173,6 @@ void LoopEndDynamicEmitter::emit_impl(const std::vector<size_t>& in,
     h->mov(reg_increments, h->ptr[reg_runtime_params + GET_OFF_DYN(loop_args)]);
     h->mov(reg_increments, h->ptr[reg_increments + id_offset + GET_OFF_LOOP_ARGS(m_ptr_increments)]);
     for (size_t idx = 0; idx < data_ptr_regs.size(); idx++) {
-        // todo: wa_increment and io_data_size[idx] are known in compile time, ptr_increments are calculated in runtime.
-        //  If we perform this multiplication in the Configurator, we won't need reg_tmp in this emitter.
-        //  The same is true for finalization_offsets
         h->add(data_ptr_regs[idx], h->ptr[reg_increments + idx * sizeof(int64_t)]);
     }
     h->sub(reg_work_amount, wa_increment);

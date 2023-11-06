@@ -102,6 +102,7 @@ private:
             static const size_t rank6D {6};
 
             typedef void (*kernel)(const void *, const void *);
+            typedef void (*dynamic_kernel)(const void *);
 
             size_t numInput = 0;
             size_t numOutput = 0;
