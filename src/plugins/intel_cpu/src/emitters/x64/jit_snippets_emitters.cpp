@@ -1165,6 +1165,8 @@ void BrgemmEmitter::emit_brgemm_kernel_call(const brgemm_kernel_t *brg_kernel, c
                                             const size_t in0_kernel_offset, const size_t in1_kernel_offset,
                                             const size_t in2_kernel_offset, const size_t out0_kernel_offset) const {
     if (ctx.is_with_amx) {
+        // todo: relace using Chenhu binary call helpers. Same for libxsmm kernel call
+        // todo: why don't we save mask regs here?
         Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->rax,
                                          h->rcx, h->rdx, h->rdi, h->rsi, h->rbp, h->rbx};
         size_t n_gprs_to_save = sizeof(gprs_to_save) / sizeof(gprs_to_save[0]);
@@ -1193,32 +1195,7 @@ void BrgemmEmitter::emit_brgemm_kernel_call(const brgemm_kernel_t *brg_kernel, c
         h->add(h->rsp, n_gprs_to_save * gpr_size);
     }
 
-    Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->r12, h->r13, h->r14, h->r15,
-                                     h->rax, h->rcx, h->rdx, h->rdi, h->rsi, h->rbp, h->rbx};
-    size_t n_gprs_to_save = sizeof(gprs_to_save) / sizeof(gprs_to_save[0]);
-
-    h->sub(h->rsp, n_gprs_to_save * gpr_size);
-    for (size_t i = 0; i < n_gprs_to_save; ++i)
-        h->mov(h->ptr[h->rsp + i * gpr_size], gprs_to_save[i]);
-
-    // caller obligation to save k-regs as callee may use them
-    size_t n_k_regs_to_save = 8;
-    h->sub(h->rsp, n_k_regs_to_save * k_mask_size);
-    for (size_t i = 0; i < n_k_regs_to_save; ++i) {
-        if (mayiuse(avx512_core))
-            h->kmovq(h->ptr[h->rsp + i * k_mask_size], Opmask(static_cast<int>(i)));
-        else
-            h->kmovw(h->ptr[h->rsp + i * k_mask_size], Opmask(static_cast<int>(i)));
-    }
-
-    // 1. Caller obligation to save vector registers as callee may use them.
-    // 2. There is an implicit assumption that the host code uses the same
-    // `isa` as the injector. Once the assumption is wrong, `vecs_count` and
-    // `vlen` should be replaced with `host_isa::vlen` and
-    // `host_isa::vecs_count`.
-    h->sub(h->rsp, get_max_vecs_count() * get_vec_length());
-    for (size_t i = 0; i < get_max_vecs_count(); ++i)
-        h->uni_vmovups(h->ptr[h->rsp + i * get_vec_length()], Zmm(i));
+    internal_call_preamble();
 
     // save function address in gpr to pass in call instruction
     const auto& brgemm_kernel_overload = static_cast<void (*)(const brgemm_kernel_t*,
@@ -1272,38 +1249,15 @@ void BrgemmEmitter::emit_brgemm_kernel_call(const brgemm_kernel_t *brg_kernel, c
     h->mov(abi_param6, static_cast<int>(m_with_comp));
 #endif
 
-    // align stack on 16-byte as ABI requires
-    // note that RBX must not be changed by the callee
-    h->mov(h->rbx, h->rsp);
-    h->and_(h->rbx, 0xf);
-    h->sub(h->rsp, h->rbx);
-
+    internal_call_rsp_align();
     h->call(h->rbp);
-
-    h->add(h->rsp, h->rbx);
+    internal_call_rsp_restore();
 
 #ifdef _WIN32
     h->add(h->rsp, num_args_passed_on_stack * gpr_size);
 #endif
-    // restore vector registers
-    for (int i = static_cast<int>(get_max_vecs_count()) - 1; i >= 0; --i) {
-        h->uni_vmovups(Zmm(i), h->ptr[h->rsp + i * get_vec_length()]);
-    }
-    h->add(h->rsp, (get_max_vecs_count()) * get_vec_length());
 
-    // restore k registers
-    for (int i = n_k_regs_to_save - 1; i >= 0; --i) {
-        if (mayiuse(avx512_core))
-            h->kmovq(Opmask(i), h->ptr[h->rsp + i * k_mask_size]);
-        else
-            h->kmovw(Opmask(i), h->ptr[h->rsp + i * k_mask_size]);
-    }
-    h->add(h->rsp, n_k_regs_to_save * k_mask_size);
-
-    // restore gpr registers
-    for (int i = n_gprs_to_save - 1; i >= 0; --i)
-        h->mov(gprs_to_save[i], h->ptr[h->rsp + i * gpr_size]);
-    h->add(h->rsp, n_gprs_to_save * gpr_size);
+    internal_call_postamble();
 }
 
 void BrgemmEmitter::emit_brgemm_kernel_call_libxsmm(const libxsmm_xmmfunction *xsmm_func, const libxsmm_xmmfunction *xsmm_tile_cfg, const brgemmCtx& ctx,
@@ -1338,32 +1292,7 @@ void BrgemmEmitter::emit_brgemm_kernel_call_libxsmm(const libxsmm_xmmfunction *x
         h->add(h->rsp, n_gprs_to_save * gpr_size);
     }
 
-    Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->r12, h->r13, h->r14, h->r15,
-                                     h->rax, h->rcx, h->rdx, h->rdi, h->rsi, h->rbp, h->rbx};
-    size_t n_gprs_to_save = sizeof(gprs_to_save) / sizeof(gprs_to_save[0]);
-
-    h->sub(h->rsp, n_gprs_to_save * gpr_size);
-    for (size_t i = 0; i < n_gprs_to_save; ++i)
-        h->mov(h->ptr[h->rsp + i * gpr_size], gprs_to_save[i]);
-
-    // caller obligation to save k-regs as callee may use them
-    size_t n_k_regs_to_save = 8;
-    h->sub(h->rsp, n_k_regs_to_save * k_mask_size);
-    for (size_t i = 0; i < n_k_regs_to_save; ++i) {
-        if (mayiuse(avx512_core))
-            h->kmovq(h->ptr[h->rsp + i * k_mask_size], Opmask(static_cast<int>(i)));
-        else
-            h->kmovw(h->ptr[h->rsp + i * k_mask_size], Opmask(static_cast<int>(i)));
-    }
-
-    // 1. Caller obligation to save vector registers as callee may use them.
-    // 2. There is an implicit assumption that the host code uses the same
-    // `isa` as the injector. Once the assumption is wrong, `vecs_count` and
-    // `vlen` should be replaced with `host_isa::vlen` and
-    // `host_isa::vecs_count`.
-    h->sub(h->rsp, get_max_vecs_count() * get_vec_length());
-    for (size_t i = 0; i < get_max_vecs_count(); ++i)
-        h->uni_vmovups(h->ptr[h->rsp + i * get_vec_length()], Zmm(i));
+    internal_call_preamble();
 
     // save function address in gpr to pass in call instruction
     const auto& brgemm_kernel_overload = static_cast<void (*)(libxsmm_xmmfunction*,
@@ -1419,38 +1348,14 @@ void BrgemmEmitter::emit_brgemm_kernel_call_libxsmm(const libxsmm_xmmfunction *x
 #endif
 #endif
 
-    // align stack on 16-byte as ABI requires
-    // note that RBX must not be changed by the callee
-    h->mov(h->rbx, h->rsp);
-    h->and_(h->rbx, 0xf);
-    h->sub(h->rsp, h->rbx);
-
+    internal_call_rsp_align();
     h->call(h->rbp);
-
-    h->add(h->rsp, h->rbx);
+    internal_call_rsp_restore();
 
 #ifdef _WIN32
     h->add(h->rsp, num_args_passed_on_stack * gpr_size);
 #endif
-    // restore vector registers
-    for (int i = static_cast<int>(get_max_vecs_count()) - 1; i >= 0; --i) {
-        h->uni_vmovups(Zmm(i), h->ptr[h->rsp + i * get_vec_length()]);
-    }
-    h->add(h->rsp, (get_max_vecs_count()) * get_vec_length());
-
-    // restore k registers
-    for (int i = n_k_regs_to_save - 1; i >= 0; --i) {
-        if (mayiuse(avx512_core))
-            h->kmovq(Opmask(i), h->ptr[h->rsp + i * k_mask_size]);
-        else
-            h->kmovw(Opmask(i), h->ptr[h->rsp + i * k_mask_size]);
-    }
-    h->add(h->rsp, n_k_regs_to_save * k_mask_size);
-
-    // restore gpr registers
-    for (int i = n_gprs_to_save - 1; i >= 0; --i)
-        h->mov(gprs_to_save[i], h->ptr[h->rsp + i * gpr_size]);
-    h->add(h->rsp, n_gprs_to_save * gpr_size);
+    internal_call_postamble();
 }
 
 void BrgemmEmitter::kernel_execute(const brgemm_kernel_t *brg_kernel,
