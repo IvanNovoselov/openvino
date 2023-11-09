@@ -13,9 +13,6 @@
 #include "transformations/snippets/x64/op/brgemm_copy_b.hpp"
 #include "transformations/snippets/x64/op//brgemm_cpu.hpp"
 #include "snippets/op/rank_normalization.hpp"
-#include "libxsmm.h"
-
-unsigned int use_xsmm = (getenv("USE_XSMM") == 0) ? 0 : atoi(getenv("USE_XSMM"));
 
 using namespace InferenceEngine;
 using namespace Xbyak;
@@ -770,10 +767,6 @@ size_t BrgemmEmitter::get_out_leading_dim(const VectorDims& shape, const std::ve
 BrgemmEmitter::BrgemmEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr) : jit_emitter(h, isa) {
     m_brgCtxs.fill(brgemmCtx());
     std::generate(m_brgKernels.begin(), m_brgKernels.end(), [](){ return nullptr; });
-    for (unsigned long int _i = 0; _i < BRGEMM_K_KERNEL_NUM * BRGEMM_N_KERNEL_NUM; _i++) {
-      m_brgKernelsXsmm[_i].gemm = NULL;
-      m_brgKernelsXsmmTileCfg[_i].gemm = NULL;
-    }
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
     const auto& brgemm_node = as_type_ptr<ov::intel_cpu::BrgemmCPU>(expr->get_node());
     if (brgemm_node->is_dynamic())
@@ -887,16 +880,7 @@ BrgemmEmitter::BrgemmEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPt
                 brgemmCtx.K == 0 || brgemmCtx.K > m_K)
                 continue;
 
-            unsigned int is_f32_gemm = ((brgemmCtx.dt_in0 == dnnl_data_type_t::dnnl_f32) && (brgemmCtx.dt_in1 == dnnl_data_type_t::dnnl_f32)) ? 1 : 0;
-            unsigned int is_bf16_gemm = ((brgemmCtx.dt_in0 == dnnl_data_type_t::dnnl_bf16) && (brgemmCtx.dt_in1 == dnnl_data_type_t::dnnl_bf16)) ? 1 : 0;
-            unsigned int is_i8_gemm = ((brgemmCtx.dt_in0 == dnnl_data_type_t::dnnl_u8) || (brgemmCtx.dt_in0 == dnnl_data_type_t::dnnl_s8)) ? 1 : 0;
-            unsigned int isKvnniDiv = (is_f32_gemm > 0) ? 1
-              : ((is_bf16_gemm > 0) ? ((brgemmCtx.K % 2 == 0) ? 1 : 0) : ((is_i8_gemm > 0) ? ((brgemmCtx.K % 4 == 0) ? 1 : 0) : 0));
-            if ((use_xsmm > 0) && (m_with_comp == 0) && (isKvnniDiv > 0)) {
-              initBrgemmXsmm(brgemmCtx, &m_brgKernelsXsmm[kernel_idx], &m_brgKernelsXsmmTileCfg[kernel_idx], brgWithAMX);
-            } else {
-              initBrgemm(brgemmCtx, m_brgKernels[kernel_idx], brgWithAMX);
-            }
+            initBrgemm(brgemmCtx, m_brgKernels[kernel_idx], brgWithAMX);
             has_N_kernel = true;
         }
         if (has_N_kernel)
@@ -980,60 +964,6 @@ void BrgemmEmitter::initBrgemm(brgemmCtx& ctx, std::unique_ptr<brgemm_kernel_t>&
     brgKernel.reset(brgKernel_);
 }
 
-libxsmm_datatype BrgemmEmitter::xsmm_dtype(dnnl_data_type_t dnnl_dtype) {
-  libxsmm_datatype result = LIBXSMM_DATATYPE_IMPLICIT;
-  if (dnnl_dtype == dnnl_data_type_t::dnnl_f32) {
-    result = LIBXSMM_DATATYPE_F32;
-  } else if (dnnl_dtype == dnnl_data_type_t::dnnl_bf16) {
-    result = LIBXSMM_DATATYPE_BF16;
-  } else if (dnnl_dtype == dnnl_data_type_t::dnnl_s8) {
-    result = LIBXSMM_DATATYPE_I8;
-  } else if (dnnl_dtype == dnnl_data_type_t::dnnl_u8) {
-    result = LIBXSMM_DATATYPE_U8;
-  } else {
-    printf("WARNING: Using implicit datatype...\n");
-  }
-  return result;
-}
-
-void BrgemmEmitter::initBrgemmXsmm(brgemmCtx& ctx, libxsmm_xmmfunction *brgKernel, libxsmm_xmmfunction *brgKernelTileCfg, bool use_amx) {
-  unsigned int is_f32_gemm = ((ctx.dt_in0 == dnnl_data_type_t::dnnl_f32) && (ctx.dt_in1 == dnnl_data_type_t::dnnl_f32)) ? 1 : 0;
-  auto l_flags_init = (is_f32_gemm > 0) ? LIBXSMM_GEMM_FLAGS('N', 'N')
-                                        : LIBXSMM_GEMM_VNNI_FLAGS('N', 'N', 'V', 'N') |
-                                          LIBXSMM_GEMM_FLAG_NO_SETUP_TILECONFIG |
-                                          LIBXSMM_GEMM_FLAG_NO_RESET_TILECONFIG;
-  auto l_flags = (ctx.beta == 0.0f) ? l_flags_init | LIBXSMM_GEMM_FLAG_BETA_0 : l_flags_init;
-  auto l_flags_cfg = (is_f32_gemm > 0) ? LIBXSMM_GEMM_FLAGS('N', 'N') :
-    LIBXSMM_GEMM_VNNI_FLAGS('N', 'N', 'V', 'N') | LIBXSMM_GEMM_FLAG_NO_RESET_TILECONFIG;
-  auto dtype0 = xsmm_dtype(ctx.dt_in1);
-  auto dtype1 = xsmm_dtype(ctx.dt_in0);
-  auto comp_dtype = (dtype0 == LIBXSMM_DATATYPE_I8 || dtype0 == LIBXSMM_DATATYPE_U8) ? LIBXSMM_DATATYPE_I32 : LIBXSMM_DATATYPE_F32;
-  auto out_dtype = (comp_dtype == LIBXSMM_DATATYPE_I32) ? LIBXSMM_DATATYPE_I32 : LIBXSMM_DATATYPE_F32;
-  if (dtype0 == LIBXSMM_DATATYPE_U8) {
-    dtype0 = LIBXSMM_DATATYPE_I8;
-    l_flags |= LIBXSMM_GEMM_FLAG_A_UNSIGNED;
-  }
-  if (dtype1 == LIBXSMM_DATATYPE_U8) {
-    dtype1 = LIBXSMM_DATATYPE_I8;
-    l_flags |= LIBXSMM_GEMM_FLAG_B_UNSIGNED;
-  }
-  auto l_shape = libxsmm_create_gemm_shape(ctx.N, ctx.M, ctx.K, ctx.LDB, ctx.LDA, ctx.LDC, dtype0, dtype1, out_dtype, comp_dtype);
-  auto l_prefetch_flags = LIBXSMM_GEMM_PREFETCH_NONE;
-  (*brgKernel).gemm = libxsmm_dispatch_gemm_v2(l_shape, l_flags, l_prefetch_flags);
-  if ((*brgKernel).gemm == NULL) {
-        printf("K is %d\n", ctx.K);
-        IE_THROW() << "LIBXSMM BrgemmEmitter cannot create brgemm kernel due to invalid params";
-  }
-  ctx.is_with_amx = use_amx;
-  ctx.is_with_comp = ctx.dt_in0 == dnnl_data_type_t::dnnl_s8 && !ctx.is_with_amx;
-  if (use_amx) {
-    (*brgKernelTileCfg).gemm = libxsmm_dispatch_gemm_v2(l_shape, l_flags_cfg, l_prefetch_flags);
-    if ((*brgKernelTileCfg).gemm == NULL) {
-          IE_THROW() << "LIBXSMM BrgemmEmitter cannot create brgemm tile config kernel due to invalid params";
-    }
-  }
-}
-
 size_t BrgemmEmitter::aux_gprs_count() const {
     return m_N_blk_loop + m_K_blk_loop;
 }
@@ -1044,7 +974,7 @@ void BrgemmEmitter::emit_N_blocking_loops(size_t k_kernel_id,
                                           const Xbyak::Reg64& work_amount_N) const {
     // Blocked N loop
     size_t kernel_idx = getBrgIdx(k_kernel_id, 0);
-    if (m_brgKernels[kernel_idx] || m_brgKernelsXsmm[kernel_idx].gemm) {
+    if (m_brgKernels[kernel_idx]) {
         const auto& brgemmCtx = m_brgCtxs[kernel_idx];
         Label N_loop_begin;
         if (m_N_blk_loop) {
@@ -1052,11 +982,7 @@ void BrgemmEmitter::emit_N_blocking_loops(size_t k_kernel_id,
             h->L(N_loop_begin);
         }
 
-        if ((use_xsmm > 0) && (m_with_comp == 0) && m_brgKernelsXsmm[kernel_idx].gemm) {
-          emit_brgemm_kernel_call_libxsmm(&m_brgKernelsXsmm[kernel_idx], &m_brgKernelsXsmmTileCfg[kernel_idx], brgemmCtx, input_0, input_1, input_2, output_0);
-        } else {
-          emit_brgemm_kernel_call(m_brgKernels[kernel_idx].get(), brgemmCtx, input_0, input_1, input_2, output_0);
-        }
+        emit_brgemm_kernel_call(m_brgKernels[kernel_idx].get(), brgemmCtx, input_0, input_1, input_2, output_0);
         // We don't need to increment pointers if we cover full N dimension in one kernel call
         if (m_N_blk_loop || m_N_tail != 0) {
             h->add(output_0, brgemmCtx.N * io_data_size.back());
@@ -1073,13 +999,8 @@ void BrgemmEmitter::emit_N_blocking_loops(size_t k_kernel_id,
     }
     // N loop tail
     kernel_idx = getBrgIdx(k_kernel_id, 1);
-    const auto& brgemmCtxTail = m_brgCtxs[kernel_idx];
-    if (m_brgKernelsXsmm[kernel_idx].gemm) {
-      emit_brgemm_kernel_call_libxsmm(&m_brgKernelsXsmm[kernel_idx], &m_brgKernelsXsmmTileCfg[kernel_idx], brgemmCtxTail, input_0, input_1, input_2, output_0);
-    }
-    if (m_brgKernels[kernel_idx]) {
-      emit_brgemm_kernel_call(m_brgKernels[kernel_idx].get(), brgemmCtxTail, input_0, input_1, input_2, output_0);
-    }
+    if (m_brgKernels[kernel_idx])
+        emit_brgemm_kernel_call(m_brgKernels[kernel_idx].get(), m_brgCtxs[kernel_idx], input_0, input_1, input_2, output_0);
 
     if (m_N_blk_loop || m_N_tail != 0) {
         h->sub(input_1, (m_N - m_N_tail) * io_data_size[1]);
@@ -1111,7 +1032,7 @@ void BrgemmEmitter::emit_impl(const std::vector<size_t>& in,
         auto get_K_kernel_idx = [&](size_t k_kernel_id, size_t& kernel_idx) {
             for (size_t n = 0; n < BRGEMM_N_KERNEL_NUM; n++) {
                 const auto idx = getBrgIdx(k_kernel_id, n);
-                if (m_brgKernels[idx] || m_brgKernelsXsmm[idx].gemm) {
+                if (m_brgKernels[idx]) {
                     kernel_idx = idx;
                     return true;
                 }
@@ -1165,8 +1086,6 @@ void BrgemmEmitter::emit_brgemm_kernel_call(const brgemm_kernel_t *brg_kernel, c
                                             const size_t in0_kernel_offset, const size_t in1_kernel_offset,
                                             const size_t in2_kernel_offset, const size_t out0_kernel_offset) const {
     if (ctx.is_with_amx) {
-        // todo: relace using Chenhu binary call helpers. Same for libxsmm kernel call
-        // todo: why don't we save mask regs here?
         Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->rax,
                                          h->rcx, h->rdx, h->rdi, h->rsi, h->rbp, h->rbx};
         size_t n_gprs_to_save = sizeof(gprs_to_save) / sizeof(gprs_to_save[0]);
@@ -1195,7 +1114,32 @@ void BrgemmEmitter::emit_brgemm_kernel_call(const brgemm_kernel_t *brg_kernel, c
         h->add(h->rsp, n_gprs_to_save * gpr_size);
     }
 
-    internal_call_preamble();
+    Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->r12, h->r13, h->r14, h->r15,
+                                     h->rax, h->rcx, h->rdx, h->rdi, h->rsi, h->rbp, h->rbx};
+    size_t n_gprs_to_save = sizeof(gprs_to_save) / sizeof(gprs_to_save[0]);
+
+    h->sub(h->rsp, n_gprs_to_save * gpr_size);
+    for (size_t i = 0; i < n_gprs_to_save; ++i)
+        h->mov(h->ptr[h->rsp + i * gpr_size], gprs_to_save[i]);
+
+    // caller obligation to save k-regs as callee may use them
+    size_t n_k_regs_to_save = 8;
+    h->sub(h->rsp, n_k_regs_to_save * k_mask_size);
+    for (size_t i = 0; i < n_k_regs_to_save; ++i) {
+        if (mayiuse(avx512_core))
+            h->kmovq(h->ptr[h->rsp + i * k_mask_size], Opmask(static_cast<int>(i)));
+        else
+            h->kmovw(h->ptr[h->rsp + i * k_mask_size], Opmask(static_cast<int>(i)));
+    }
+
+    // 1. Caller obligation to save vector registers as callee may use them.
+    // 2. There is an implicit assumption that the host code uses the same
+    // `isa` as the injector. Once the assumption is wrong, `vecs_count` and
+    // `vlen` should be replaced with `host_isa::vlen` and
+    // `host_isa::vecs_count`.
+    h->sub(h->rsp, get_max_vecs_count() * get_vec_length());
+    for (size_t i = 0; i < get_max_vecs_count(); ++i)
+        h->uni_vmovups(h->ptr[h->rsp + i * get_vec_length()], Zmm(i));
 
     // save function address in gpr to pass in call instruction
     const auto& brgemm_kernel_overload = static_cast<void (*)(const brgemm_kernel_t*,
@@ -1249,113 +1193,38 @@ void BrgemmEmitter::emit_brgemm_kernel_call(const brgemm_kernel_t *brg_kernel, c
     h->mov(abi_param6, static_cast<int>(m_with_comp));
 #endif
 
-    internal_call_rsp_align();
+    // align stack on 16-byte as ABI requires
+    // note that RBX must not be changed by the callee
+    h->mov(h->rbx, h->rsp);
+    h->and_(h->rbx, 0xf);
+    h->sub(h->rsp, h->rbx);
+
     h->call(h->rbp);
-    internal_call_rsp_restore();
+
+    h->add(h->rsp, h->rbx);
 
 #ifdef _WIN32
     h->add(h->rsp, num_args_passed_on_stack * gpr_size);
 #endif
-
-    internal_call_postamble();
-}
-
-void BrgemmEmitter::emit_brgemm_kernel_call_libxsmm(const libxsmm_xmmfunction *xsmm_func, const libxsmm_xmmfunction *xsmm_tile_cfg, const brgemmCtx& ctx,
-                                            Reg64 addr_A, Reg64 addr_B, Reg64 scratch, Reg64 addr_C,
-                                            const size_t in0_kernel_offset, const size_t in1_kernel_offset,
-                                            const size_t in2_kernel_offset, const size_t out0_kernel_offset) const {
-    if (ctx.is_with_amx) {
-        Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->rax,
-                                         h->rcx, h->rdx, h->rdi, h->rsi, h->rbp, h->rbx};
-        size_t n_gprs_to_save = sizeof(gprs_to_save) / sizeof(gprs_to_save[0]);
-
-        h->sub(h->rsp, n_gprs_to_save * gpr_size);
-        for (size_t i = 0; i < n_gprs_to_save; ++i)
-            h->mov(h->ptr[h->rsp + i * gpr_size], gprs_to_save[i]);
-
-        // save function address in gpr to pass in call instruction
-        const auto& overload = static_cast<void (*)(libxsmm_xmmfunction*)>(libxsmm_amx_tile_configure);
-        h->mov(h->rbp, reinterpret_cast<uintptr_t>(overload));
-        h->mov(abi_param1, reinterpret_cast<uintptr_t>(xsmm_tile_cfg));
-        // align stack on 16-byte as ABI requires
-        // note that RBX must not be changed by the callee
-        h->mov(h->rbx, h->rsp);
-        h->and_(h->rbx, 0xf);
-        h->sub(h->rsp, h->rbx);
-
-        h->call(h->rbp);
-
-        h->add(h->rsp, h->rbx);
-        // restore gpr registers
-        for (int i = n_gprs_to_save - 1; i >= 0; --i)
-            h->mov(gprs_to_save[i], h->ptr[h->rsp + i * gpr_size]);
-        h->add(h->rsp, n_gprs_to_save * gpr_size);
+    // restore vector registers
+    for (int i = static_cast<int>(get_max_vecs_count()) - 1; i >= 0; --i) {
+        h->uni_vmovups(Zmm(i), h->ptr[h->rsp + i * get_vec_length()]);
     }
+    h->add(h->rsp, (get_max_vecs_count()) * get_vec_length());
 
-    internal_call_preamble();
-
-    // save function address in gpr to pass in call instruction
-    const auto& brgemm_kernel_overload = static_cast<void (*)(libxsmm_xmmfunction*,
-                                                              void*,
-                                                              void*,
-                                                              void*)>(kernel_execute_libxsmm);
-    h->mov(h->rbp, reinterpret_cast<uintptr_t>(brgemm_kernel_overload));
-    // todo: several of addr_{A, B, C} could be also abi_paramX, so one of them could be corrupted
-    //  if moving directly h->uni_vmovq(abi_paramX, adr_X). Save them to vector regs to avoid corruption.
-    //  It's likely that a more efficient solution exists.
-    h->uni_vmovq(Xmm(0), addr_A);
-    h->uni_vmovq(Xmm(1), addr_B);
-    h->uni_vmovq(Xmm(2), addr_C);
-#if 0
-    if (m_with_scratch)
-        h->uni_vmovq(Xmm(3), scratch);
-#endif
-    // todo: Windows ABI : requires different num of arguments passed in regs and on the stack. Need to align.
-    const auto data_ptr_reg = [&](Xmm xmm, Xbyak::Reg64 reg, size_t bytes_offset) {
-        h->uni_vmovq(reg, xmm);
-        if (bytes_offset) h->add(reg, bytes_offset);
-    };
-    h->mov(abi_param1, reinterpret_cast<uintptr_t>(xsmm_func));
-    data_ptr_reg(Xmm(0), abi_param2, in0_kernel_offset);
-    data_ptr_reg(Xmm(1), abi_param3, in1_kernel_offset);
-    data_ptr_reg(Xmm(2), abi_param4, out0_kernel_offset);
-
-#ifdef _WIN32
-    // Before function call we should allocate stack area for
-    //  - register parameters - ABI parameters (shadow space)
-    //  - stack parameters - remaining parameters
-    const size_t num_args_passed_on_stack = 6;  // count of function brgemm_kernel_overload() parameters
-    size_t abi_param_count = sizeof(abi_param_regs) / sizeof(abi_param_regs[0]);
-    h->sub(h->rsp, num_args_passed_on_stack * gpr_size);
-
-    // Push the remaining parameters on the stack
-    if (m_with_scratch) {
-        h->uni_vmovq(h->qword[h->rsp + (abi_param_count + 0) * gpr_size], Xmm(3));
-        if (in2_kernel_offset) h->add(h->qword[h->rsp + (abi_param_count + 0) * gpr_size], in2_kernel_offset);
-    } else {
-        h->mov(h->qword[h->rsp + (abi_param_count + 0) * gpr_size], reinterpret_cast<uintptr_t>(nullptr));
+    // restore k registers
+    for (int i = n_k_regs_to_save - 1; i >= 0; --i) {
+        if (mayiuse(avx512_core))
+            h->kmovq(Opmask(i), h->ptr[h->rsp + i * k_mask_size]);
+        else
+            h->kmovw(Opmask(i), h->ptr[h->rsp + i * k_mask_size]);
     }
-    h->mov(abi_not_param1, static_cast<int>(m_with_comp));
-    h->mov(h->qword[h->rsp + (abi_param_count + 1) * gpr_size], abi_not_param1);
-#else
-#if 0
-    if (m_with_scratch) {
-        data_ptr_reg(Xmm(3), abi_param5, in2_kernel_offset);
-    } else {
-        h->mov(abi_param5, reinterpret_cast<uintptr_t>(nullptr));
-    }
-    h->mov(abi_param6, static_cast<int>(m_with_comp));
-#endif
-#endif
+    h->add(h->rsp, n_k_regs_to_save * k_mask_size);
 
-    internal_call_rsp_align();
-    h->call(h->rbp);
-    internal_call_rsp_restore();
-
-#ifdef _WIN32
-    h->add(h->rsp, num_args_passed_on_stack * gpr_size);
-#endif
-    internal_call_postamble();
+    // restore gpr registers
+    for (int i = n_gprs_to_save - 1; i >= 0; --i)
+        h->mov(gprs_to_save[i], h->ptr[h->rsp + i * gpr_size]);
+    h->add(h->rsp, n_gprs_to_save * gpr_size);
 }
 
 void BrgemmEmitter::kernel_execute(const brgemm_kernel_t *brg_kernel,
@@ -1375,25 +1244,6 @@ void BrgemmEmitter::kernel_execute(const brgemm_kernel_t *brg_kernel,
     brgemm_p.BS = 1;  // default value
     assert(brg_kernel);
     (*brg_kernel)(&brgemm_p);
-}
-
-void BrgemmEmitter::kernel_execute_libxsmm(libxsmm_xmmfunction *brg_kernel,
-                                   void *A, void *B, void *C) {
-    libxsmm_gemm_param gemm_p;
-    gemm_p.a.primary = reinterpret_cast<void*>(B);
-    gemm_p.b.primary = reinterpret_cast<void*>(A);
-    gemm_p.c.primary = reinterpret_cast<void*>(C);
-    assert(brg_kernel);
-    (*brg_kernel).gemm(&gemm_p);
-}
-
-void BrgemmEmitter::libxsmm_amx_tile_configure(libxsmm_xmmfunction *cfg_kernel) {
-    libxsmm_gemm_param gemm_p;
-    gemm_p.a.primary = reinterpret_cast<void*>(NULL);
-    gemm_p.b.primary = reinterpret_cast<void*>(NULL);
-    gemm_p.c.primary = reinterpret_cast<void*>(NULL);
-    assert(cfg_kernel);
-    (*cfg_kernel).gemm(&gemm_p);
 }
 
 BrgemmCopyBEmitter::BrgemmCopyBEmitter(jit_generator* h, cpu_isa_t isa, const ExpressionPtr& expr)

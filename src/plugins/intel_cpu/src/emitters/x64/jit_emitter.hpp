@@ -133,12 +133,12 @@ protected:
     }
 
     // below 4 functions must be inline funtions to avoid corrupted rsp by function call, so defined inside class declaration.
-    inline void internal_call_preamble() const;
-    inline void internal_call_postamble() const;
+    void internal_call_preamble() const;
+    void internal_call_postamble() const;
     // align stack on 16-byte as ABI reqiures
     // callee is responsible to save and restore rbx. rbx must not be changed after call callee.
-    inline void internal_call_rsp_align() const;
-    inline void internal_call_rsp_restore() const;
+    void internal_call_rsp_align() const;
+    void internal_call_rsp_restore() const;
 
 private:
     mutable std::vector<size_t> preserved_vec_idxs;

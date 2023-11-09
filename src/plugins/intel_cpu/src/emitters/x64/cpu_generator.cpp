@@ -10,6 +10,7 @@
 
 #include "cpu_generator.hpp"
 #include "jit_snippets_emitters.hpp"
+#include "jit_snippets_tpp_emitters.hpp"
 #include "jit_eltwise_emitters.hpp"
 #include "jit_dnnl_emitters.hpp"
 #include "jit_dnnl_ext_emitters.hpp"
@@ -22,6 +23,7 @@
 #include "transformations/snippets/x64/op/brgemm_cpu.hpp"
 #include "transformations/cpu_opset/common/op/swish_cpu.hpp"
 #include "transformations/snippets/x64/pass/lowered/fuse_load_store_and_convert.hpp"
+#include "transformations/snippets/tpp/op/brgemm_tpp.hpp"
 
 #include <openvino/opsets/opset5.hpp>
 
@@ -157,6 +159,8 @@ intel_cpu::CPUTargetMachine::CPUTargetMachine(dnnl::impl::cpu::x64::cpu_isa_t ho
     jitters[snippets::op::LoopEnd::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(LoopEndEmitter);
     jitters[intel_cpu::BrgemmCPU::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BrgemmEmitter);
     jitters[intel_cpu::BrgemmCopyB::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BrgemmCopyBEmitter);
+    // TPP
+    jitters[intel_cpu::BrgemmTPP::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BrgemmTppEmitter);
 }
 
 size_t intel_cpu::CPUTargetMachine::get_lanes() const {
