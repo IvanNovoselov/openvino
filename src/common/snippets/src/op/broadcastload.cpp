@@ -12,7 +12,7 @@ namespace snippets {
 namespace op {
 
 BroadcastLoad::BroadcastLoad(const Output<Node>& x, ov::PartialShape shape, size_t offset)
-    : MemoryAccess({x}, std::set<size_t>{0}, std::set<size_t>{}), output_shape(std::move(shape)) {
+    : MemoryAccess(std::set<size_t>{0}, std::set<size_t>{}), Op({x}), output_shape(std::move(shape)) {
     set_input_port_descriptor({1, offset}, 0);
     constructor_validate_and_infer_types();
 }

@@ -27,7 +27,7 @@ void AllocateBuffers::propagate_offset(const LinearIR& linear_ir, const Expressi
             const auto& parent_expr = parent_output.get_expr();
             const auto port = parent_output.get_index();
             const auto& parent_node = parent_expr->get_node();
-            auto memory_access = ov::as_type_ptr<ov::snippets::op::MemoryAccess>(parent_node);
+            auto memory_access = std::dynamic_pointer_cast<modifier::MemoryAccess>(parent_node);
             if (memory_access && memory_access->is_memory_access_output_port(port)) {
                 memory_access->set_output_offset(offset, port);
             } else {
@@ -42,7 +42,7 @@ void AllocateBuffers::propagate_offset(const LinearIR& linear_ir, const Expressi
         const auto& child_expr = child_expr_input.get_expr();
         const auto port = child_expr_input.get_index();
         const auto& child_node = child_expr->get_node();
-        auto memory_access = ov::as_type_ptr<ov::snippets::op::MemoryAccess>(child_node);
+        auto memory_access = std::dynamic_pointer_cast<modifier::MemoryAccess>(child_node);
         if (memory_access && memory_access->is_memory_access_input_port(port)) {
             memory_access->set_input_offset(offset, port);
         } else if (ov::is_type<op::LoopEnd>(child_node)) {
@@ -94,8 +94,8 @@ bool AllocateBuffers::run(LinearIR& linear_ir) {
                 const auto& parent_node = parent_expr->get_node();
                 // Full MemoryAccess ops need new memory. Previous logic is to check for parent isn't Loop
                 // [113664] It should be unified in MemoryManager with memory reuse in the near future
-                const auto ma = ov::as_type_ptr<op::MemoryAccess>(parent_node);
-                if (ma && ma->is_full_memory_access_op()) {
+                const auto ma = std::dynamic_pointer_cast<modifier::MemoryAccess>(parent_node);
+                if (ma && ma->is_full_memory_access_op(parent_node)) {
                     allocate(buffer, *expr_it, buffer_size);
                     continue;
                 }
@@ -114,8 +114,8 @@ bool AllocateBuffers::run(LinearIR& linear_ir) {
                 for (const auto& consumer : consumers) {
                     const auto& consumer_expr = consumer.get_expr();
                     const auto& child_node = consumer_expr->get_node();
-                    const auto ma = ov::as_type_ptr<op::MemoryAccess>(child_node);
-                    if (ma && ma->is_full_memory_access_op()) {
+                    const auto ma = std::dynamic_pointer_cast<modifier::MemoryAccess>(child_node);
+                    if (ma && ma->is_full_memory_access_op(child_node)) {
                         for (size_t i = 0; i < consumer_expr->get_input_count() && !need_allocate; ++i) {
                             if (i == consumer.get_index())
                                 continue;

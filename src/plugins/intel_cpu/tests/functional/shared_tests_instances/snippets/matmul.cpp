@@ -36,7 +36,6 @@ static inline std::vector<std::vector<element::Type>> precisions(bool only_fp32 
     std::vector<std::vector<element::Type>> prc = {
             {element::f32, element::f32},
 //            {element::u8, element::i8},
-
     };
 //    if (!only_fp32) {
 //        auto quant = quantized_precisions();
