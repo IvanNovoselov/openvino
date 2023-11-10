@@ -62,6 +62,8 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
       m_brgKernelsXsmm[i].gemm = nullptr;
       m_brgKernelsXsmmTileCfg[i].gemm = nullptr;
     }
+    //todo: remove this debug print
+    std::cerr << "BrgemmTppEmitter invoked\n" << std::flush;
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
     const auto& brgemm_node = as_type_ptr<ov::intel_cpu::BrgemmTPP>(expr->get_node());
     OPENVINO_ASSERT(!brgemm_node->is_dynamic(), "Snippets don't support code generation for dynamic Brgemm");
@@ -86,12 +88,12 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
         leading_dimensions.push_back(get_out_leading_dim(output->get_shape(), io_layouts.back()));
     };
     init_in_scheduling_params(expr->get_input_port_descriptor(0));
-    if (brgemm_node->is_with_data_repacking()) {
-        io_layouts.push_back(std::vector<size_t>{});
-        leading_dimensions.push_back(0);
-    } else {
+//    if (brgemm_node->is_with_data_repacking()) {
+//        io_layouts.push_back(std::vector<size_t>{});
+//        leading_dimensions.push_back(0);
+//    } else {
         init_in_scheduling_params(expr->get_input_port_descriptor(1));
-    }
+//    }
     init_out_scheduling_params(expr->get_output_port_descriptor(0));
 
     const auto& A_shape = expr->get_input_port_descriptor(0)->get_shape();
@@ -124,8 +126,10 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
 //        io_data_size.push_back(brgemm_node->get_input_element_type(2).size());
     io_data_size.push_back(brgemm_node->get_output_element_type(0).size());
 
-    m_with_comp = brgemm_node->is_with_compensations();
-    m_with_scratch = brgemm_node->is_with_scratchpad();
+//    m_with_comp = brgemm_node->is_with_compensations();
+//    m_with_scratch = brgemm_node->is_with_scratchpad();
+    m_with_scratch = false;
+    m_with_comp = false;
 
     m_N_blk = brgemm_node->get_n_block_size();
     m_K_blk = brgemm_node->get_k_block_size();
@@ -134,8 +138,8 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
 
     m_N_blk_loop = m_N >= 2 * m_N_blk;
     m_K_blk_loop = m_K >= 3 * m_K_blk;
-    OPENVINO_ASSERT((!brgemm_node->is_with_data_repacking()) || (!m_N_blk_loop && !m_K_blk_loop),
-                    "BrgemmTppEmitter doesn't support blocking by K, N dimensions when data repacking is needed!");
+//    OPENVINO_ASSERT((!brgemm_node->is_with_data_repacking()) || (!m_N_blk_loop && !m_K_blk_loop),
+//                    "BrgemmTppEmitter doesn't support blocking by K, N dimensions when data repacking is needed!");
 
     auto N = [&](size_t n) {
         switch (n) {
