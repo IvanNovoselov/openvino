@@ -530,5 +530,25 @@ void BrgemmTppEmitter::libxsmm_amx_tile_configure(libxsmm_xmmfunction *cfg_kerne
     (*cfg_kernel).gemm(&gemm_p);
 }
 
+
+BinaryEltwiseTppEmitter::BinaryEltwiseTppEmitter(dnnl::impl::cpu::x64::jit_generator* h,
+                                                 dnnl::impl::cpu::x64::cpu_isa_t isa,
+                                                 const ov::snippets::lowered::ExpressionPtr& expr)
+                                                 : jit_emitter(h, isa) {
+}
+
+std::set<std::vector<element::Type>> BinaryEltwiseTppEmitter::get_supported_precisions(const std::shared_ptr<ngraph::Node>& node) {
+    // todo: check what precisions are natively supported by tpp (without additional converts)
+    return {{element::f32, element::f32}};
+}
+
+void BinaryEltwiseTppEmitter::validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const {
+    OPENVINO_THROW("BinaryEltwiseTppEmitter not implemented");
+}
+
+void BinaryEltwiseTppEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size_t>& out) const {
+    OPENVINO_THROW("BinaryEltwiseTppEmitter not implemented");
+}
+
 }  // namespace intel_cpu
 }  // namespace ov

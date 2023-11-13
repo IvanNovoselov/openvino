@@ -92,5 +92,21 @@ private:
     std::vector<size_t> io_data_size {};
 };
 
+class BinaryEltwiseTppEmitter : public jit_emitter {
+public:
+    BinaryEltwiseTppEmitter(dnnl::impl::cpu::x64::jit_generator* h,
+                     dnnl::impl::cpu::x64::cpu_isa_t isa,
+                     const ov::snippets::lowered::ExpressionPtr& expr);
+
+    size_t get_inputs_num() const override { return 2; }
+    static std::set<std::vector<element::Type>> get_supported_precisions(const std::shared_ptr<ngraph::Node>& node = nullptr);
+//    size_t aux_gprs_count() const override;
+
+private:
+    void validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const override;
+    void emit_impl(const std::vector<size_t>& in,
+                   const std::vector<size_t>& out) const override;
+};
+
 }   // namespace intel_cpu
 }   // namespace ov
