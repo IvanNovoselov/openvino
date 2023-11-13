@@ -17,7 +17,7 @@ namespace op {
  * @brief Brgemm is a batch-reduced matrix multiplication with the support of arbitrary strides between matrices rows
  * @ingroup snippets
  */
-class Brgemm : public modifier::MemoryAccess, public ov::op::Op {
+class Brgemm : virtual public modifier::MemoryAccess, public ov::op::Op {
 public:
     OPENVINO_OP("Brgemm", "SnippetsOpset");
     Brgemm(const Output<Node>& A, const Output<Node>& B,

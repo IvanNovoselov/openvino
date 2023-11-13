@@ -11,7 +11,7 @@
 #include "snippets/lowered/expression.hpp"
 #include "snippets/lowered/port_connector.hpp"
 #include "transformations/snippets/x64/op/brgemm_copy_b.hpp"
-#include "transformations/snippets/tpp/op/brgemm_tpp.hpp"
+#include "transformations/snippets/tpp/op/brgemm.hpp"
 #include "libxsmm.h"
 
 using namespace InferenceEngine;
@@ -65,7 +65,7 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
     //todo: remove this debug print
     std::cerr << "BrgemmTppEmitter invoked\n" << std::flush;
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
-    const auto& brgemm_node = as_type_ptr<ov::intel_cpu::BrgemmTPP>(expr->get_node());
+    const auto& brgemm_node = as_type_ptr<intel_cpu::tpp::op::BrgemmTPP>(expr->get_node());
     OPENVINO_ASSERT(!brgemm_node->is_dynamic(), "Snippets don't support code generation for dynamic Brgemm");
 //    const auto brgemm_copy = brgemm_node->is_with_data_repacking() ? brgemm_node->get_brgemm_copy() : nullptr;
 

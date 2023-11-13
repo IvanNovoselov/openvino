@@ -348,7 +348,7 @@ void Snippet::initOptimalPrimitiveDescriptor() {
         SNIPPETS_REGISTER_PASS(PassPosition(Place::PipelineStart), ov::snippets::pass::MatMulToBrgemm);
         SNIPPETS_REGISTER_PASS(PassPosition(Place::After, "MatMulToBrgemm"), pass::EnforcePrecision, element::f32, element::bf16);
     }
-    SNIPPETS_REGISTER_PASS(PassPosition(Place::Before, "PropagatePrecision"), ov::intel_cpu::pass::BrgemmToBrgemmTPP);
+    SNIPPETS_REGISTER_PASS(PassPosition(Place::Before, "PropagatePrecision"), ov::intel_cpu::tpp::pass::BrgemmToBrgemmTPP);
     SNIPPETS_REGISTER_PASS(PassPosition(Place::Before, "PropagatePrecision"), ov::intel_cpu::pass::BrgemmToBrgemmCPU);
     SNIPPETS_REGISTER_PASS(PassPosition(Place::Before, "PropagatePrecision"), ov::intel_cpu::pass::SetBrgemmCPUBlockingParams);
 

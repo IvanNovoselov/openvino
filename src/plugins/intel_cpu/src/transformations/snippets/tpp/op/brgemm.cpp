@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "brgemm_tpp.hpp"
+#include "brgemm.hpp"
 #include "snippets/itt.hpp"
 #include "snippets/utils.hpp"
 #include "snippets/lowered/port_descriptor.hpp"
@@ -11,6 +11,8 @@
 
 namespace ov {
 namespace intel_cpu {
+namespace tpp {
+namespace op {
 
 BrgemmTPP::BrgemmTPP(const Output<Node>& A, const Output<Node>& B, const Type type,
                      const size_t offset_a, const size_t offset_b, const size_t offset_c,
@@ -168,5 +170,7 @@ size_t BrgemmTPP::get_offset_scratch() const {
     return get_input_offset(2);
 }
 
+} // namespace op
+} // namespace tpp
 } // namespace intel_cpu
 } // namespace ov

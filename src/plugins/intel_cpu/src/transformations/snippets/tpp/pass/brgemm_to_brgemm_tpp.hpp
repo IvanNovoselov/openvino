@@ -8,6 +8,7 @@
 
 namespace ov {
 namespace intel_cpu {
+namespace tpp {
 namespace pass {
 
 /**
@@ -40,5 +41,6 @@ public:
 
 
 }  // namespace pass
+}  // namespace tpp
 }  // namespace intel_cpu
 }  // namespace ov

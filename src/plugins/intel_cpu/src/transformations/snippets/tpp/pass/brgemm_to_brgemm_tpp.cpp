@@ -9,7 +9,7 @@
 #include "snippets/utils.hpp"
 #include "snippets/op/brgemm.hpp"
 #include "transformations/snippets/x64/op/brgemm_copy_b.hpp"
-#include "transformations/snippets/tpp/op/brgemm_tpp.hpp"
+#include "transformations/snippets/tpp/op/brgemm.hpp"
 
 #include "openvino/core/rt_info.hpp"
 #include "openvino/pass/pattern/op/wrap_type.hpp"
@@ -23,6 +23,8 @@
 
 namespace ov {
 namespace intel_cpu {
+namespace tpp {
+namespace pass {
 
 using namespace snippets::lowered;
 
@@ -41,7 +43,7 @@ void set_port_desc(const T& port, Args... params) {
 }
 } // namespace
 
-pass::BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
+BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
     MATCHER_SCOPE(BrgemmToBrgemmTPP);
 
     auto m_brgemm = ov::pass::pattern::wrap_type<snippets::op::Brgemm>();
@@ -50,7 +52,7 @@ pass::BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
         OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "ov::intel_cpu::pass::BrgemmToBrgemmTPP")
         const auto node = m.get_match_root();
         const auto brgemm = ov::as_type_ptr<snippets::op::Brgemm>(node);
-        const auto brgemm_tpp = ov::as_type_ptr<BrgemmTPP>(node);
+        const auto brgemm_tpp = ov::as_type_ptr<tpp::op::BrgemmTPP>(node);
         if (!brgemm || brgemm_tpp)
             OPENVINO_THROW("BrgemmCPU cannot be in body before BrgemmToBrgemmTPP pass");
 
@@ -78,10 +80,10 @@ pass::BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
         const auto offset_b = brgemm->get_offset_b();
         const auto offset_c = brgemm->get_offset_c();
 
-        std::shared_ptr<BrgemmTPP> brgemm_cpu = nullptr;
+        std::shared_ptr<tpp::op::BrgemmTPP> brgemm_cpu = nullptr;
         std::shared_ptr<BrgemmCopyB> brgemm_repacking = nullptr;
         if (element_type_a == ov::element::f32) {
-            brgemm_cpu = std::make_shared<BrgemmTPP>(brgemm->input_value(0), brgemm->input_value(1), BrgemmTPP::Type::Floating,
+            brgemm_cpu = std::make_shared<tpp::op::BrgemmTPP>(brgemm->input_value(0), brgemm->input_value(1), tpp::op::BrgemmTPP::Type::Floating,
                                                      offset_a, offset_b, offset_c,
                                                      brgemm_in0_desc->get_layout(), brgemm_in1_desc->get_layout(), brgemm_out_desc->get_layout());
         } else {
@@ -139,5 +141,7 @@ pass::BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
     auto m = std::make_shared<ov::pass::pattern::Matcher>(m_brgemm, matcher_name);
     register_matcher(m, callback);
 }
+} // namespace pass
+} // namespace tpp
 } // namespace intel_cpu
 } // namespace ov

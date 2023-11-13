@@ -5,9 +5,12 @@
 #pragma once
 
 #include "transformations/snippets/x64/op/brgemm_cpu.hpp"
+#include "modifiers.hpp"
 
 namespace ov {
 namespace intel_cpu {
+namespace tpp {
+namespace op {
 
 /**
  * @interface BrgemmTPP
@@ -19,7 +22,7 @@ namespace intel_cpu {
 //  For example: BrgemmCPU
 //               /       \
 //           BrgemmTPP  BrgemmX86 (or BrgemmOneDNN)
-class BrgemmTPP : public snippets::op::Brgemm {
+class BrgemmTPP : public TensorProcessingPrimitive, public snippets::op::Brgemm  {
 public:
     OPENVINO_OP("BrgemmTPP", "SnippetsOpset", snippets::op::Brgemm);
 
@@ -82,5 +85,7 @@ private:
     size_t m_N_blk = 0;
 };
 
+} // namespace op
+} // namespace tpp
 } // namespace intel_cpu
 } // namespace ov
