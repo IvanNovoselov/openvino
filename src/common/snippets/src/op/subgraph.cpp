@@ -494,12 +494,9 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const lowered::pass::PassPi
     OPENVINO_ASSERT(m_linear_ir, "Attempt to call generate, when linear IR was not initialized");
 
     auto linear_ir {*m_linear_ir->clone()};
-
-    ov::pass::Serialize("snsdebug_ngraph.xml", "snsdebug_ngraph.bin").run_on_model(body_ptr());
-
     LoweringResult lowering_result;
     control_flow_transformations(linear_ir, lowering_result, backend_passes_pre_common, backend_passes_post_common);
-    linear_ir.serialize("snsdebug_lir.xml", "snsdebug_lir.bin");
+
     m_generator->generate(linear_ir, lowering_result, compile_params);
 
     VectorDims parallel_exec_domain = linear_ir.get_master_shape();

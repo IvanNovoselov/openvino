@@ -97,15 +97,21 @@ public:
     BinaryEltwiseTppEmitter(dnnl::impl::cpu::x64::jit_generator* h,
                      dnnl::impl::cpu::x64::cpu_isa_t isa,
                      const ov::snippets::lowered::ExpressionPtr& expr);
-
+    void emit_code(const std::vector<size_t> &in,
+                   const std::vector<size_t> &out) const;
     size_t get_inputs_num() const override { return 2; }
     static std::set<std::vector<element::Type>> get_supported_precisions(const std::shared_ptr<ngraph::Node>& node = nullptr);
+    static  libxsmm_blasint get_broadcasted_dim(libxsmm_blasint dim0, libxsmm_blasint dim1, std::pair<bool, bool>& bcast_flags);
 //    size_t aux_gprs_count() const override;
+    static libxsmm_datatype ov_to_xsmm_dtype(ov::element::Type_t elemet_type);
 
 private:
+    using jit_emitter::emit_code;
     void validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const override;
     void emit_impl(const std::vector<size_t>& in,
                    const std::vector<size_t>& out) const override;
+    static void execute_libxsmm_kernel(libxsmm_meltwfunction_binary *eltwise_kernel, void *in0, void *in1, void *out0);
+    libxsmm_meltwfunction_binary libxsmm_kernel{nullptr};
 };
 
 }   // namespace intel_cpu

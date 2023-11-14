@@ -13,6 +13,7 @@
 #include "transformations/snippets/x64/op/brgemm_copy_b.hpp"
 #include "transformations/snippets/tpp/op/brgemm.hpp"
 #include "libxsmm.h"
+#include "transformations/snippets/tpp/op/eltwise.hpp"
 
 using namespace InferenceEngine;
 using namespace Xbyak;
@@ -529,12 +530,71 @@ void BrgemmTppEmitter::libxsmm_amx_tile_configure(libxsmm_xmmfunction *cfg_kerne
     assert(cfg_kernel);
     (*cfg_kernel).gemm(&gemm_p);
 }
-
+libxsmm_blasint BinaryEltwiseTppEmitter::get_broadcasted_dim(libxsmm_blasint dim0, libxsmm_blasint dim1, std::pair<bool, bool>& bcast_flags) {
+    if (dim0 == dim1) {
+        bcast_flags = {false, false};
+        return dim0;
+    } else if (dim1 == 1) {
+        bcast_flags = {false, true};
+        return dim0;
+    } else if (dim0 == 1) {
+        bcast_flags = {true, false};
+        return dim1;
+    }
+    OPENVINO_THROW("Invalid dimensions passed to get_broadcast_flags");
+    return -1;
+}
 
 BinaryEltwiseTppEmitter::BinaryEltwiseTppEmitter(dnnl::impl::cpu::x64::jit_generator* h,
                                                  dnnl::impl::cpu::x64::cpu_isa_t isa,
                                                  const ov::snippets::lowered::ExpressionPtr& expr)
                                                  : jit_emitter(h, isa) {
+    const auto& node = expr->get_node();
+    const auto& tpp_node = std::dynamic_pointer_cast<tpp::op::BinaryEltwiseTPP>(node);
+    OPENVINO_ASSERT(tpp_node, "BinaryEltwiseTppEmitter invoked with invalid node type");
+    const auto& dtype_in0 = ov_to_xsmm_dtype(node->get_input_element_type(0));
+    const auto& dtype_in1 = ov_to_xsmm_dtype(node->get_input_element_type(1));
+    const auto& dtype_out0 = ov_to_xsmm_dtype(node->get_output_element_type(0));
+    // todo: how to derive dtype_comp in a general case?
+    const auto& dtype_comp = ov_to_xsmm_dtype(ov::element::Type_t::f32);
+
+
+    const auto& shape_in0 = expr->get_input_port_descriptor(0)->get_shape();
+    const auto& shape_in1 = expr->get_input_port_descriptor(1)->get_shape();
+    const libxsmm_blasint ld_in0 = static_cast<libxsmm_blasint>(*++shape_in0.rbegin());
+    const libxsmm_blasint ld_in1 = static_cast<libxsmm_blasint>(*++shape_in1.rbegin());
+
+    std::pair<bool, bool> n_bcast_flags, m_bcast_flags;
+    const auto N = get_broadcasted_dim(static_cast<libxsmm_blasint>(shape_in0.back()),
+                                       static_cast<libxsmm_blasint>(shape_in1.back()),
+                                       n_bcast_flags);
+    const auto M = get_broadcasted_dim(ld_in0, ld_in1, m_bcast_flags);
+
+    const libxsmm_blasint ld_out0 = N;
+    libxsmm_bitfield libxsmm_flags{LIBXSMM_MELTW_FLAG_BINARY_NONE};
+    if (n_bcast_flags.first && m_bcast_flags.first) {
+        libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_SCALAR_IN_0;
+    } else if (n_bcast_flags.first) {
+        libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_COL_IN_0;
+    } else  if (m_bcast_flags.first) {
+        libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_ROW_IN_0;
+    }
+    if (n_bcast_flags.second && m_bcast_flags.second) {
+        libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_SCALAR_IN_1;
+    } else if (n_bcast_flags.second) {
+        libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_COL_IN_1;
+    } else  if (m_bcast_flags.second) {
+        libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_ROW_IN_1;
+    }
+    const auto& libxsmm_op_type = tpp_node->get_op_type();
+    const auto& libxsmm_shape = libxsmm_create_meltw_binary_shape(M, N, ld_in0, ld_in1, ld_out0, dtype_in0, dtype_in1, dtype_out0, dtype_comp);
+    libxsmm_kernel = libxsmm_dispatch_meltw_binary_v2(libxsmm_op_type, libxsmm_shape, libxsmm_flags);
+    OPENVINO_ASSERT(libxsmm_kernel, "Failed to dispatch libxsmm_kernel in BinaryEltwiseTppEmitter");
+}
+
+void BinaryEltwiseTppEmitter::emit_code(const std::vector<size_t> &in, const std::vector<size_t> &out) const {
+    validate_arguments(in, out);
+    emit_impl(in, out);
 }
 
 std::set<std::vector<element::Type>> BinaryEltwiseTppEmitter::get_supported_precisions(const std::shared_ptr<ngraph::Node>& node) {
@@ -543,11 +603,68 @@ std::set<std::vector<element::Type>> BinaryEltwiseTppEmitter::get_supported_prec
 }
 
 void BinaryEltwiseTppEmitter::validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const {
-    OPENVINO_THROW("BinaryEltwiseTppEmitter not implemented");
+    OPENVINO_ASSERT(in.size() == 2, "BinaryEltwiseTppEmitter expects 2 input registers, got " + std::to_string(in.size()));
+    OPENVINO_ASSERT(out.size() == 1, "BinaryEltwiseTppEmitter expects 1 output register, got " + std::to_string(in.size()));
+}
+
+void BinaryEltwiseTppEmitter::execute_libxsmm_kernel(libxsmm_meltwfunction_binary *eltwise_kernel,
+                                                    void *in0, void *in1, void *out0) {
+    // todo: how do we initialize the libxsmm_meltw_binary_param.op field?
+    //  In general, how to use the libxsmm_matrix_arg type? What is the purpose of these primary/secondary/ternary fields?
+    libxsmm_meltw_binary_param binary_param;
+    binary_param.in0.primary = reinterpret_cast<void*>(in0);
+    binary_param.in1.primary = reinterpret_cast<void*>(in1);
+    binary_param.out.primary = reinterpret_cast<void*>(out0);
+    assert(eltwise_kernel);
+    (*eltwise_kernel)(&binary_param);
 }
 
 void BinaryEltwiseTppEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size_t>& out) const {
-    OPENVINO_THROW("BinaryEltwiseTppEmitter not implemented");
+    internal_call_preamble();
+    auto in0_ptr = Reg64(static_cast<int>(in[0]));
+    auto in1_ptr = Reg64(static_cast<int>(in[1]));
+    auto out0_ptr = Reg64(static_cast<int>(out[0]));
+
+    // save function address in gpr to pass in call instruction
+    h->mov(h->rbp, reinterpret_cast<uintptr_t>(execute_libxsmm_kernel));
+    // todo: several of in/out ptr could be also abi_paramX, so one of them could be corrupted
+    //  if moving directly h->uni_vmovq(abi_paramX, adr_X). Save them to vector regs to avoid corruption.
+    //  It's likely that a more efficient solution exists.
+    h->uni_vmovq(Xmm(0), in0_ptr);
+    h->uni_vmovq(Xmm(1), in1_ptr);
+    h->uni_vmovq(Xmm(2), out0_ptr);
+
+    // todo: Windows ABI : requires different num of arguments passed in regs and on the stack. Need to align.
+    const auto data_ptr_reg = [&](Xmm xmm, Xbyak::Reg64 reg, size_t bytes_offset) {
+        h->uni_vmovq(reg, xmm);
+        if (bytes_offset) h->add(reg, bytes_offset);
+    };
+    h->mov(abi_param1, reinterpret_cast<uintptr_t>(libxsmm_kernel));
+//    data_ptr_reg(Xmm(0), abi_param2, in0_kernel_offset);
+//    data_ptr_reg(Xmm(1), abi_param3, in1_kernel_offset);
+//    data_ptr_reg(Xmm(2), abi_param4, out0_kernel_offset);
+    data_ptr_reg(Xmm(0), abi_param2, 0);
+    data_ptr_reg(Xmm(1), abi_param3, 0);
+    data_ptr_reg(Xmm(2), abi_param4, 0);
+
+    // todo: add shadow space handling for WIN32
+    internal_call_rsp_align();
+    h->call(h->rbp);
+    internal_call_rsp_restore();
+
+    internal_call_postamble();
+}
+
+libxsmm_datatype BinaryEltwiseTppEmitter::ov_to_xsmm_dtype(ov::element::Type_t elemet_type) {
+    switch (elemet_type) {
+        case ov::element::Type_t::f32 : return LIBXSMM_DATATYPE_F32;
+        case ov::element::Type_t::bf16 : return LIBXSMM_DATATYPE_BF16;
+        case ov::element::Type_t::i8 : return LIBXSMM_DATATYPE_I8;
+        case ov::element::Type_t::u8 : return LIBXSMM_DATATYPE_U8;
+        default:
+            OPENVINO_THROW("Attempt to convert unsupported ov data type");
+            return LIBXSMM_DATATYPE_IMPLICIT;
+    }
 }
 
 }  // namespace intel_cpu
