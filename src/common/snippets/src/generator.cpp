@@ -9,6 +9,7 @@
 #include "snippets/lowered/pass/insert_tail_loop.hpp"
 
 #include "snippets/op/kernel.hpp"
+#include "snippets/op/memory_access.hpp"
 
 #include "snippets/itt.hpp"
 
@@ -24,9 +25,10 @@ void Generator::generate(lowered::LinearIR& linear_ir, LoweringResult& result, c
     std::function<opRegType(const std::shared_ptr<Node>& op)> reg_type_mapper = [&](const std::shared_ptr<Node>& op) -> opRegType {
         return get_op_reg_type(op);
     };
+    linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
     lowered::pass::PassPipeline lowered_pipeline;
     lowered_pipeline.register_pass<lowered::pass::AssignRegisters>(reg_type_mapper);
-    lowered_pipeline.register_pass<lowered::pass::InsertTailLoop>();
+//    lowered_pipeline.register_pass<lowered::pass::InsertTailLoop>();
     lowered_pipeline.run(linear_ir);
     linear_ir.init_emitters(target);
 
@@ -60,7 +62,8 @@ std::shared_ptr<const TargetMachine> Generator::get_target_machine() const {
 }
 
 Generator::opRegType Generator::get_op_reg_type(const std::shared_ptr<Node>& op) const {
-    if (std::dynamic_pointer_cast<ov::op::v0::Parameter>(op) ||
+    if (std::dynamic_pointer_cast<modifier::MemoryAccess>(op) ||
+        std::dynamic_pointer_cast<ov::op::v0::Parameter>(op) ||
         std::dynamic_pointer_cast<ov::op::v0::Result>(op) ||
         std::dynamic_pointer_cast<op::LoopBegin>(op) ||
         std::dynamic_pointer_cast<op::LoopEnd>(op) ||

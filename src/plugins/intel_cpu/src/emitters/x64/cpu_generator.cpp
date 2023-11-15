@@ -223,7 +223,8 @@ std::shared_ptr<snippets::Generator> intel_cpu::CPUGenerator::clone() const {
 
 snippets::Generator::opRegType intel_cpu::CPUGenerator::get_specific_op_reg_type(const std::shared_ptr<ov::Node>& op) const {
     if (std::dynamic_pointer_cast<intel_cpu::BrgemmCPU>(op) ||
-        std::dynamic_pointer_cast<intel_cpu::BrgemmCopyB>(op))
+        std::dynamic_pointer_cast<intel_cpu::BrgemmCopyB>(op) ||
+        std::dynamic_pointer_cast<intel_cpu::tpp::op::BinaryEltwiseTPP>(op))
         return gpr2gpr;
     else if (
         std::dynamic_pointer_cast<intel_cpu::FusedMulAdd>(op) ||
@@ -234,6 +235,8 @@ snippets::Generator::opRegType intel_cpu::CPUGenerator::get_specific_op_reg_type
 }
 bool intel_cpu::CPUGenerator::uses_precompiled_kernel(const std::shared_ptr<snippets::Emitter>& e) const {
     return std::dynamic_pointer_cast<intel_cpu::BrgemmEmitter>(e) ||
-           std::dynamic_pointer_cast<intel_cpu::BrgemmCopyBEmitter>(e);
+           std::dynamic_pointer_cast<intel_cpu::BrgemmCopyBEmitter>(e) ||
+            std::dynamic_pointer_cast<intel_cpu::BrgemmTppEmitter>(e) ||
+           std::dynamic_pointer_cast<intel_cpu::BinaryEltwiseTppEmitter>(e);
 }
 } // namespace ov
