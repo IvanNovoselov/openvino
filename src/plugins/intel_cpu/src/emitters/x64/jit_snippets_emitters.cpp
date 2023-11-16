@@ -136,23 +136,22 @@ void KernelEmitter::init_body_parameters(const ExpressionPtr& expr) {
         io_shapes.push_back(shape);
         io_data_layouts.push_back(layout);
         io_data_sizes.push_back(etype.size());
-
-        std::set<size_t> unique_buffers;
-        for (const auto& expr : body) {
-            // Brgemm is a special case since it incorporates input and output (we use onednn kernel)
-            // Just like Load & Store it requires offsets calculation
-            if (const auto buffer = ov::as_type_ptr<snippets::op::Buffer>(expr->get_node())) {
-                const auto buffer_id = buffer->get_id();
-                if (unique_buffers.count(buffer_id) == 0) {
-                    mem_access_exprs.push_back(expr);
-                    unique_buffers.insert(buffer_id);
-                }
-            } else {
-                general_exprs.emplace_back(expr);
-            }
-        }
-        num_unique_buffers = unique_buffers.size();
     }
+    std::set<size_t> unique_buffers;
+    for (const auto& expr : body) {
+        // Brgemm is a special case since it incorporates input and output (we use onednn kernel)
+        // Just like Load & Store it requires offsets calculation
+        if (const auto buffer = ov::as_type_ptr<snippets::op::Buffer>(expr->get_node())) {
+            const auto buffer_id = buffer->get_id();
+            if (unique_buffers.count(buffer_id) == 0) {
+                mem_access_exprs.push_back(expr);
+                unique_buffers.insert(buffer_id);
+            }
+        } else {
+            general_exprs.emplace_back(expr);
+        }
+    }
+    num_unique_buffers = unique_buffers.size();
     OPENVINO_ASSERT(kernel->compile_params, "KernelEmitter invoked with op::Kernel that contains no compile_params");
     jcp = *reinterpret_cast<const jit_snippets_compile_args*>(kernel->compile_params);
     // Note that master_shape could be dynamic in a general case
