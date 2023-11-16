@@ -25,7 +25,7 @@ void Generator::generate(lowered::LinearIR& linear_ir, LoweringResult& result, c
     std::function<opRegType(const std::shared_ptr<Node>& op)> reg_type_mapper = [&](const std::shared_ptr<Node>& op) -> opRegType {
         return get_op_reg_type(op);
     };
-    linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
+
     lowered::pass::PassPipeline lowered_pipeline;
     lowered_pipeline.register_pass<lowered::pass::AssignRegisters>(reg_type_mapper);
 //    lowered_pipeline.register_pass<lowered::pass::InsertTailLoop>();

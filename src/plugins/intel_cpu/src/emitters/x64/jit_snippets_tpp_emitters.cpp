@@ -555,40 +555,40 @@ BinaryEltwiseTppEmitter::BinaryEltwiseTppEmitter(dnnl::impl::cpu::x64::jit_gener
     const auto& dtype_in0 = ov_to_xsmm_dtype(node->get_input_element_type(0));
     const auto& dtype_in1 = ov_to_xsmm_dtype(node->get_input_element_type(1));
     const auto& dtype_out0 = ov_to_xsmm_dtype(node->get_output_element_type(0));
-    // todo: how to derive dtype_comp in a general case?
     const auto& dtype_comp = ov_to_xsmm_dtype(ov::element::Type_t::f32);
 
 
     const auto& shape_in0 = expr->get_input_port_descriptor(0)->get_shape();
     const auto& shape_in1 = expr->get_input_port_descriptor(1)->get_shape();
     std::pair<bool, bool> n_bcast_flags, m_bcast_flags;
+    const libxsmm_blasint ld_in0 = static_cast<libxsmm_blasint>(*shape_in0.rbegin());
+    const libxsmm_blasint ld_in1 = static_cast<libxsmm_blasint>(*shape_in1.rbegin());
     const auto N = get_broadcasted_dim(static_cast<libxsmm_blasint>(*shape_in0.rbegin()),
                                        static_cast<libxsmm_blasint>(*shape_in1.rbegin()),
                                        n_bcast_flags);
+    const libxsmm_blasint ld_out0 = N;
     const auto M = get_broadcasted_dim(static_cast<libxsmm_blasint>(*++shape_in0.rbegin()),
                                        static_cast<libxsmm_blasint>(*++shape_in1.rbegin()),
                                        m_bcast_flags);
-    // todo: why expecting leading dimensions are M while the strides between columns are N?
-    const libxsmm_blasint ld_in0 = M;
-    const libxsmm_blasint ld_in1 = M;
-    const libxsmm_blasint ld_out0 = M;
     libxsmm_bitfield libxsmm_flags{LIBXSMM_MELTW_FLAG_BINARY_NONE};
-    if (n_bcast_flags.first && m_bcast_flags.first) {
+    if (m_bcast_flags.first && n_bcast_flags.first) {
         libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_SCALAR_IN_0;
-    } else if (n_bcast_flags.first) {
+    } else if (m_bcast_flags.first) {
         libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_COL_IN_0;
-    } else  if (m_bcast_flags.first) {
+    } else  if (n_bcast_flags.first) {
         libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_ROW_IN_0;
     }
-    if (n_bcast_flags.second && m_bcast_flags.second) {
+    if (m_bcast_flags.second && n_bcast_flags.second) {
         libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_SCALAR_IN_1;
-    } else if (n_bcast_flags.second) {
+    } else if (m_bcast_flags.second) {
         libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_COL_IN_1;
-    } else  if (m_bcast_flags.second) {
+    } else  if (n_bcast_flags.second) {
         libxsmm_flags |= LIBXSMM_MELTW_FLAG_BINARY_BCAST_ROW_IN_1;
     }
     const auto& libxsmm_op_type = tpp_node->get_op_type();
-    const auto& libxsmm_shape = libxsmm_create_meltw_binary_shape(M, N, ld_in0, ld_in1, ld_out0, dtype_in0, dtype_in1, dtype_out0, dtype_comp);
+    // Note: libxsmm implies column-major layout, so we have to swap M and N here
+    const auto& libxsmm_shape = libxsmm_create_meltw_binary_shape(N, M, ld_in0, ld_in1, ld_out0, dtype_in0, dtype_in1, dtype_out0, dtype_comp);
+//    const auto& libxsmm_shape = libxsmm_create_meltw_binary_shape(M, N, ld_in0, ld_in1, ld_out0, dtype_in0, dtype_in1, dtype_out0, dtype_comp);
     libxsmm_kernel = libxsmm_dispatch_meltw_binary_v2(libxsmm_op_type, libxsmm_shape, libxsmm_flags);
     OPENVINO_ASSERT(libxsmm_kernel, "Failed to dispatch libxsmm_kernel in BinaryEltwiseTppEmitter");
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;

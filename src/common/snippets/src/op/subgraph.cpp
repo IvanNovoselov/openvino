@@ -460,6 +460,7 @@ void Subgraph::control_flow_transformations(lowered::LinearIR& linear_ir,
     buffer_pipeline.register_pass(buffer_allocation_pass);
     buffer_pipeline.run(linear_ir);
 
+    linear_ir.serialize("snsdebug_linear.xml", "snsdebug_linear.bin");
     lowered::pass::PassPipeline final_pipeline;
     final_pipeline.register_pass<lowered::pass::PropagateLayout>();
     final_pipeline.register_pass<lowered::pass::CleanupLoopOffsets>();
