@@ -33,7 +33,8 @@ public:
     // True if we should check runtime info for nodes to call specific needed transformations
     bool m_need_fill_tail_register = false;
     size_t m_loop_depth = 1;
-    PerfCountMode perf_count_mode = PerfCountMode::Disabled;
+    // PerfCountMode perf_count_mode = PerfCountMode::Disabled;
+    PerfCountMode perf_count_mode = PerfCountMode::BackendSpecific;
     // Some Subgraphs doesn't support domain optimization due to operations' semantics
     bool m_enable_domain_optimization = false;
     // Minimal advised work amount for parallel execution.

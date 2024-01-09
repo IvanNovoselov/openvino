@@ -503,7 +503,7 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const std::vector<PassPipel
     LoweringResult lowering_result;
 
     control_flow_transformations(linear_ir, lowering_result, control_flow_passes);
-    if (linear_ir.get_config().perf_count_mode == lowered::PerfCountMode::Chrono) {
+    if (linear_ir.get_config().perf_count_mode != lowered::PerfCountMode::Disabled) {
         lowered::pass::InsertPerfCount perf_count_pass;
         perf_count_pass.run(linear_ir);
     }
