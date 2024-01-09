@@ -6,6 +6,7 @@
 
 #include "openvino/op/op.hpp"
 #include "snippets/op/perf_count.hpp"
+#include <iomanip>
 
 using namespace ov::snippets::op;
 
@@ -37,8 +38,15 @@ public:
     PerfCountRdtscEnd(const Output<Node>& pc_begin);
     PerfCountRdtscEnd() = default;
     ~PerfCountRdtscEnd() {
-        uint64_t avg = iteration == 0 ? 0 : accumulation / iteration;
-        std::cout << "accumulation:" << accumulation << " iteration:" << iteration << " avg:" << avg << std::endl;
+        double avg = 0;
+        if (iteration != 0) {
+            // get integral part
+            avg = accumulation / iteration;
+            // get fractional part
+            avg += (accumulation - avg * iteration) / iteration;
+        }
+        std::cout << "name : " << get_friendly_name() << " : acc : " << accumulation << " : num_hit : " << iteration
+         << std::fixed << std::setprecision(4) << " : avg : " << avg << std::endl;
     }
     std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& inputs) const override;
 
@@ -48,7 +56,7 @@ public:
     // in destructor of PerfCountRdtscEnd, output the perf info
     // accumulation is cycle count
     uint64_t accumulation = 0ul;
-    uint32_t iteration = 0u;
+    uint64_t iteration = 0;
 };
 
 } // namespace intel_cpu
