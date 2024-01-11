@@ -127,7 +127,12 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
                               is_i8_gemm > 0 ? (m_brgCtx.K % 4 == 0 ? 1 : 0) :
                               0;
     OPENVINO_ASSERT(isKvnniDiv, "Unsupported parameter combination for BrgemmTpp kernel configuration");
+
+#if defined(FORCE_ONEDNN_BRGEMM_TPP)
+    initBrgemm_OneDNN(m_brgCtx, m_brgKernelsOneDNN, brgWithAMX);
+#else
     initBrgemmXsmm(m_brgCtx, m_brgKernelsXsmm, m_brgKernelsXsmmTileCfg, brgWithAMX);
+#endif
 
     m_load_offset_a = brgemm_node->get_offset_a();
     m_load_offset_b = brgemm_node->get_offset_b();
@@ -214,11 +219,32 @@ void BrgemmTppEmitter::initBrgemmXsmm(brgemmCtx& ctx, libxsmm_gemmfunction& brgK
 void BrgemmTppEmitter::emit_impl(const std::vector<size_t>& in,
                               const std::vector<size_t>& out) const {
     validate_arguments(in, out);
+#if defined(FORCE_ONEDNN_BRGEMM_TPP)
+ if (host_isa_ == cpu::x64::avx512_core) {
+        Xbyak::Reg64 input_0(static_cast<int>(in[0]));
+        Xbyak::Reg64 input_1(static_cast<int>(in[1]));
+        Xbyak::Reg64 input_2(static_cast<int>(m_with_scratch ? in[2] : 0));  // scratch. Default reg index is 0 if there isn't scratch
+        Xbyak::Reg64 output_0(static_cast<int>(out[0]));
+        emit_brgemm_kernel_call_OneDNN(m_brgKernelsOneDNN.get(),
+                                m_brgCtx,
+                                input_0,
+                                input_1,
+                                input_2,
+                                output_0,
+                                m_load_offset_a,
+                                m_load_offset_b,
+                                m_load_offset_scratch,
+                                m_store_offset_c);
+    } else {
+        OPENVINO_THROW("BrgemmEmitter requires at least avx512_core instruction set");
+    }
+#else
     OPENVINO_ASSERT(host_isa_ == cpu::x64::avx512_core, "BrgemmTppEmitter requires at least avx512_core instruction set");
     Xbyak::Reg64 input_0(static_cast<int>(in[0]));
     Xbyak::Reg64 input_1(static_cast<int>(in[1]));
     Xbyak::Reg64 output_0(static_cast<int>(out[0]));
     emit_brgemm_kernel_call_libxsmm(input_0, input_1, output_0);
+#endif
 }
 
 void BrgemmTppEmitter::emit_brgemm_kernel_call_libxsmm(Reg64 addr_A, Reg64 addr_B, Reg64 addr_C) const {
@@ -297,6 +323,150 @@ void BrgemmTppEmitter::kernel_execute_libxsmm(libxsmm_gemmfunction brg_kernel,
     assert(brg_kernel);
     brg_kernel(&gemm_p);
 }
+
+#ifdef FORCE_ONEDNN_BRGEMM_TPP
+void BrgemmTppEmitter::initBrgemm_OneDNN(brgemmCtx& ctx, std::unique_ptr<brgemm_kernel_t>& brgKernel, bool use_amx) {
+    brgemm_t brgDesc;
+    const bool is_int8 = utils::one_of(ctx.dt_in0, data_type::u8, data_type::s8) && utils::one_of(ctx.dt_in1, data_type::u8, data_type::s8);
+    auto isa = use_amx ? isa_undef
+                       : ctx.dt_in0 == dnnl_data_type_t::dnnl_bf16 ? avx512_core_bf16 : (is_int8 ? avx512_core_vnni : avx512_core);
+    auto status = brgemm_desc_init(&brgDesc, isa, brgemm_strd, ctx.dt_in0, ctx.dt_in1,
+                                   false, false, brgemm_row_major, 1.f, ctx.beta, ctx.LDA, ctx.LDB, ctx.LDC, ctx.M, ctx.N, ctx.K, nullptr);
+    if (status != dnnl_success)
+        OPENVINO_THROW("BrgemmEmitter cannot initialize brgemm descriptor due to invalid params");
+
+    ctx.is_with_amx = use_amx;
+    status = brgemm_init_tiles(brgDesc, ctx.palette);
+    if (use_amx)
+        amx_tile_configure(ctx.palette);
+
+    ctx.is_with_comp = ctx.dt_in0 == dnnl_data_type_t::dnnl_s8 && !ctx.is_with_amx;
+
+    brgemm_kernel_t* brgKernel_ = nullptr;
+    status = brgemm_kernel_create(&brgKernel_, brgDesc);
+    if (status != dnnl_success)
+        OPENVINO_THROW("BrgemmEmitter cannot create brgemm kernel due to invalid params");
+    brgKernel.reset(brgKernel_);
+}
+
+void BrgemmTppEmitter::emit_brgemm_kernel_call_OneDNN(const brgemm_kernel_t *brg_kernel, const brgemmCtx& ctx,
+                                            Reg64 addr_A, Reg64 addr_B, Reg64 scratch, Reg64 addr_C,
+                                            const size_t in0_kernel_offset, const size_t in1_kernel_offset,
+                                            const size_t in2_kernel_offset, const size_t out0_kernel_offset) const {
+    std::cout << "OneDNN kernel forced in BrgemmTppEmitter\n";
+    if (ctx.is_with_amx) {
+        Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->rax,
+                                         h->rcx, h->rdx, h->rdi, h->rsi, h->rbp, h->rbx};
+        size_t n_gprs_to_save = sizeof(gprs_to_save) / sizeof(gprs_to_save[0]);
+
+        h->sub(h->rsp, n_gprs_to_save * gpr_size);
+        for (size_t i = 0; i < n_gprs_to_save; ++i)
+            h->mov(h->ptr[h->rsp + i * gpr_size], gprs_to_save[i]);
+
+        // save function address in gpr to pass in call instruction
+        const auto& overload = static_cast<status_t(*)(const char*)>(amx_tile_configure);
+        h->mov(h->rbp, reinterpret_cast<uintptr_t>(overload));
+        h->mov(abi_param1, reinterpret_cast<uintptr_t>(ctx.palette));
+
+        // align stack on 16-byte as ABI requires
+        // note that RBX must not be changed by the callee
+        h->mov(h->rbx, h->rsp);
+        h->and_(h->rbx, 0xf);
+        h->sub(h->rsp, h->rbx);
+
+        h->call(h->rbp);
+
+        h->add(h->rsp, h->rbx);
+        // restore gpr registers
+        for (int i = n_gprs_to_save - 1; i >= 0; --i)
+            h->mov(gprs_to_save[i], h->ptr[h->rsp + i * gpr_size]);
+        h->add(h->rsp, n_gprs_to_save * gpr_size);
+    }
+
+    internal_call_preamble();
+
+    // save function address in gpr to pass in call instruction
+    const auto& brgemm_kernel_overload = static_cast<void (*)(const brgemm_kernel_t*,
+                                                              const void*,
+                                                              const void*,
+                                                              void*,
+                                                              void*,
+                                                              int)>(kernel_execute_OneDNN);
+    h->mov(h->rbp, reinterpret_cast<uintptr_t>(brgemm_kernel_overload));
+    // todo: several of addr_{A, B, C} could be also abi_paramX, so one of them could be corrupted
+    //  if moving directly h->uni_vmovq(abi_paramX, adr_X). Save them to vector regs to avoid corruption.
+    //  It's likely that a more efficient solution exists.
+    h->uni_vmovq(Xmm(0), addr_A);
+    h->uni_vmovq(Xmm(1), addr_B);
+    h->uni_vmovq(Xmm(2), addr_C);
+    if (m_with_scratch)
+        h->uni_vmovq(Xmm(3), scratch);
+    // todo: Windows ABI : requires different num of arguments passed in regs and on the stack. Need to align.
+    const auto data_ptr_reg = [&](Xmm xmm, Xbyak::Reg64 reg, size_t bytes_offset) {
+        h->uni_vmovq(reg, xmm);
+        if (bytes_offset) h->add(reg, bytes_offset);
+    };
+    h->mov(abi_param1, reinterpret_cast<uintptr_t>(brg_kernel));
+    data_ptr_reg(Xmm(0), abi_param2, in0_kernel_offset);
+    data_ptr_reg(Xmm(1), abi_param3, in1_kernel_offset);
+    data_ptr_reg(Xmm(2), abi_param4, out0_kernel_offset);
+
+#ifdef _WIN32
+    // Before function call we should allocate stack area for
+    //  - register parameters - ABI parameters (shadow space)
+    //  - stack parameters - remaining parameters
+    const size_t num_args_passed_on_stack = 6;  // count of function brgemm_kernel_overload() parameters
+    size_t abi_param_count = sizeof(abi_param_regs) / sizeof(abi_param_regs[0]);
+    h->sub(h->rsp, num_args_passed_on_stack * gpr_size);
+
+    // Push the remaining parameters on the stack
+    if (m_with_scratch) {
+        h->uni_vmovq(h->qword[h->rsp + (abi_param_count + 0) * gpr_size], Xmm(3));
+        if (in2_kernel_offset) h->add(h->qword[h->rsp + (abi_param_count + 0) * gpr_size], in2_kernel_offset);
+    } else {
+        h->mov(h->qword[h->rsp + (abi_param_count + 0) * gpr_size], reinterpret_cast<uintptr_t>(nullptr));
+    }
+    h->mov(abi_not_param1, static_cast<int>(m_with_comp));
+    h->mov(h->qword[h->rsp + (abi_param_count + 1) * gpr_size], abi_not_param1);
+#else
+    if (m_with_scratch) {
+        data_ptr_reg(Xmm(3), abi_param5, in2_kernel_offset);
+    } else {
+        h->mov(abi_param5, reinterpret_cast<uintptr_t>(nullptr));
+    }
+    h->mov(abi_param6, static_cast<int>(m_with_comp));
+#endif
+
+    internal_call_rsp_align();
+    h->call(h->rbp);
+    internal_call_rsp_restore();
+
+#ifdef _WIN32
+    h->add(h->rsp, num_args_passed_on_stack * gpr_size);
+#endif
+
+    internal_call_postamble();
+}
+
+void BrgemmTppEmitter::kernel_execute_OneDNN(const brgemm_kernel_t *brg_kernel,
+                                   const void *A, const void *B, void *C, void *scratch, int with_comp) {
+    brgemm_kernel_params_t brgemm_p;
+
+    brgemm_p.batch = nullptr;  // default value
+    brgemm_p.ptr_A = A;
+    brgemm_p.ptr_B = B;
+    brgemm_p.ptr_C = C;
+    brgemm_p.ptr_D = C;
+    brgemm_p.ptr_buf = scratch;
+    brgemm_p.ptr_bias = nullptr;
+    brgemm_p.do_post_ops = static_cast<size_t>(with_comp);
+    brgemm_p.do_apply_comp = static_cast<size_t>(with_comp);
+    brgemm_p.skip_accm = 0;
+    brgemm_p.BS = 1;  // default value
+    assert(brg_kernel);
+    (*brg_kernel)(&brgemm_p);
+}
+#endif
 
 void BrgemmTppEmitter::libxsmm_amx_tile_configure(libxsmm_gemmfunction cfg_kernel) {
     libxsmm_gemm_param gemm_p;

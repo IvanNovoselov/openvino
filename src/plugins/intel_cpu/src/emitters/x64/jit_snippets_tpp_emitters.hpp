@@ -14,8 +14,13 @@
 #include "jit_load_store_emitters.hpp"
 
 #include "transformations/snippets/x64/op/store_convert.hpp"
-// Matmul support:
 #include "libxsmm.h"
+
+// OneDNN Matmul support for debug purposes:
+#include <cpu/x64/brgemm/brgemm.hpp>
+#include <cpu/x64/matmul/brgemm_matmul_copy_utils.hpp>
+#include <cpu/x64/matmul/brgemm_matmul_utils.hpp>
+#include <cpu/x64/amx_tile_configure.hpp>
 
 #include <cxxabi.h>
 namespace ov {
@@ -23,6 +28,7 @@ namespace intel_cpu {
 //todo: this class is largely a copy of BrgemmEmitter. It makes sense to develop a base class for
 // BrgemmEmitter and BrgemmTppEmitter, but his can't be done until PR#19335 is merged, since it drastically
 // simplifies BrgemmEmitter implementation.
+// #define FORCE_ONEDNN_BRGEMM_TPP
 class BrgemmTppEmitter : public jit_emitter {
 public:
     BrgemmTppEmitter(dnnl::impl::cpu::x64::jit_generator* h,
@@ -57,6 +63,22 @@ private:
     void emit_brgemm_kernel_call_libxsmm(Xbyak::Reg64 addr_A, Xbyak::Reg64 addr_B, Xbyak::Reg64 addr_C) const;
     static void kernel_execute_libxsmm(libxsmm_gemmfunction brg_kernel, void *A, void *B, void *C);
     static void libxsmm_amx_tile_configure(libxsmm_gemmfunction cfg_kernel);
+    // For debug purposes
+    /// OneDNN Kernel support BEGIN
+#ifdef FORCE_ONEDNN_BRGEMM_TPP
+    static void initBrgemm_OneDNN(brgemmCtx& ctx, std::unique_ptr<dnnl::impl::cpu::x64::brgemm_kernel_t>& brgKernel, bool use_amx);
+    std::unique_ptr<dnnl::impl::cpu::x64::brgemm_kernel_t> m_brgKernelsOneDNN = nullptr;
+    static void kernel_execute_OneDNN(const dnnl::impl::cpu::x64::brgemm_kernel_t *brg_kernel,
+                                      const void *A, const void *B, void *C, void *scratch, int with_comp);
+    void emit_brgemm_kernel_call_OneDNN(const dnnl::impl::cpu::x64::brgemm_kernel_t* brg_kernel, const brgemmCtx& ctx,
+                                 Xbyak::Reg64 addr_A, Xbyak::Reg64 addr_B, Xbyak::Reg64 scratch, Xbyak::Reg64 addr_C,
+                                 size_t in0_kernel_offset = 0, size_t in1_kernel_offset = 0,
+                                 size_t in2_kernel_offset = 0, size_t out0_kernel_offset = 0) const;
+    bool m_with_scratch = false;
+    bool m_with_comp = false;
+    size_t m_load_offset_scratch = 0;
+#endif
+    /// OneDNN Kernel support END
 
     brgemmCtx m_brgCtx;
 

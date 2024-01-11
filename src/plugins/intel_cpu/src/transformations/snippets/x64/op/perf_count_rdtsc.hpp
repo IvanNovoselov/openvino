@@ -45,7 +45,7 @@ public:
             // get fractional part
             avg += (accumulation - avg * iteration) / iteration;
         }
-        std::cout << "name : " << get_friendly_name() << " : acc : " << accumulation << " : num_hit : " << iteration
+        std::cerr << "name : " << get_friendly_name() << " : acc : " << accumulation << " : num_hit : " << iteration
          << std::fixed << std::setprecision(4) << " : avg : " << avg << std::endl;
     }
     std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& inputs) const override;
