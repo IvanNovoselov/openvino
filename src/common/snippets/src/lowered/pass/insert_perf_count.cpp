@@ -111,18 +111,18 @@ bool InsertPerfCount::run(LinearIR& linear_ir) {
     // TPP ///
     ///// Additivity test Single run
     // TPP ///
-    // const std::map<std::string, std::string>& wrap_op_names{{"Transpose_18", "Result_2625"},
-    //                                                         {"LoopBegin_2860", "LoopEnd_2861"},
-    //                                                         {"LoopBegin_2864", "LoopEnd_2865"}};
+    const std::map<std::string, std::string>& wrap_op_names{{"Transpose_18", "Result_2625"},
+                                                            {"LoopBegin_2860", "LoopEnd_2861"},
+                                                            {"LoopBegin_2864", "LoopEnd_2865"}};
     // CPU ///
     // const std::map<std::string, std::string>& wrap_op_names{{"Transpose_18", "Result_2625"},
     //                                                         {"LoopBegin_2865", "LoopEnd_2866"},
     //                                                         {"LoopBegin_2869", "LoopEnd_2870"}};
     ///// Additivity test Single run inside cycle
     // TPP ///
-    const std::map<std::string, std::string>& wrap_op_names{{"LoopBegin_2866", "LoopEnd_2867"},
-                                                            {"IntermediateMemoryBuffer_2856", "IntermediateMemoryBuffer_2855"},
-                                                            {"LoopBegin_2872", "LoopEnd_2873"}};
+    // const std::map<std::string, std::string>& wrap_op_names{{"LoopBegin_2866", "LoopEnd_2867"},
+    //                                                         {"IntermediateMemoryBuffer_2856", "IntermediateMemoryBuffer_2855"},
+    //                                                         {"LoopBegin_2872", "LoopEnd_2873"}};
     //CPU ///
     // const std::map<std::string, std::string>& wrap_op_names{{"LoopBegin_2871", "LoopEnd_2872"},
     //                                                         {"IntermediateMemoryBuffer_2852", "IntermediateMemoryBuffer_2853"},
