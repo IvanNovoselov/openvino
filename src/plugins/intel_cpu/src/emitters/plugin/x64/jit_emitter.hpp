@@ -173,6 +173,8 @@ private:
         const auto scale = te.bcast ? get_vec_length() : sizeof(table_entry_val_t);
         return te.off + key_off_val_shift * scale;
     }
+
+protected:
     virtual void validate_arguments(const std::vector<size_t>&, const std::vector<size_t>&) const {}
 };
 

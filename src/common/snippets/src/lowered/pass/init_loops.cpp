@@ -46,20 +46,23 @@ void InitLoops::init_is_incremented(const LinearIR::LoopManager::LoopInfoPtr& lo
     auto update = [=](std::vector<LoopPort>& ports) {
         for (auto& port : ports) {
             const auto& expr = port.expr_port->get_expr();
+            const auto& expr_loops = expr->get_loop_ids();
             if (!std::dynamic_pointer_cast<modifier::MemoryAccess>((expr->get_node()))) {
                 port.is_incremented = false;
-            } else if (expr->get_loop_ids().back() != loop_id) {
+            } else if (expr_loops.back() != loop_id) {
                 // Note: LoopPort connected to Buffer between two loops should not be incremented in the outermost loop
                 // Consider the example below:
-                //     Store; Loop ids [1,2,3]
-                //     IntermediateMemoryBuffer; Loop ids [1]
-                //     Load; Loop ids [1, 4, 5]
+                //     Store; Loop ids [0,1,2,3]
+                //     IntermediateMemoryBuffer; Loop ids [0,1]
+                //     Load; Loop ids [0,1,4,5]
                 // Store is exit port of Loop-1, but it should be incremented only in Loop-2 and Loop-3. Similar with Load.
-                auto is_ignored = [=](const ExpressionPtr& expr){
-                    if (ov::is_type<op::IntermediateMemoryBuffer>(expr->get_node())) {
-                        const auto& expr_loops = expr->get_loop_ids();
-                        if (!expr_loops.empty() && expr_loops.back() == loop_id) {
-                            return true;
+                auto is_ignored = [=](const ExpressionPtr& target_expr){
+                    if (ov::is_type<op::IntermediateMemoryBuffer>(target_expr->get_node())) {
+                        const auto& target_loops = target_expr->get_loop_ids();
+                        const auto i_max = std::min(expr_loops.size(), target_loops.size());
+                        for (size_t i = 0; i < i_max && expr_loops[i] == target_loops[i]; i++) {
+                            if (target_loops[i] == loop_id)
+                                return true;
                         }
                     }
                     return false;
