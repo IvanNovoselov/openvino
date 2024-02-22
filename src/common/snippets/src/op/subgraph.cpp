@@ -56,6 +56,9 @@
 #include <memory>
 #include <array>
 
+#include "snippets/lowered/pass/serialize_control_flow.hpp"
+#include "snippets/lowered/pass/serialize_data_flow.hpp"
+
 using namespace std;
 using namespace ov::op::util;
 
@@ -476,10 +479,15 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const std::shared_ptr<lower
     control_flow_transformations(linear_ir, lowering_result, lowered_pass_config, backed_passes);
 #ifdef SNIPPETS_DEBUG_CAPS
     if (linear_ir.get_config().perf_count_mode != lowered::PerfCountMode::Disabled) {
-        lowered::pass::InsertPerfCount perf_count_pass({});
+        std::map<std::string, std::string> ops {{"LoopBegin_18395", "LoopEnd_18396"}};
+        lowered::pass::InsertPerfCount perf_count_pass(ops);
         perf_count_pass.run(linear_ir, linear_ir.cbegin(), linear_ir.cend());
     }
 #endif
+    if (get_friendly_name() == "Transpose_78_original") {
+        lowered::pass::SerializeControlFlow("snsdebug_control_flow.xml").run(linear_ir);
+        lowered::pass::SerializeDataFlow("snsdebug_data_flow.xml").run(linear_ir);
+    }
     m_generator->generate(linear_ir, lowering_result, compile_params);
 
     VectorDims parallel_exec_domain = linear_ir.get_master_shape();

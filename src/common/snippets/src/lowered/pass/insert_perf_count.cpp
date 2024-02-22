@@ -6,6 +6,7 @@
 #include "snippets/lowered/pass/insert_perf_count.hpp"
 #include "snippets/lowered/linear_ir.hpp"
 #include "snippets/itt.hpp"
+#include "/home/inovosel/openvino/snippets/src/plugins/intel_cpu/src/transformations/snippets/x64/op/perf_count_rdtsc.hpp"
 
 namespace ov {
 namespace snippets {
@@ -36,12 +37,14 @@ bool InsertPerfCount::run(LinearIR& linear_ir, lowered::LinearIR::constExprIt be
                 perf_count_end_pos++;
             }
             OPENVINO_ASSERT(perf_count_end_pos != linear_ir.cend(), "Failed to find requested op name to insert PerfCountEnd");
-            const auto& perf_count_begin = std::make_shared<snippets::op::PerfCountBegin>();
+            const auto& perf_count_begin = std::make_shared<ov::intel_cpu::PerfCountRdtscBegin>();
+//            const auto& perf_count_begin = std::make_shared<snippets::op::PerfCountBegin>();
             perf_count_begin->set_friendly_name(std::string("PerfCount_Begin_") + std::to_string(seq_number));
             const auto empty_inputs = std::vector<PortConnectorPtr>{};
             linear_ir.insert_node(perf_count_begin, empty_inputs, perf_count_begin_pos->get()->get_loop_ids(), false, perf_count_begin_pos);
 
-            const auto& perf_count_end = std::make_shared<snippets::op::PerfCountEnd>(perf_count_begin->output(0));
+//            const auto& perf_count_end = std::make_shared<snippets::op::PerfCountEnd>(perf_count_begin->output(0));
+            const auto& perf_count_end = std::make_shared<ov::intel_cpu::PerfCountRdtscEnd>(perf_count_begin->output(0));
             perf_count_end->set_friendly_name(std::string("PerfCount_End_") + std::to_string(seq_number));
             // linear_ir.insert has insert before behavior, need to increment perf_count_end_pos
             linear_ir.insert_node(perf_count_end, empty_inputs, perf_count_end_pos->get()->get_loop_ids(), false, next(perf_count_end_pos));

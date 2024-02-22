@@ -34,7 +34,7 @@ public:
     bool m_need_fill_tail_register = false;
     size_t m_loop_depth = 1;
 #ifdef SNIPPETS_DEBUG_CAPS
-    PerfCountMode perf_count_mode = PerfCountMode::Disabled;
+    PerfCountMode perf_count_mode = PerfCountMode::BackendSpecific;
 #endif
     // Some Subgraphs doesn't support domain optimization due to operations' semantics
     bool m_enable_domain_optimization = false;
