@@ -41,6 +41,7 @@
 
 #ifdef SNIPPETS_LIBXSMM_TPP
 #include "transformations/snippets/tpp/op/brgemm.hpp"
+#include "transformations/snippets/tpp/op/vnni_transform.hpp"
 #include "transformations/snippets/tpp/op/eltwise.hpp"
 #include "transformations/snippets/tpp/op/reduce.hpp"
 #include "transformations/snippets/tpp/op/modifiers.hpp"
@@ -252,6 +253,7 @@ intel_cpu::CPUTargetMachine::CPUTargetMachine(dnnl::impl::cpu::x64::cpu_isa_t ho
 
 #ifdef SNIPPETS_LIBXSMM_TPP
     jitters[intel_cpu::tpp::op::BrgemmTPP::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BrgemmTppEmitter);
+    jitters[intel_cpu::tpp::op::VnniTransform::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(VnniTransformTppEmitter);
     jitters[intel_cpu::tpp::op::Add::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BinaryEltwiseTppEmitter);
     jitters[intel_cpu::tpp::op::Subtract::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BinaryEltwiseTppEmitter);
     jitters[intel_cpu::tpp::op::Multiply::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BinaryEltwiseTppEmitter);

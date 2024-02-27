@@ -36,8 +36,8 @@ public:
     static void execute_kernel(libxsmm_meltwfunction_unary eltwise_kernel, void *in0, void *out0);
     const uintptr_t get_compiled_kernel_ptr() const override {
         return reinterpret_cast<const uintptr_t>(libxsmm_dispatch_meltw_unary(m_op_type,
-                                                                                 m_shape,
-                                                                                 m_compile_flags));
+                                                                              m_shape,
+                                                                              m_compile_flags));
     }
     const uintptr_t get_execute_function_ptr() const override { return reinterpret_cast<const uintptr_t>(execute_kernel); }
     static std::set<std::vector<element::Type>> get_supported_precisions(const std::shared_ptr<ov::Node>& node = nullptr);
@@ -46,6 +46,16 @@ protected:
     libxsmm_meltw_unary_shape m_shape;
     libxsmm_meltw_unary_type m_op_type;
     void validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const override;
+};
+
+class VnniTransformTppEmitter : public UnaryEltwiseTppEmitter {
+public:
+    VnniTransformTppEmitter(dnnl::impl::cpu::x64::jit_generator* h,
+                            dnnl::impl::cpu::x64::cpu_isa_t isa,
+                            const ov::snippets::lowered::ExpressionPtr& expr) : UnaryEltwiseTppEmitter(h, isa, expr) {}
+    static std::set<std::vector<element::Type>> get_supported_precisions(const std::shared_ptr<ov::Node>& node) {
+        return {{element::i8}, {element::u8}, {element::bf16}};
+    }
 };
 
 class ReduceTppEmitter : public UnaryEltwiseTppEmitter {

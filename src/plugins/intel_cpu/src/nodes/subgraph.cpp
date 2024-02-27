@@ -48,6 +48,7 @@ std::mutex err_print_lock;
 #include "transformations/snippets/tpp/pass/eltwise_to_eltwise_tpp.hpp"
 #include "transformations/snippets/tpp/pass/scalar_to_scalar_tpp.hpp"
 #include "transformations/snippets/tpp/pass/lowered/set_tpp_leading_dim.hpp"
+#include "transformations/snippets/tpp/pass/lowered/set_vnni_transform_buffers_shape.hpp"
 #endif
 
 using namespace dnnl::impl::utils;
@@ -670,6 +671,10 @@ void Snippet::SnippetJitExecutor::generate(const jit_snippets_compile_args* jcp)
     lowering_config->disable<ov::snippets::lowered::pass::OptimizeDomain>();
     SNIPPETS_REGISTER_PASS_RELATIVE(Place::After, ov::intel_cpu::pass::FuseLoadStoreConvert,
                                     ov::intel_cpu::tpp::pass::SetTPPLeadingDim);
+    // todo: this pass is very similar to SetBrgemmCopyBBuffersShape. Both passes could be joined when
+    //  BrgemmCopyB and VnniTransform will derive from a common base class.
+    SNIPPETS_REGISTER_PASS_RELATIVE(Place::After, ov::intel_cpu::tpp::pass::SetTPPLeadingDim,
+                                    ov::intel_cpu::pass::SetVnniTransformBufferShape);
 #endif
     schedule = snippetAttrs.snippet->generate_from_linear_ir(lowering_config,
                                                              backend_passes,

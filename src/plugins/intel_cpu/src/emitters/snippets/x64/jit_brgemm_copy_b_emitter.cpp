@@ -93,8 +93,7 @@ void jit_brgemm_copy_b_emitter::init_brgemm_copy(std::unique_ptr<matmul::jit_brg
         brgCopyKernelConf.s8s8_compensation_required = false;
     } else {
         brgCopyKernelConf.isa = dt_in0 == dnnl_data_type_t::dnnl_bf16 ? avx512_core_bf16 : avx512_core_vnni;
-        // todo: this is a WA to check that repacking works with libxsmm. Undo when tpp repacking is implemented
-        brgCopyKernelConf.s8s8_compensation_required = false;// dt_in0 == dnnl_data_type_t::dnnl_s8;
+        brgCopyKernelConf.s8s8_compensation_required = dt_in0 == dnnl_data_type_t::dnnl_s8;
     }
 
     brgCopyKernelConf.has_zero_point_a = false;

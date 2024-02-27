@@ -8,7 +8,7 @@
 
 #include "snippets/utils.hpp"
 #include "snippets/op/brgemm.hpp"
-#include "transformations/snippets/x64/op/brgemm_copy_b.hpp"
+#include "transformations/snippets/tpp/op/vnni_transform.hpp"
 #include "transformations/snippets/tpp/op/brgemm.hpp"
 
 #include "openvino/core/rt_info.hpp"
@@ -90,13 +90,14 @@ BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
         const auto offset_a = brgemm->get_offset_a();
         const auto offset_b = brgemm->get_offset_b();
         const auto offset_c = brgemm->get_offset_c();
-        std::shared_ptr<BrgemmCopyB> brgemm_repacking = nullptr;
+        std::shared_ptr<tpp::op::VnniTransform> brgemm_repacking = nullptr;
 
         auto input_val_a = brgemm->input_value(0);
         auto input_val_b = brgemm->input_value(1);
         if (element_type_b != ov::element::f32) {
-            brgemm_repacking = std::make_shared<BrgemmCopyB>(input_val_b, element_type_b, BrgemmCopyB::OnlyRepacking, offset_b, 0, 0,
-                                                             brgemm_in1_desc->get_layout());
+            brgemm_repacking = std::make_shared<tpp::op::VnniTransform>(input_val_b, element_type_b,
+                                                                        offset_b, 0,
+                                                                        brgemm_in1_desc->get_layout());
             input_val_b = brgemm_repacking->output(0);
             set_port_desc(brgemm_repacking->input(0), brgemm_in1_desc->get_shape(), brgemm_in1_desc->get_subtensor(), brgemm_in1_desc->get_layout());
             set_full_port_desc(brgemm_repacking->output(0));

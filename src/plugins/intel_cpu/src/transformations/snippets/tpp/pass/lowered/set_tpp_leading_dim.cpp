@@ -6,7 +6,6 @@
 #include "snippets/op/buffer.hpp"
 #include "transformations/snippets/tpp/op/modifiers.hpp"
 #include "set_tpp_leading_dim.hpp"
-#include "snippets/op/brgemm.hpp"
 #include "snippets/lowered/loop_manager.hpp"
 
 namespace ov {
