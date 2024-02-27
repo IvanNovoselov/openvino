@@ -29,6 +29,14 @@ namespace pass {
 using namespace snippets::lowered;
 
 namespace {
+std::vector<size_t> make_subtensor(const ov::Shape& tensor) {
+    return std::vector<size_t>(std::min(tensor.size(), size_t(2)), PortDescriptor::ServiceDimensions::FULL_DIM);
+}
+template<typename T>
+void set_full_port_desc(const T& port) {
+    const auto& shape = port.get_shape();
+    PortDescriptorUtils::set_port_descriptor_ptr(port, std::make_shared<PortDescriptor>(shape, make_subtensor(shape)));
+}
 template<typename T, typename... Args>
 void set_port_desc(const T& port, Args... params) {
     PortDescriptorUtils::set_port_descriptor_ptr(port, std::make_shared<PortDescriptor>(params...));
@@ -65,20 +73,44 @@ BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
         const auto element_type_a = brgemm->get_input_element_type(0);
         const auto element_type_b = brgemm->get_input_element_type(1);
 
+        const auto brgemmVNNIFactor = 4 / element_type_a.size();
+        // todo: does N has to be multiple of brgemmVNNIFactor as well?
+        // TPP doesn't support B matrices with shapes that are not multiple of VNNI factor
+        if (K % brgemmVNNIFactor != 0 || N % brgemmVNNIFactor != 0) {
+            std::cerr << "Brgemm TPP not created due to VNII block limitations\n";
+            return false;
+        }
+        const bool AMXSupported = dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx512_core_amx);
+        // TPP doesn't support compensations, so two i8 inputs are accepted only for architectures with AMX
+//        if (element_type_a == ov::element::i8 && element_type_b == ov::element::i8 && !AMXSupported) {
+//            std::cerr << "Brgemm TPP not created due to compensations support\n";
+//            return false;
+//        }
+
         const auto offset_a = brgemm->get_offset_a();
         const auto offset_b = brgemm->get_offset_b();
         const auto offset_c = brgemm->get_offset_c();
+        std::shared_ptr<BrgemmCopyB> brgemm_repacking = nullptr;
 
-        std::shared_ptr<tpp::op::BrgemmTPP> brgemm_tpp = nullptr;
-        if (element_type_a == ov::element::f32) {
-            brgemm_tpp = std::make_shared<tpp::op::BrgemmTPP>(brgemm->input_value(0),
-                                                              brgemm->input_value(1),
-                                                              offset_a, offset_b, offset_c,
-                                                              brgemm_in0_desc->get_layout(),
-                                                              brgemm_in1_desc->get_layout(),
-                                                              brgemm_out_desc->get_layout());
+        auto input_val_a = brgemm->input_value(0);
+        auto input_val_b = brgemm->input_value(1);
+        if (element_type_b != ov::element::f32) {
+            brgemm_repacking = std::make_shared<BrgemmCopyB>(input_val_b, element_type_b, BrgemmCopyB::OnlyRepacking, offset_b, 0, 0,
+                                                             brgemm_in1_desc->get_layout());
+            input_val_b = brgemm_repacking->output(0);
+            set_port_desc(brgemm_repacking->input(0), brgemm_in1_desc->get_shape(), brgemm_in1_desc->get_subtensor(), brgemm_in1_desc->get_layout());
+            set_full_port_desc(brgemm_repacking->output(0));
         }
-        OPENVINO_ASSERT(brgemm_tpp, "DEBUG ASSERT: FAILED TO CREATE BrgemmTPP in the BrgemmToBrgemmTPP pass");
+        auto brgemm_tpp = std::make_shared<tpp::op::BrgemmTPP>(input_val_a,
+                                                               input_val_b,
+                                                               offset_a,
+                                                               brgemm_repacking ? 0 : offset_b,
+                                                               offset_c,
+                                                               brgemm_in0_desc->get_layout(),
+                                                               brgemm_repacking ? std::vector<size_t>{} : brgemm_in1_desc->get_layout(),
+                                                               brgemm_out_desc->get_layout());
+        if (brgemm_tpp)
+            std::cerr << "Brgemm TPP was created successfully\n";
         // Set blocking params
         // Ticket: 113745
         // TODO: extend block size selection heuristics
@@ -103,11 +135,16 @@ BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
 
         // Set FULL_DIM tensors on ports to avoid automatic loop markup (blocked loops will be inserted in a separate transformation)
         set_port_desc(brgemm_tpp->input(0), brgemm_in0_desc->get_shape(), brgemm_in0_desc->get_subtensor(), brgemm_in0_desc->get_layout());
-        set_port_desc(brgemm_tpp->input(1), brgemm_in1_desc->get_shape(), brgemm_in1_desc->get_subtensor(), brgemm_in1_desc->get_layout());
+        if (brgemm_repacking)
+            set_full_port_desc(brgemm_tpp->input(1));
+        else
+            set_port_desc(brgemm_tpp->input(1), brgemm_in1_desc->get_shape(), brgemm_in1_desc->get_subtensor(), brgemm_in1_desc->get_layout());
         set_port_desc(brgemm_tpp->output(0), brgemm_out_desc->get_shape(), brgemm_out_desc->get_subtensor(), brgemm_out_desc->get_layout());
 
         // need to run validate_and_infer_types manually: either input shapes were updated or
         // output Layout was updated (out shape will be updated in validate_and_infer_types())
+        if (brgemm_repacking)
+            brgemm_repacking->validate_and_infer_types();
         brgemm_tpp->validate_and_infer_types();
 
         return true;

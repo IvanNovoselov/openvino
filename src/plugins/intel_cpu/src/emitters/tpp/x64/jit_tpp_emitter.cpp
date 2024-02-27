@@ -125,6 +125,7 @@ void TppEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size
 libxsmm_datatype TppEmitter::ov_to_xsmm_dtype(ov::element::Type_t elemet_type) {
     switch (elemet_type) {
         case ov::element::Type_t::f32 : return LIBXSMM_DATATYPE_F32;
+        case ov::element::Type_t::i32 : return LIBXSMM_DATATYPE_I32;
         case ov::element::Type_t::bf16 : return LIBXSMM_DATATYPE_BF16;
         case ov::element::Type_t::i8 : return LIBXSMM_DATATYPE_I8;
         case ov::element::Type_t::u8 : return LIBXSMM_DATATYPE_U8;

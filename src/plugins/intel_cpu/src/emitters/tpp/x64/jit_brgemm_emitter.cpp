@@ -38,12 +38,10 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
 
     auto in_0_prec = ov_to_xsmm_dtype(brgemm_node->get_input_element_type(0));
     auto in_1_prec = ov_to_xsmm_dtype(brgemm_node->get_input_element_type(1));
+    auto out_0_prec = ov_to_xsmm_dtype(brgemm_node->get_output_element_type(0));
     exec_dtype = in_0_prec == LIBXSMM_DATATYPE_I8 || in_0_prec == LIBXSMM_DATATYPE_U8 ?
                   LIBXSMM_DATATYPE_I32 :
                   LIBXSMM_DATATYPE_F32;
-    auto out_0_prec = exec_dtype == LIBXSMM_DATATYPE_I32 ?
-                      LIBXSMM_DATATYPE_I32 :
-                      LIBXSMM_DATATYPE_F32;
 
     const auto beta = brgemm_node->get_beta();
     OV_CPU_JIT_EMITTER_ASSERT(beta == 0 || beta == 1, "Detected unsupported beta value: " + std::to_string(beta));
@@ -92,7 +90,10 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
 
 std::set<std::vector<element::Type>> BrgemmTppEmitter::get_supported_precisions(const std::shared_ptr<ov::Node>& node) {
     // Note: BrgemmTpp currently supports only fp32
-    return {{element::f32, element::f32}};
+    return {{element::f32, element::f32},
+            {element::i8, element::u8},
+            {element::u8, element::i8},
+            {element::u8, element::u8}};
 }
 
 void BrgemmTppEmitter::validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const {
