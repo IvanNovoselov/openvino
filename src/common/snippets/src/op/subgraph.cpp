@@ -45,6 +45,9 @@
 #include "snippets/lowered/pass/pass_config.hpp"
 #include "snippets/lowered/pass/reduce_decomposition.hpp"
 
+#include "snippets/lowered/pass/serialize_control_flow.hpp"
+//#include "snippets/lowered/pass/serialize_data_flow.hpp"
+
 #include "transformations/utils/utils.hpp"
 
 #include "snippets/pass/manager.hpp"
@@ -405,6 +408,7 @@ void Subgraph::data_flow_transformations(const BlockedShapeVector& blocked_input
 
     manager.register_positioned_passes(backend_passes);
     manager.run_passes(body_ptr());
+    ov::pass::Serialize("snsdebug_ngraph.xml", "snsdebug_ngraph.bin").run_on_model(body_ptr());
 }
 
 void Subgraph::control_flow_transformations(lowered::LinearIR& linear_ir,
@@ -486,6 +490,7 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const std::shared_ptr<lower
     // Note: LIBXSMM_GEMM_K_A_PF_DIST allows to tweak prefetching.
     setenv("LIBXSMM_GEMM_K_A_PF_DIST", "4", 1);
 #endif
+    lowered::pass::SerializeControlFlow("snsdebug_control.xml").run(linear_ir);
     m_generator->generate(linear_ir, lowering_result, compile_params);
 #ifdef SNIPPETS_LIBXSMM_TPP
     unsetenv("LIBXSMM_X86_HINT_USE_HIGH_PREC_ELTWISE_APPROX");
