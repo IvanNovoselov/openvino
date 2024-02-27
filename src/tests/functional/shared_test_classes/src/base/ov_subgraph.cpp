@@ -270,6 +270,33 @@ void SubgraphBaseTest::compare(const std::vector<ov::Tensor>& expected,
             }
             auto it = compareMap.find(inputNode->get_type_info());
             ASSERT_NE(it, compareMap.end());
+            const auto& exp = expected[j];
+            const auto& act = actual[j];
+            if (exp.get_element_type() == element::f32) {
+                auto exp_data = exp.data<float>();
+                auto act_data = act.data<float>();
+                std::cerr << "exp vs actual (float)\n";
+                for (int k = 0; k < std::min(exp.get_size(), 1024ul); k++) {
+                    std::string mark = abs(exp_data[k] - act_data[k]) > 1e-4 ? " ***" : "";
+                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
+                }
+            } else if (exp.get_element_type() == element::i8) {
+                auto exp_data = exp.data<int8_t>();
+                auto act_data = act.data<int8_t>();
+                std::cerr << "exp vs actual (int8)\n";
+                for (int k = 0; k < std::min(exp.get_size(), 1024ul); k++) {
+                    std::string mark = abs(exp_data[k] - act_data[k]) > 1e-4 ? " ***" : "";
+                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
+                }
+            } else if (exp.get_element_type() == element::u8) {
+                auto exp_data = exp.data<uint8_t>();
+                auto act_data = act.data<uint8_t>();
+                std::cerr << "exp vs actual (uint8) \n";
+                for (int k = 0; k < std::min(exp.get_size(), 1024ul); k++) {
+                    std::string mark = abs(exp_data[k] - act_data[k]) > 1e-4 ? " ***" : "";
+                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
+                }
+            }
             it->second(inputNode, i, expected[j], actual[j], abs_threshold, rel_threshold);
         }
     }
