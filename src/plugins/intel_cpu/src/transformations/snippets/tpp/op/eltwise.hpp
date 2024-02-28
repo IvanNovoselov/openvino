@@ -35,8 +35,10 @@ public:
 private:
     libxsmm_meltw_binary_type m_op_type;
 };
-
+class VnniTransform;
 class UnaryEltwiseTPP : public EltwiseTPP {
+    // Note: VnniTransform is a special case, since its op_type depends on the shape and precision
+    friend VnniTransform;
 public:
     UnaryEltwiseTPP(libxsmm_meltw_unary_type op_type);
     libxsmm_meltw_unary_type get_op_type() const { return m_op_type; }

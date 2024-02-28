@@ -272,31 +272,45 @@ void SubgraphBaseTest::compare(const std::vector<ov::Tensor>& expected,
             ASSERT_NE(it, compareMap.end());
             const auto& exp = expected[j];
             const auto& act = actual[j];
+            size_t num_fail = 0;
             if (exp.get_element_type() == element::f32) {
                 auto exp_data = exp.data<float>();
                 auto act_data = act.data<float>();
                 std::cerr << "exp vs actual (float)\n";
                 for (int k = 0; k < std::min(exp.get_size(), 1024ul); k++) {
-                    std::string mark = abs(exp_data[k] - act_data[k]) > 1e-4 ? " ***" : "";
-                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
+                    std::string mark;
+                    if (abs(exp_data[k] - act_data[k]) > 1e-4) {
+                        mark = " ***";
+                        num_fail++;
+                    }
+//                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
                 }
             } else if (exp.get_element_type() == element::i8) {
                 auto exp_data = exp.data<int8_t>();
                 auto act_data = act.data<int8_t>();
                 std::cerr << "exp vs actual (int8)\n";
                 for (int k = 0; k < std::min(exp.get_size(), 1024ul); k++) {
-                    std::string mark = abs(exp_data[k] - act_data[k]) > 1e-4 ? " ***" : "";
-                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
+                    std::string mark;
+                    if (abs(exp_data[k] - act_data[k]) > 1e-4) {
+                        mark = " ***";
+                        num_fail++;
+                    }
+//                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
                 }
             } else if (exp.get_element_type() == element::u8) {
                 auto exp_data = exp.data<uint8_t>();
                 auto act_data = act.data<uint8_t>();
                 std::cerr << "exp vs actual (uint8) \n";
                 for (int k = 0; k < std::min(exp.get_size(), 1024ul); k++) {
-                    std::string mark = abs(exp_data[k] - act_data[k]) > 1e-4 ? " ***" : "";
-                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
+                    std::string mark;
+                    if (abs(exp_data[k] - act_data[k]) > 1e-4) {
+                        mark = " ***";
+                        num_fail++;
+                    }
+//                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
                 }
             }
+            OPENVINO_ASSERT(num_fail == 0, "Num fail: " + std::to_string(num_fail));
             it->second(inputNode, i, expected[j], actual[j], abs_threshold, rel_threshold);
         }
     }

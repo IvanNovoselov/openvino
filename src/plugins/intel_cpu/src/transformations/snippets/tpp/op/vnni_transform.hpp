@@ -19,10 +19,7 @@ public:
     OPENVINO_OP("VnniTransform", "TppOpset");
     VnniTransform(const Output<Node>& arg, element::Type src_type,
                   size_t offset_in = 0lu, size_t offset_out = 0lu,
-                  std::vector<size_t> layout_in = {}, size_t blk_size_k = 0, size_t blk_size_n = 0);
-//    VnniTransform(const Output<Node>& arg, element::Type src_type,
-//                  const PortDescriptor& desc_in = {}, const PortDescriptor& desc_out = {},
-//                  std::vector<size_t> layout_input = {}, size_t blk_size_k = 0, size_t blk_size_n = 0);
+                  const std::vector<size_t>& layout_in = {}, size_t blk_size_k = 0, size_t blk_size_n = 0);
 
     // todo: some of these methods are very similar to BrgemmCopyB.
     //  Should we consider moving shared functionality to a base class in the common part?
@@ -30,6 +27,7 @@ public:
     void validate_and_infer_types() override;
     bool visit_attributes(AttributeVisitor& visitor) override;
     ov::Shape get_data_repacking_shape(const ov::snippets::VectorDims& planar_dims) const;
+    static size_t get_vnni_factor(const ov::element::Type& type) {return 4 / type.size();}
 
     class ShapeInfer : public snippets::IShapeInferSnippets {
         std::vector<size_t> m_layout{};
@@ -41,12 +39,12 @@ public:
 private:
     void compute_block_size_values(size_t blk_size_k, size_t blk_size_n);
     void validate_element_type(const ov::element::Type& element_type);
-    void custom_constructor_validate_and_infer_types(std::vector<size_t> layout_input);
-    static libxsmm_meltw_unary_type get_libxsmm_op_type(element::Type src_type);
+    void custom_constructor_validate_and_infer_types(const std::vector<size_t>& layout_input);
+    libxsmm_meltw_unary_type get_libxsmm_op_type(element::Type src_type, const snippets::VectorDims& planar_shape) const;
     element::Type m_src_type = ov::element::undefined;
     size_t m_K_blk = 0;
     size_t m_N_blk = 0;
-    size_t m_brgemmVNNIFactor = 1;
+    size_t m_VnniFactor = 1;
 };
 
 

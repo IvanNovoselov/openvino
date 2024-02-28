@@ -14,22 +14,35 @@ namespace op {
 
 VnniTransform::VnniTransform(const Output<Node>& arg, const element::Type src_type,
                              const size_t offset_in, const size_t offset_out,
-                             std::vector<size_t> layout_in, const size_t blk_size_k, const size_t blk_size_n) :
-                             UnaryEltwiseTPP(get_libxsmm_op_type(src_type)),
-                             Op({arg}), m_src_type(src_type) {
+                             const std::vector<size_t>& layout_in, const size_t blk_size_k, const size_t blk_size_n) :
+                             UnaryEltwiseTPP(LIBXSMM_MELTW_TYPE_UNARY_TRANSFORM_NORM_TO_VNNI2),
+                             Op({arg}), m_src_type(src_type), m_VnniFactor(get_vnni_factor(src_type)) {
     m_input_ports[0].offset = offset_in;
     m_output_ports[0].offset = offset_out;
     compute_block_size_values(blk_size_k, blk_size_n);
-    custom_constructor_validate_and_infer_types(std::move(layout_in));
+    custom_constructor_validate_and_infer_types(layout_in);
 }
 
-libxsmm_meltw_unary_type VnniTransform::get_libxsmm_op_type(element::Type src_type) {
+libxsmm_meltw_unary_type VnniTransform::get_libxsmm_op_type(element::Type src_type, const VectorDims& planar_shape) const {
+    const auto& repacking_shape = get_data_repacking_shape(planar_shape);
+    const bool padding_needed = !std::equal(repacking_shape.crbegin(),
+                                           repacking_shape.crend(),
+                                           planar_shape.crbegin());
+    // todo: Vnni can support padding, but this is not enough, since copy of A tensork is also required
+    //  so make K will be a multiple of 2 (bf16) or 4 (i8).
+    OPENVINO_ASSERT(!padding_needed, "VnniTransform doesn't support padding");
     switch (src_type) {
         case element::bf16:
             return LIBXSMM_MELTW_TYPE_UNARY_TRANSFORM_NORM_TO_VNNI2;
+//            return padding_needed ?
+//                   LIBXSMM_MELTW_TYPE_UNARY_TRANSFORM_NORM_TO_VNNI2_PAD :
+//                   LIBXSMM_MELTW_TYPE_UNARY_TRANSFORM_NORM_TO_VNNI2;
         case element::i8:
         case element::u8:
             return LIBXSMM_MELTW_TYPE_UNARY_TRANSFORM_NORM_TO_VNNI4;
+//            return padding_needed ?
+//                   LIBXSMM_MELTW_TYPE_UNARY_TRANSFORM_NORM_TO_VNNI4_PAD :
+//                   LIBXSMM_MELTW_TYPE_UNARY_TRANSFORM_NORM_TO_VNNI4;
         default:
             OPENVINO_THROW("Unsupported src precision for VnniTransform: " + src_type.to_string());
     }
@@ -43,9 +56,11 @@ void VnniTransform::compute_block_size_values(const size_t blk_size_k, const siz
 }
 
 ov::Shape VnniTransform::get_data_repacking_shape(const ov::snippets::VectorDims& planar_dims) const {
+    // todo: why don't we set a repacked shape in validate_and_infer_types?
     const auto& N = *planar_dims.rbegin();
     const auto& K = *(planar_dims.rbegin() + 1);
-    return ov::Shape{rnd_up(K, m_brgemmVNNIFactor), rnd_up(N, m_N_blk)};
+    // todo: why do we need to round-up N by block size?
+    return ov::Shape{rnd_up(K, m_VnniFactor), rnd_up(N, m_N_blk)};
 }
 
 std::shared_ptr<Node> VnniTransform::clone_with_new_inputs(const OutputVector& new_args) const {
@@ -72,12 +87,15 @@ void VnniTransform::validate_element_type(const ov::element::Type& element_type)
                     "VnniTransform doesn't support element type" + element_type.get_type_name());
 }
 
-void VnniTransform::custom_constructor_validate_and_infer_types(std::vector<size_t> layout_input) {
+void VnniTransform::custom_constructor_validate_and_infer_types(const std::vector<size_t>& layout_input) {
     // During ctor call, BrgemmCopyB doesn't know his port descriptors.
     // So we use port descs from source inputs
     const auto element_type = get_input_element_type(0);
     validate_element_type(element_type);
-    const auto planar_pshape = snippets::utils::get_planar_pshape(get_input_partial_shape(0), layout_input);
+    const auto& planar_pshape = snippets::utils::get_planar_pshape(get_input_partial_shape(0), layout_input);
+    // Update op_type base
+    const auto& planar_vdims = snippets::utils::pshape_to_vdims(planar_pshape);
+    m_op_type = get_libxsmm_op_type(element_type, planar_vdims);
     set_output_type(0, element_type, planar_pshape);
 }
 
