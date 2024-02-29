@@ -81,11 +81,14 @@ BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
             return false;
         }
         const bool AMXSupported = dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx512_core_amx);
+        // todo: this condition could be simplified, but keep until generic matmul support is enabled (no VNNI block limitations).
+        const bool use_amx = element_type_b != element::f32 &&
+                             AMXSupported && (K % brgemmVNNIFactor == 0) && (N % brgemmVNNIFactor == 0);
         // TPP doesn't support compensations, so two i8 inputs are accepted only for architectures with AMX
-//        if (element_type_a == ov::element::i8 && element_type_b == ov::element::i8 && !AMXSupported) {
-//            std::cerr << "Brgemm TPP not created due to compensations support\n";
-//            return false;
-//        }
+        if (element_type_a == ov::element::i8 && element_type_b == ov::element::i8 && !AMXSupported) {
+            std::cerr << "Brgemm TPP not created due to compensations support\n";
+            return false;
+        }
 
         const auto offset_a = brgemm->get_offset_a();
         const auto offset_b = brgemm->get_offset_b();
@@ -94,10 +97,28 @@ BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
 
         auto input_val_a = brgemm->input_value(0);
         auto input_val_b = brgemm->input_value(1);
+        // Set blocking params
+        // Ticket: 113745
+        // TODO: extend block size selection heuristics
+        auto get_block_size_m = [](const size_t M) {
+            return 32ul;
+        };
+        auto get_block_size_k = [=](const size_t K) {
+            if (element_type_b != ov::element::f32)
+                return K;
+            return K > 1024 ? 1024 : K > 512 ? 512 : K;
+        };
+        auto get_block_size_n = [=](const size_t N) {
+            return element_type_b != ov::element::f32 ? N : 64;
+        };
         if (element_type_b != ov::element::f32) {
+            const size_t blk_size_k = use_amx ? get_block_size_k(K) : K;
+            const size_t blk_size_n = 64;
             brgemm_repacking = std::make_shared<tpp::op::VnniTransform>(input_val_b, element_type_b,
                                                                         offset_b, 0,
-                                                                        brgemm_in1_desc->get_layout());
+                                                                        brgemm_in1_desc->get_layout(),
+                                                                        blk_size_k,
+                                                                        blk_size_n);
             input_val_b = brgemm_repacking->output(0);
             set_port_desc(brgemm_repacking->input(0), brgemm_in1_desc->get_shape(), brgemm_in1_desc->get_subtensor(), brgemm_in1_desc->get_layout());
             set_full_port_desc(brgemm_repacking->output(0));
@@ -109,27 +130,12 @@ BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
                                                                offset_c,
                                                                brgemm_in0_desc->get_layout(),
                                                                brgemm_repacking ? std::vector<size_t>{} : brgemm_in1_desc->get_layout(),
-                                                               brgemm_out_desc->get_layout());
+                                                               brgemm_out_desc->get_layout(),
+                                                               get_block_size_m(M),
+                                                               get_block_size_k(K),
+                                                               get_block_size_n(N));
         if (brgemm_tpp)
             std::cerr << "Brgemm TPP was created successfully\n";
-        // Set blocking params
-        // Ticket: 113745
-        // TODO: extend block size selection heuristics
-        auto get_block_size_m = [](const size_t M) {
-            return 32;
-        };
-        auto get_block_size_k = [=](const size_t K) {
-            if (element_type_b != ov::element::f32)
-                return K;
-            return K > 1024 ? 1024 : K > 512 ? 512 : K;
-        };
-        auto get_block_size_n = [=](const size_t N) {
-            return element_type_b != ov::element::f32 ? N : 64;
-        };
-
-        brgemm_tpp->set_m_block_size(get_block_size_m(M));
-        brgemm_tpp->set_k_block_size(get_block_size_k(K));
-        brgemm_tpp->set_n_block_size(get_block_size_n(N));
 
         brgemm_tpp->set_friendly_name(brgemm->get_friendly_name());
         ov::replace_node(brgemm, brgemm_tpp);

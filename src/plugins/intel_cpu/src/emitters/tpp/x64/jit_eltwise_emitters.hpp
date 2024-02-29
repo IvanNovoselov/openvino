@@ -48,16 +48,6 @@ protected:
     void validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const override;
 };
 
-class VnniTransformTppEmitter : public UnaryEltwiseTppEmitter {
-public:
-    VnniTransformTppEmitter(dnnl::impl::cpu::x64::jit_generator* h,
-                            dnnl::impl::cpu::x64::cpu_isa_t isa,
-                            const ov::snippets::lowered::ExpressionPtr& expr) : UnaryEltwiseTppEmitter(h, isa, expr) {}
-    static std::set<std::vector<element::Type>> get_supported_precisions(const std::shared_ptr<ov::Node>& node) {
-        return {{element::i8}, {element::u8}, {element::bf16}};
-    }
-};
-
 class ReduceTppEmitter : public UnaryEltwiseTppEmitter {
 public:
     ReduceTppEmitter(dnnl::impl::cpu::x64::jit_generator* h,

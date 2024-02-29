@@ -283,7 +283,7 @@ void SubgraphBaseTest::compare(const std::vector<ov::Tensor>& expected,
                         mark = " ***";
                         num_fail++;
                     }
-//                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
+                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
                 }
             } else if (exp.get_element_type() == element::i8) {
                 auto exp_data = exp.data<int8_t>();

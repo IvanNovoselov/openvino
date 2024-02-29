@@ -64,6 +64,8 @@ struct CustomPowerStaticBuilder : public TPPNodeFactory::TPPCustomBuilder {
         {ov::op::v1::Subtract::get_type_info_static(), CREATE_BINARY_TPP_NODE(Subtract)},
         {ov::op::v1::Multiply::get_type_info_static(), CREATE_BINARY_TPP_NODE(Multiply)},
         {ov::op::v1::Divide::get_type_info_static(), CREATE_BINARY_TPP_NODE(Divide)},
+        {ov::op::v1::Minimum::get_type_info_static(), CREATE_BINARY_TPP_NODE(Minimum)},
+        {ov::op::v1::Maximum::get_type_info_static(), CREATE_BINARY_TPP_NODE(Maximum)},
         {ov::op::v0::Exp::get_type_info_static(), CREATE_UNARY_TPP_NODE(Exp)},
         {ov::op::v0::Relu::get_type_info_static(), CREATE_UNARY_TPP_NODE(Relu)},
         // Note that we don't support conversion from ngraph ops here, since they have a broader semantics (e.g. multiple axis provided at a secont input)

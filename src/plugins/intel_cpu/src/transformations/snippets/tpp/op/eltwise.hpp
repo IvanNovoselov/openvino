@@ -78,6 +78,22 @@ public:
     bool visit_attributes(AttributeVisitor& visitor) override;
 };
 
+class Minimum : public BinaryEltwiseTPP, public ov::op::v1::Minimum {
+public:
+    OPENVINO_OP("Minimum", "TppOpset", ov::op::v1::Minimum);
+    Minimum(const Output<Node>& arg0, const Output<Node>& arg1, const AutoBroadcastSpec& auto_broadcast);
+    std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& new_args) const override;
+    bool visit_attributes(AttributeVisitor& visitor) override;
+};
+
+class Maximum : public BinaryEltwiseTPP, public ov::op::v1::Maximum {
+public:
+    OPENVINO_OP("Maximum", "TppOpset", ov::op::v1::Maximum);
+    Maximum(const Output<Node>& arg0, const Output<Node>& arg1, const AutoBroadcastSpec& auto_broadcast);
+    std::shared_ptr<Node> clone_with_new_inputs(const OutputVector& new_args) const override;
+    bool visit_attributes(AttributeVisitor& visitor) override;
+};
+
 class Exp : public UnaryEltwiseTPP, public ov::op::v0::Exp {
 public:
     OPENVINO_OP("Exp", "TppOpset", ov::op::v0::Exp);

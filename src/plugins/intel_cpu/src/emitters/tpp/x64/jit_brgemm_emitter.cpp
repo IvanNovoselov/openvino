@@ -93,7 +93,8 @@ std::set<std::vector<element::Type>> BrgemmTppEmitter::get_supported_precisions(
     return {{element::f32, element::f32},
             {element::i8, element::u8},
             {element::u8, element::i8},
-            {element::u8, element::u8}};
+            {element::u8, element::u8},
+            {element::bf16, element::bf16}};
 }
 
 void BrgemmTppEmitter::validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const {

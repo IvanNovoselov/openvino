@@ -60,7 +60,8 @@ ov::Shape VnniTransform::get_data_repacking_shape(const ov::snippets::VectorDims
     const auto& N = *planar_dims.rbegin();
     const auto& K = *(planar_dims.rbegin() + 1);
     // todo: why do we need to round-up N by block size?
-    return ov::Shape{rnd_up(K, m_VnniFactor), rnd_up(N, m_N_blk)};
+//    return ov::Shape{rnd_up(K, m_VnniFactor), rnd_up(N, m_N_blk)};
+    return ov::Shape{rnd_up(K, m_VnniFactor), N};
 }
 
 std::shared_ptr<Node> VnniTransform::clone_with_new_inputs(const OutputVector& new_args) const {

@@ -28,6 +28,10 @@ public:
     bool visit_attributes(AttributeVisitor& visitor) override;
     ov::Shape get_data_repacking_shape(const ov::snippets::VectorDims& planar_dims) const;
     static size_t get_vnni_factor(const ov::element::Type& type) {return 4 / type.size();}
+    // todo: these helpers should be deprecated (here and in all Brgemm-like nodes)
+    //  blocking should be supported through subtensors, as it is done for eltwise TPPs for example
+    size_t get_k_block_size() const { return m_K_blk; }
+    size_t get_n_block_size() const { return m_N_blk; }
 
     class ShapeInfer : public snippets::IShapeInferSnippets {
         std::vector<size_t> m_layout{};

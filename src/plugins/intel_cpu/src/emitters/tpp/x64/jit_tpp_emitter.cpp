@@ -78,12 +78,17 @@ void TppEmitter::emit_code(const std::vector<size_t> &in, const std::vector<size
 
 void TppEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size_t>& out) const {
     internal_call_preamble();
+    emit_call(in, out, get_execute_function_ptr(), get_compiled_kernel_ptr());
+    internal_call_postamble();
+}
+void TppEmitter::emit_call(const std::vector<size_t>& in, const std::vector<size_t>& out,
+                           const uintptr_t execute_function_ptr, const uintptr_t compiled_kernel_ptr) const {
     // Note: 4 args is currently enough for unary and binary ops.
     // To enable ternary ops, we will have to pass extra regs on stack for Windows,
     std::array<Xbyak::Reg64, 4> abi_params{abi_param1, abi_param2, abi_param3, abi_param4};
 
     // save function address in gpr to pass in call instruction
-    h->mov(h->rbp, get_execute_function_ptr());
+    h->mov(h->rbp, execute_function_ptr);
     int aux_xmm_count = 0;
     for (auto reg_idx : in)
         h->uni_vmovq(Xmm(aux_xmm_count++),  Reg64(static_cast<int>(reg_idx)));
@@ -97,10 +102,9 @@ void TppEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size
         h->uni_vmovq(reg, xmm);
         if (bytes_offset) h->add(reg, bytes_offset);
     };
-    const auto& compiled_kernel = get_compiled_kernel_ptr();
-    OV_CPU_JIT_EMITTER_ASSERT(compiled_kernel, "Failed to compile libxsmm_kernel");
+    OV_CPU_JIT_EMITTER_ASSERT(compiled_kernel_ptr, "Failed to compile libxsmm_kernel");
 
-    h->mov(abi_params[0], compiled_kernel);
+    h->mov(abi_params[0], compiled_kernel_ptr);
     for (int i = 0; i < num_kernel_args; i++)
         data_ptr_reg(Xmm(i), abi_params[i + 1], io_offsets[i]);
 
@@ -119,7 +123,6 @@ void TppEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size
 #ifdef _WIN32
     h->add(h->rsp, (num_kernel_args + 1) * gpr_size);
 #endif
-    internal_call_postamble();
 }
 
 libxsmm_datatype TppEmitter::ov_to_xsmm_dtype(ov::element::Type_t elemet_type) {

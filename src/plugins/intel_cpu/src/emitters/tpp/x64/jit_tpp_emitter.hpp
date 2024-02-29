@@ -26,6 +26,10 @@ public:
 protected:
     void emit_impl(const std::vector<size_t>& in,
                    const std::vector<size_t>& out) const override;
+    void emit_call(const std::vector<size_t>& in,
+                   const std::vector<size_t>& out,
+                   const uintptr_t execute_function_ptr,
+                   const uintptr_t compiled_kernel_ptr) const;
     static ov::snippets::VectorDims get_projected_subtensor(const snippets::lowered::PortDescriptorPtr& desc);
 
     /// Generate function pointer to the thin wrapper over the kernel that is called in runtime on every iteration

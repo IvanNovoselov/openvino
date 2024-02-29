@@ -69,6 +69,18 @@ Divide::Divide(const Output<Node>& arg0, const Output<Node>& arg1, const AutoBro
 
 BINARY_AUX_METHODS(Divide)
 
+Minimum::Minimum(const Output<Node>& arg0, const Output<Node>& arg1, const AutoBroadcastSpec& auto_broadcast)
+        : BinaryEltwiseTPP(LIBXSMM_MELTW_TYPE_BINARY_MIN), ov::op::v1::Minimum(arg0, arg1, auto_broadcast) {
+}
+
+BINARY_AUX_METHODS(Minimum)
+
+Maximum::Maximum(const Output<Node>& arg0, const Output<Node>& arg1, const AutoBroadcastSpec& auto_broadcast)
+        : BinaryEltwiseTPP(LIBXSMM_MELTW_TYPE_BINARY_MAX), ov::op::v1::Maximum(arg0, arg1, auto_broadcast) {
+}
+
+BINARY_AUX_METHODS(Maximum)
+
 Exp::Exp(const Output<Node>& arg0) : UnaryEltwiseTPP(LIBXSMM_MELTW_TYPE_UNARY_EXP), ov::op::v0::Exp(arg0) {
 }
 

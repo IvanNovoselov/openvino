@@ -47,6 +47,7 @@
 #include "transformations/snippets/tpp/op/modifiers.hpp"
 #include "transformations/snippets/tpp/op/scalar.hpp"
 #include "emitters/tpp/x64/jit_eltwise_emitters.hpp"
+#include "emitters/tpp/x64/jit_vnni_transform_emitter.hpp"
 #include "emitters/tpp/x64/jit_brgemm_emitter.hpp"
 #include "emitters/tpp/x64/jit_scalar_emitter.hpp"
 #include "emitters/tpp/x64/jit_debug_emitter.hpp"
