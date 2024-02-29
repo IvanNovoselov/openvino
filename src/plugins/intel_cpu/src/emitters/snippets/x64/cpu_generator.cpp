@@ -259,6 +259,8 @@ intel_cpu::CPUTargetMachine::CPUTargetMachine(dnnl::impl::cpu::x64::cpu_isa_t ho
     jitters[intel_cpu::tpp::op::Subtract::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BinaryEltwiseTppEmitter);
     jitters[intel_cpu::tpp::op::Multiply::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BinaryEltwiseTppEmitter);
     jitters[intel_cpu::tpp::op::Divide::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BinaryEltwiseTppEmitter);
+    jitters[intel_cpu::tpp::op::Minimum::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BinaryEltwiseTppEmitter);
+    jitters[intel_cpu::tpp::op::Maximum::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(BinaryEltwiseTppEmitter);
 
     jitters[intel_cpu::tpp::op::Exp::get_type_info_static()] = CREATE_SNIPPETS_EMITTER(UnaryEltwiseTppEmitter);
     // Note: you can use can register Debug emitter for Unary/Binary operations as shown below:
