@@ -35,7 +35,7 @@ BrgemmTPP::BrgemmTPP(const Output<Node>& A, const Output<Node>& B,
       Brgemm(A, B,
              desc_a, desc_b, desc_c,
              std::move(layout_a), std::move(layout_b), std::move(layout_c),
-             blk_size_m, blk_size_n, blk_size_k) {
+             blk_size_m, blk_size_k, blk_size_n) {
     set_beta(beta);
 }
 
