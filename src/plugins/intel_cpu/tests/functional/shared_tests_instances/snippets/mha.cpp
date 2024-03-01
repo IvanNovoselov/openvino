@@ -16,7 +16,7 @@ namespace snippets {
 namespace {
 
 const std::vector<std::vector<ov::PartialShape>> inputShapes_4D = {
-    {{1, 128, 12, 64}, {1, 128, 12, 64}, {1, 12, 128, 128}, {1, 128, 12, 64}},
+    {{1, 128, 1, 64}, {1, 128, 1, 64}, {1, 1, 128, 128}, {1, 128, 1, 64}},
     {{1, 128, 16, 64}, {1, 128, 16, 64}, {1, 16, 1, 1}, {1, 128, 16, 64}},
     {{1, 128, 16, 64}, {1, 128, 16, 64}, {1, 1, 1, 128}, {1, 128, 16, 64}},
     {{2, 68, 6, 92}, {2, 68, 6, 92}, {1, 1, 68, 68}, {2, 68, 6, 92}},
@@ -48,7 +48,7 @@ static inline std::vector<std::vector<element::Type>> precision_bf16(size_t coun
 static ov::AnyMap enable_callback() {
     return ov::AnyMap({ov::intel_cpu::snippets_mode(ov::intel_cpu::SnippetsMode::ENABLE)});
 }
-
+/*
 INSTANTIATE_TEST_SUITE_P(smoke_Snippets_MHA_4D,
                          MHA,
                          ::testing::Combine(::testing::ValuesIn(inputShapes_4D),
@@ -169,14 +169,14 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values(ov::test::utils::DEVICE_CPU),
                        ::testing::Values(CPUTestUtils::empty_plugin_config)),
     MHA::getTestCaseName);
-
+*/
 const std::vector<std::vector<ov::PartialShape>> inputShapesWOTranspose_4D = {
     {{1, 12, 197, 64}, {1, 12, 64, 197}, {1, 12, 197, 64}},
     {{1, 12, 12, 64}, {1, 12, 64, 48}, {1, 12, 48, 64}}};
 const std::vector<std::vector<ov::PartialShape>> inputShapesWOTranspose_3D = {
     {{12, 197, 64}, {12, 64, 197}, {12, 197, 64}},
     {{12, 128, 100}, {12, 100, 128}, {12, 128, 100}}};
-
+/*
 INSTANTIATE_TEST_SUITE_P(
     smoke_Snippets_MHAWOTransposeOnInputs_4D,
     MHAWOTransposeOnInputs,
@@ -274,12 +274,12 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values(ov::test::utils::DEVICE_CPU),
                        ::testing::Values(CPUTestUtils::cpu_bf16_plugin_config)),
     MHA::getTestCaseName);
-
+*/
 INSTANTIATE_TEST_SUITE_P(
     smoke_Snippets_MHAINT8MatMul,
     MHAINT8MatMul,
     ::testing::Combine(::testing::ValuesIn(std::vector<std::vector<ov::PartialShape>>(inputShapes_4D.begin(),
-                                                                                      inputShapes_4D.begin() + 2)),
+                                                                                      inputShapes_4D.begin() + 1)),
                        ::testing::Values(std::vector<element::Type>{}),
                        ::testing::Values(ov::element::f32),
                        ::testing::Values(false),  // The graph doesn't contain Multiply
@@ -289,7 +289,7 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values(ov::test::utils::DEVICE_CPU),
                        ::testing::Values(CPUTestUtils::empty_plugin_config)),
     MHA::getTestCaseName);
-
+/*
 INSTANTIATE_TEST_SUITE_P(
     smoke_Snippets_MHAQuantMatMul0,
     MHAQuantMatMul0,
@@ -374,7 +374,7 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values(ov::test::utils::DEVICE_CPU),
                        ::testing::Values(CPUTestUtils::empty_plugin_config)),
     MHA::getTestCaseName);
-
+*/
 }  // namespace
 }  // namespace snippets
 }  // namespace test

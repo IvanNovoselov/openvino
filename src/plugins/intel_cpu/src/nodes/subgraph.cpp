@@ -377,6 +377,8 @@ void Snippet::initOptimalPrimitiveDescriptor() {
     SNIPPETS_REGISTER_PASS_ABSOLUTE(Place::PipelineEnd, ov::intel_cpu::tpp::pass::ScalarToScalarTPP);
     SNIPPETS_REGISTER_PASS_RELATIVE(Place::After, ov::intel_cpu::tpp::pass::BrgemmToBrgemmTPP,
                                     ov::intel_cpu::tpp::pass::EltwiseToEltwiseTPP);
+//    SNIPPETS_REGISTER_PASS_RELATIVE(Place::Before, ov::intel_cpu::pass::BrgemmToBrgemmCPU,
+//                                    ov::intel_cpu::tpp::pass::EltwiseToEltwiseTPP);
 #endif
 
 #undef SNIPPETS_REGISTER_PASS
@@ -572,6 +574,8 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
             jit_snippets_call_args call_args;
             update_ptrs(call_args, inMemPtrs, outMemPtrs);
             callable(&call_args, indexes);
+//            const auto a = call_args.buffer_scratchpad_ptr;
+//            std::cerr << a << "\n";
         });
 }
 

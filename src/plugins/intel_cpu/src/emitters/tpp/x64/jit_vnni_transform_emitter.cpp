@@ -3,6 +3,7 @@
 //
 
 #include "jit_vnni_transform_emitter.hpp"
+#include "snippets/utils.hpp"
 #include "transformations/snippets/tpp/op/vnni_transform.hpp"
 
 namespace ov {
@@ -18,14 +19,15 @@ VnniTransformTppEmitter::VnniTransformTppEmitter(dnnl::impl::cpu::x64::jit_gener
     OV_CPU_JIT_EMITTER_ASSERT(transform_node, "Invalid TPP node type detected");
 
     const auto& subtensor_in0 = get_projected_subtensor(io_port_descriptors[0]);
-    const auto& shape = io_port_descriptors[0]->get_shape();
+    const auto& planar_shape = snippets::utils::get_planar_vdims(io_port_descriptors[0]->get_shape(),
+                                                                 io_port_descriptors[0]->get_layout());
     // todo: subtensors are ignored, since blocking loop is incorporated into emitter
     //m_N_subtensor = static_cast<libxsmm_blasint>(*subtensor_in0.rbegin());
     m_N_subtensor = transform_node->get_n_block_size();
     // todo: M_blocking is currently ignored to reproduce BrgemmCopyB behavior
-    //const auto M_subtensor = static_cast<libxsmm_blasint>(*++shape.rbegin());
-    const auto M_subtensor = static_cast<libxsmm_blasint>(*++subtensor_in0.rbegin());
-    m_N_full = static_cast<libxsmm_blasint>(*shape.rbegin());
+    // const auto M_subtensor = static_cast<libxsmm_blasint>(*++subtensor_in0.rbegin());
+    const auto M_subtensor = static_cast<libxsmm_blasint>(*++planar_shape.rbegin());
+    m_N_full = static_cast<libxsmm_blasint>(*planar_shape.rbegin());
     m_N_subtensor = std::min(m_N_subtensor, m_N_full);
     m_N_tail = m_N_full % m_N_subtensor;
 

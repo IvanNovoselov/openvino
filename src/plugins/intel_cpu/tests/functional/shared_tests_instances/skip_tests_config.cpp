@@ -402,7 +402,7 @@ std::vector<std::string> disabledTestPatterns() {
     retVector.emplace_back(R"(.*smoke_Snippets_Convert.*)");
     // ABS and ROUND operations are needed for TPP support. Disable, since low precisions are not supported by TPP yet.
     retVector.emplace_back(R"(.*smoke_Snippets_FQ.*)");
-    retVector.emplace_back(R"(.*smoke_Snippets_TransposeMatMulFQ.*)");
+//    retVector.emplace_back(R"(.*smoke_Snippets_TransposeMatMulFQ.*)");
     // TPP doesn't support op with 2 outs, when one of them is Result (ticket: 130642)
     retVector.emplace_back(R"(.*smoke_Snippets_MaxNumParamsEltwise.*)");
     retVector.emplace_back(R"(.*smoke_Snippets_Eltwise_TwoResults.*)");
@@ -415,7 +415,7 @@ std::vector<std::string> disabledTestPatterns() {
     retVector.emplace_back(R"(.*smoke_Snippets_MatMulBiasQuantized.*)");
     retVector.emplace_back(R"(.*smoke_Snippets_MatMulQuantized.*)");
     retVector.emplace_back(R"(.*smoke_Snippets_MatMulQuantizedSoftmax.*)");
-    retVector.emplace_back(R"(.*smoke_Snippets_MHAINT8MatMul.*)");
+//    retVector.emplace_back(R"(.*smoke_Snippets_MHAINT8MatMul.*)");
     retVector.emplace_back(R"(.*smoke_Snippets_MHAQuantMatMul0.*)");
     retVector.emplace_back(R"(.*smoke_Snippets_MHAFQ.*)");
     retVector.emplace_back(R"(.*smoke_Snippets_PrecisionPropagation_Convertion.*)");

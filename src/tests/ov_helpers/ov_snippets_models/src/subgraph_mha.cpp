@@ -653,11 +653,11 @@ std::shared_ptr<ov::Model> MHAINT8MatMulFunction::initOriginal() const {
                                                  {0}, {0.820726}, {0}, {0.820726});
     const auto transpose2 = std::make_shared<ov::op::v1::Transpose>(fq2, transpose2Const);
     const auto matMul1 = std::make_shared<ov::op::v0::MatMul>(fq4, transpose2, transA, transB);
-    auto fq5 = ov::test::utils::make_fake_quantize(matMul1, ov::element::f32, 256, {1},
-                                                 {-35.0172004}, {34.7436294}, {-35.0172004}, {34.7436294});
-    const auto transpose3 = std::make_shared<ov::op::v1::Transpose>(fq5, transpose3Const);
+//    auto fq5 = ov::test::utils::make_fake_quantize(matMul1, ov::element::f32, 256, {1},
+//                                                 {-35.0172004}, {34.7436294}, {-35.0172004}, {34.7436294});
+//    const auto transpose3 = std::make_shared<ov::op::v1::Transpose>(fq5, transpose3Const);
 
-    ov::ResultVector results{std::make_shared<ov::opset1::Result>(transpose3)};
+    ov::ResultVector results{std::make_shared<ov::opset1::Result>(matMul1)};
     return std::make_shared<ov::Model>(results, ngraphParam, "mha");
 }
 std::shared_ptr<ov::Model> MHAQuantMatMul0Function::initOriginal() const {

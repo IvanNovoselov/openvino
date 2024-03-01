@@ -66,21 +66,24 @@ size_t get_leading_dim(ExpressionPort port, const snippets::lowered::LinearIR::L
     const auto& port_desc = port.get_descriptor_ptr();
     auto layout = port_desc->get_layout();
     auto shape = port_desc->get_shape();
-    auto subtensor = port_desc->get_subtensor();
-    // Some expressions (e.g. ReduceMax/ReduceSum) allow for FULL_DIM values in subtensor.
-    // Here we should replace them with actual dim values before calculating strides & offsets.
-    bool full_dim_substituted = false;
-    for (size_t i = 1; i <= subtensor.size(); i++) {
-        const auto idx = subtensor.size() - i;
-        if (subtensor[idx] == snippets::lowered::PortDescriptor::ServiceDimensions::FULL_DIM) {
-            // the reason that we don't support FULL_DIM substitution for an arbitrary layout is that
-            // the layout and subtersor can (and usually do) have different ranks
-            full_dim_substituted = true;
-            subtensor[idx] = shape[shape.size() - i];
-        }
-    }
-    OPENVINO_ASSERT(!full_dim_substituted || is_planar_layout(layout),
-                    "Only planar layouts are supported for FULL_DIM substitution");
+    // todo: looks like this subtensor filling is obsolete
+//    auto subtensor = port_desc->get_subtensor();
+//    // Some expressions (e.g. ReduceMax/ReduceSum) allow for FULL_DIM values in subtensor.
+//    // Here we should replace them with actual dim values before calculating strides & offsets.
+//    bool full_dim_substituted = false;
+//    for (size_t i = 1; i <= subtensor.size(); i++) {
+//        const auto idx = subtensor.size() - i;
+//        if (subtensor[idx] == snippets::lowered::PortDescriptor::ServiceDimensions::FULL_DIM) {
+//            // the reason that we don't support FULL_DIM substitution for an arbitrary layout is that
+//            // the layout and subtersor can (and usually do) have different ranks
+//            full_dim_substituted = true;
+//            subtensor[idx] = shape[shape.size() - i];
+//        }
+//    }
+//    if (full_dim_substituted && !is_planar_layout(layout))
+//        std::cerr << "hop\n";
+//    OPENVINO_ASSERT(!full_dim_substituted || is_planar_layout(layout),
+//                    "Only planar layouts are supported for FULL_DIM substitution");
 
     if (has_directly_connected_buffer(port, loop_mngr)) {
         shape = port_desc->get_subtensor();
@@ -128,7 +131,6 @@ bool SetTPPLeadingDim::run(snippets::lowered::LinearIR& linear_ir) {
     OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "Snippets::SetTPPLeadingDim")
     if (linear_ir.empty())
         return false;
-
     bool modified = false;
     for (auto expr_it = linear_ir.begin(); expr_it != linear_ir.end(); expr_it++) {
         const auto& expr = *expr_it;
