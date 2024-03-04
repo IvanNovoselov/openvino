@@ -45,6 +45,8 @@ public:
     void set_n_block_size(size_t block_size) { m_N_blk = block_size; }
 
     ov::Shape get_data_repacking_shape(const ov::snippets::VectorDims& planar_dims) const;
+    // TODO: remove + change emitter logic
+    ov::Shape get_data_repacking_shape_old(const ov::snippets::VectorDims& planar_dims) const;
     ov::Shape get_compensation_shape(const ov::snippets::VectorDims& planar_dims) const;
 
     Type get_type() const { return m_type; }
