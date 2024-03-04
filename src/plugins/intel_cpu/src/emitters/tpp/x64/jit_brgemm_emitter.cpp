@@ -74,11 +74,11 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
 
     if (in_0_prec == LIBXSMM_DATATYPE_U8) {
         in_0_prec = LIBXSMM_DATATYPE_I8;
-        m_compile_flags |= LIBXSMM_GEMM_FLAG_A_UNSIGNED;
+        m_compile_flags |= LIBXSMM_GEMM_FLAG_B_UNSIGNED;
     }
     if (in_1_prec == LIBXSMM_DATATYPE_U8) {
         in_1_prec = LIBXSMM_DATATYPE_I8;
-        m_compile_flags |= LIBXSMM_GEMM_FLAG_B_UNSIGNED;
+        m_compile_flags |= LIBXSMM_GEMM_FLAG_A_UNSIGNED;
     }
 
     m_shape = libxsmm_create_gemm_shape(N, M, K,
