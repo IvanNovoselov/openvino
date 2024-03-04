@@ -384,6 +384,7 @@ void Subgraph::data_flow_transformations(const BlockedShapeVector& blocked_input
                                          const std::vector<snippets::pass::Manager::PositionedPassBase>& backend_passes) {
     INTERNAL_OP_SCOPE(Subgraph);
     OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "Snippets::op::data_flow_transformations")
+    ov::pass::Serialize("snsdebug_ngraph.xml", "snsdebug_ngraph.bin").run_on_model(body_ptr());
 
     ov::snippets::pass::Manager manager;
     if (!blocked_input_shapes.empty())

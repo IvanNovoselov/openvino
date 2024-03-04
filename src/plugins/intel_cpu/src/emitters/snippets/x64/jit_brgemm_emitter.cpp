@@ -52,6 +52,7 @@ size_t jit_brgemm_emitter::get_out_leading_dim(const VectorDims& shape, const st
 jit_brgemm_emitter::jit_brgemm_emitter(jit_generator* h, cpu_isa_t isa, const ov::snippets::lowered::ExpressionPtr& expr) : jit_emitter(h, isa) {
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
     const auto& brgemm_node = as_type_ptr<ov::intel_cpu::BrgemmCPU>(expr->get_node());
+    friendly_name = brgemm_node->get_friendly_name();
     OV_CPU_JIT_EMITTER_ASSERT(!brgemm_node->is_dynamic(), "Snippets don't support code generation for dynamic Brgemm");
 
     std::vector<size_t> leading_dimensions;
@@ -233,14 +234,15 @@ void jit_brgemm_emitter::emit_brgemm_kernel_call(const brgemm_kernel_t *brg_kern
     }
 
     internal_call_preamble();
-
     // save function address in gpr to pass in call instruction
     const auto& brgemm_kernel_overload = static_cast<void (*)(const brgemm_kernel_t*,
                                                               const void*,
                                                               const void*,
                                                               void*,
                                                               void*,
-                                                              int)>(kernel_execute);
+                                                              int)>(friendly_name == "MatMul_44_original" ?
+                                                                    kernel_execute_debug :
+                                                                    kernel_execute);
     h->mov(h->rbp, reinterpret_cast<uintptr_t>(brgemm_kernel_overload));
     // todo: several of addr_{A, B, C} could be also abi_paramX, so one of them could be corrupted
     //  if moving directly h->uni_vmovq(abi_paramX, adr_X). Save them to vector regs to avoid corruption.
@@ -313,6 +315,37 @@ void jit_brgemm_emitter::kernel_execute(const brgemm_kernel_t *brg_kernel, const
     brgemm_p.BS = 1;  // default value
     OV_CPU_JIT_EMITTER_ASSERT(brg_kernel != nullptr, "has nullptr kernel");
     (*brg_kernel)(&brgemm_p);
+}
+
+void jit_brgemm_emitter::kernel_execute_debug(const brgemm_kernel_t *brg_kernel, const void *A, const void *B, void *C, void *scratch, int with_comp) {
+    brgemm_kernel_params_t brgemm_p;
+
+    brgemm_p.batch = nullptr;  // default value
+    brgemm_p.ptr_A = A;
+    brgemm_p.ptr_B = B;
+    brgemm_p.ptr_C = C;
+    brgemm_p.ptr_D = C;
+    brgemm_p.ptr_buf = scratch;
+    brgemm_p.ptr_bias = nullptr;
+    brgemm_p.do_post_ops = static_cast<size_t>(with_comp);
+    brgemm_p.do_apply_comp = static_cast<size_t>(with_comp);
+    brgemm_p.skip_accm = 0;
+    brgemm_p.BS = 1;  // default value
+    OV_CPU_JIT_EMITTER_ASSERT(brg_kernel != nullptr, "has nullptr kernel");
+    (*brg_kernel)(&brgemm_p);
+    auto A1 = reinterpret_cast<const int8_t*>(A);
+    auto B1 = reinterpret_cast<const u_int8_t*>(B);
+    auto C1 = reinterpret_cast<int32_t*>(C);
+    for (int i = 0; i < 64; i ++)
+        std::cout << +A1[i] << " ";
+    std::cout << "\n";
+    for (int i = 0; i < 64; i ++)
+        std::cout << +B1[i] << " ";
+    std::cout << "\n";
+    for (int i = 0; i < 64; i ++)
+        std::cout << static_cast<int32_t>(C1[i]) << " ";
+    std::cout << "\n" << std::flush;
+    std::cout << "\n";
 }
 
 }   // namespace intel_cpu

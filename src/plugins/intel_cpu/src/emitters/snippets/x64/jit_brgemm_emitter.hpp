@@ -42,6 +42,8 @@ private:
                                  size_t in0_kernel_offset = 0, size_t in1_kernel_offset = 0,
                                  size_t in2_kernel_offset = 0, size_t out0_kernel_offset = 0) const;
     static void kernel_execute(const dnnl::impl::cpu::x64::brgemm_kernel_t *brg_kernel, const void *A, const void *B, void *C, void *scratch, int with_comp);
+    static void kernel_execute_debug(const dnnl::impl::cpu::x64::brgemm_kernel_t *brg_kernel,
+                                     const void *A, const void *B, void *C, void *scratch, int with_comp);
 
     brgemmCtx m_ctx;
     std::unique_ptr<dnnl::impl::cpu::x64::brgemm_kernel_t> m_kernel = nullptr;
@@ -53,6 +55,7 @@ private:
     size_t m_load_offset_b = 0lu;
     size_t m_load_offset_scratch = 0lu;
     size_t m_store_offset_c = 0lu;
+    std::string friendly_name;
 
     std::vector<size_t> io_data_size {};
 
