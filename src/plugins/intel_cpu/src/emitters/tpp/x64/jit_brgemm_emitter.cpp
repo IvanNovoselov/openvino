@@ -113,19 +113,6 @@ void BrgemmTppEmitter::execute_brgemm_kernel(libxsmm_gemmfunction brg_kernel, vo
     gemm_p.c.primary = out0;
     assert(brg_kernel);
     brg_kernel(&gemm_p);
-    auto A = reinterpret_cast<int8_t*>(in0);
-    auto B = reinterpret_cast<u_int8_t*>(in1);
-    auto C = reinterpret_cast<int32_t*>(out0);
-    for (int i = 0; i < 64; i ++)
-        std::cout << +A[i] << " ";
-    std::cout << "\n";
-    for (int i = 0; i < 64; i ++)
-        std::cout << +B[i] << " ";
-    std::cout << "\n";
-    for (int i = 0; i < 64; i ++)
-        std::cout << static_cast<int32_t>(C[i]) << " ";
-    std::cout << "\n" << std::flush;
-    std::cout << "\n";
 }
 
 }  // namespace intel_cpu

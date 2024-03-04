@@ -43,14 +43,9 @@ protected:
         OV_CPU_JIT_EMITTER_ASSERT(emitter && emitter->m_execute_function && emitter->m_compiled_kernel,
                                   "Unable to execute binary kernel");
         // Note: put a breakpoint here and analyze all the necessary debug info in runtime
-        std::cout << emitter->m_source_node->get_friendly_name() << " : ";
+        std::cout << emitter->m_source_node->get_friendly_name() << std::endl;
         auto f = reinterpret_cast<void(*)(uintptr_t, void*, void*, void*)>(emitter->m_execute_function);
         f(emitter->m_compiled_kernel, in0, in1, out0);
-        auto o = reinterpret_cast<float*>(out0);
-        for (int i  = 0; i < 32; i++)
-            std::cout << o[i] << " ";
-        std::cout << "\n" << std::flush;
-        std::cout << " ";
     }
 
     const uintptr_t get_execute_function_ptr() const override {
