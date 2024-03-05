@@ -62,12 +62,12 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
                               (is_bf16_gemm && K % 2 == 0) ||
                               (is_i8_gemm && K % 4 == 0),
                               "Unsupported parameter combination for kernel configuration");
-
-    m_compile_flags = is_f32_gemm ?
-                      LIBXSMM_GEMM_FLAGS('N', 'N') :
-                      LIBXSMM_GEMM_VNNI_FLAGS('N', 'N', 'V', 'N') |
-                      LIBXSMM_GEMM_FLAG_NO_SETUP_TILECONFIG |
-                      LIBXSMM_GEMM_FLAG_NO_RESET_TILECONFIG;
+    m_with_amx = dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx512_core_amx) && !is_f32_gemm;
+    m_compile_flags_amx_tile_config = is_f32_gemm ?
+                                      LIBXSMM_GEMM_FLAGS('N', 'N') :
+                                      LIBXSMM_GEMM_VNNI_FLAGS('N', 'N', 'V', 'N') |
+                                      LIBXSMM_GEMM_FLAG_NO_RESET_TILECONFIG;
+    m_compile_flags = m_compile_flags_amx_tile_config | LIBXSMM_GEMM_FLAG_NO_SETUP_TILECONFIG;
 
     if (beta == 0)
         m_compile_flags |= LIBXSMM_GEMM_FLAG_BETA_0;
@@ -86,6 +86,31 @@ BrgemmTppEmitter::BrgemmTppEmitter(jit_generator* h, cpu_isa_t isa, const Expres
                                         in_1_prec, in_0_prec, out_0_prec,
                                         exec_dtype);
     m_prefetching_flags = LIBXSMM_GEMM_PREFETCH_NONE;
+}
+
+void BrgemmTppEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size_t>& out) const {
+    internal_call_preamble();
+
+    if (m_with_amx) {
+        Xbyak::Reg64 in0(static_cast<int>(in[0]));
+        Xbyak::Reg64 in1(static_cast<int>(in[1]));
+        Xbyak::Reg64 out0(static_cast<int>(out[0]));
+        h->push(in0);
+        h->push(in1);
+        h->push(out0);
+        h->mov(in0, NULL);
+        h->mov(in1, NULL);
+        h->mov(out0, NULL);
+        const auto amx_time_config_kernel = reinterpret_cast<const uintptr_t> (libxsmm_dispatch_gemm(m_shape,
+                                                                                                     m_compile_flags_amx_tile_config,
+                                                                                                     m_prefetching_flags));
+        emit_call(in, out, get_execute_function_ptr(), amx_time_config_kernel);
+        h->pop(out0);
+        h->pop(in1);
+        h->pop(in0);
+    }
+    emit_call(in, out, get_execute_function_ptr(), get_compiled_kernel_ptr());
+    internal_call_postamble();
 }
 
 std::set<std::vector<element::Type>> BrgemmTppEmitter::get_supported_precisions(const std::shared_ptr<ov::Node>& node) {
@@ -113,6 +138,14 @@ void BrgemmTppEmitter::execute_brgemm_kernel(libxsmm_gemmfunction brg_kernel, vo
     gemm_p.c.primary = out0;
     assert(brg_kernel);
     brg_kernel(&gemm_p);
+}
+void BrgemmTppEmitter::execute_amx_tile_config(libxsmm_gemmfunction cfg_kernel) {
+    libxsmm_gemm_param gemm_p;
+    gemm_p.a.primary = reinterpret_cast<void*>(NULL);
+    gemm_p.b.primary = reinterpret_cast<void*>(NULL);
+    gemm_p.c.primary = reinterpret_cast<void*>(NULL);
+    assert(cfg_kernel);
+    cfg_kernel(&gemm_p);
 }
 
 }  // namespace intel_cpu
