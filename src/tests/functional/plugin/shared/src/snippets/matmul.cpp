@@ -33,13 +33,6 @@ void MatMul::SetUp() {
     std::vector<ov::element::Type> elem_types;
     std::tie(input_shapes, elem_types, ref_num_nodes, ref_num_subgraphs, targetDevice) = this->GetParam();
     init_input_shapes(static_partial_shapes_to_test_representation(input_shapes));
-    if (std::all_of(elem_types.begin(), elem_types.end(), [](const element::Type_t& t) {return t == element::f32;})) {
-        abs_threshold = 1e-4;
-        rel_threshold = 1e-4;
-    } else {
-        abs_threshold = 1;
-        rel_threshold = 1e-4;
-    }
     init_subgraph(input_shapes, elem_types);
     if (!configuration.count("SNIPPETS_MODE")) {
         configuration.insert({"SNIPPETS_MODE", "IGNORE_CALLBACK"});

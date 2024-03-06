@@ -134,8 +134,8 @@ BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
                                                                get_block_size_m(M),
                                                                get_block_size_k(K),
                                                                get_block_size_n(N));
-        if (brgemm_tpp)
-            std::cerr << "Brgemm TPP was created successfully\n";
+//        if (brgemm_tpp)
+//            std::cerr << "Brgemm TPP was created successfully\n";
 
         brgemm_tpp->set_friendly_name(brgemm->get_friendly_name());
         ov::replace_node(brgemm, brgemm_tpp);
