@@ -285,6 +285,18 @@ void SubgraphBaseTest::compare(const std::vector<ov::Tensor>& expected,
                     }
                     std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
                 }
+            } else if (exp.get_element_type() == element::bf16) {
+                auto exp_data = exp.data<ov::bfloat16>();
+                auto act_data = act.data<ov::bfloat16>();
+                std::cerr << "exp vs actual (bfloat16)\n";
+                for (int k = 0; k < std::min(exp.get_size(), 1024ul); k++) {
+                    std::string mark;
+                    if (abs(exp_data[k] - act_data[k]) > 1e-4) {
+                        mark = " ***";
+                        num_fail++;
+                    }
+                    std::cerr << k << " : " << exp_data[k] << " : " << act_data[k] << mark << "\n";
+                }
             } else if (exp.get_element_type() == element::i8) {
                 auto exp_data = exp.data<int8_t>();
                 auto act_data = act.data<int8_t>();

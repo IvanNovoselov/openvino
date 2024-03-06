@@ -364,6 +364,8 @@ bool intel_cpu::CPUGenerator::uses_precompiled_kernel(const std::shared_ptr<snip
 #endif
 #ifdef SNIPPETS_LIBXSMM_TPP
     need |= std::dynamic_pointer_cast<intel_cpu::ReferenceUnaryEltwiseTppEmitter>(e) ||
+            // todo: we need to save it only if amx is supported (to store amx config)
+            std::dynamic_pointer_cast<intel_cpu::BrgemmTppEmitter>(e) ||
             std::dynamic_pointer_cast<intel_cpu::DebugTppEmitter>(e);
 #endif
     return need;

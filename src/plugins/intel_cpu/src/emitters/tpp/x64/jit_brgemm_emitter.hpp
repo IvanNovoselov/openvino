@@ -18,7 +18,7 @@ public:
     static std::set<std::vector<element::Type>> get_supported_precisions(const std::shared_ptr<ov::Node>& node = nullptr);
 
     static void execute_brgemm_kernel(libxsmm_gemmfunction brgemm_kernel, void *in0, void *in1, void *out0);
-    static void execute_amx_tile_config(libxsmm_gemmfunction cfg_kernel);
+    static void execute_amx_tile_config(libxsmm_tilecfgfunction cfg_kernel, void *in0, void *in1, void *out0);
 
     const uintptr_t get_execute_function_ptr() const override { return reinterpret_cast<const uintptr_t>(execute_brgemm_kernel); }
     const uintptr_t get_compiled_kernel_ptr() const override;
@@ -27,12 +27,13 @@ protected:
     void validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const override;
     void emit_impl(const std::vector<size_t>& in, const std::vector<size_t>& out) const override;
     static void validate_subtensors(const VectorDims& in_0, const VectorDims& in_1, const VectorDims& out_0);
-    libxsmm_gemm_shape m_shape;
+    libxsmm_gemm_shape m_shape{};
     libxsmm_bitfield m_prefetching_flags {0};
     // compile flags for amx tile configuration kernel
     libxsmm_bitfield m_compile_flags_amx_tile_config {0};
     // true is amx tile configuration is needed
     bool m_with_amx = false;
+    libxsmm_tilecfg_state m_amx_cfg_state{};
 };
 
 }   // namespace intel_cpu
