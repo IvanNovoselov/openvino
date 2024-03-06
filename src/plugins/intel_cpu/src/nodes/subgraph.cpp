@@ -371,18 +371,14 @@ void Snippet::initOptimalPrimitiveDescriptor() {
     SNIPPETS_REGISTER_PASS_ABSOLUTE(Place::PipelineEnd, ov::intel_cpu::pass::MulAddToFMA);
 
 #ifdef SNIPPETS_LIBXSMM_TPP
-    SNIPPETS_REGISTER_PASS_RELATIVE(Place::Before, ov::intel_cpu::pass::BrgemmToBrgemmCPU,
-                                    ov::intel_cpu::tpp::pass::BrgemmToBrgemmTPP);
-    // Note: There could be several ConvertConstantsToScalars instances in the pipeline
-    SNIPPETS_REGISTER_PASS_ABSOLUTE(Place::PipelineEnd, ov::intel_cpu::tpp::pass::ScalarToScalarTPP);
     if (snippetAttrs.snippet->has_domain_sensitive_ops()) {
+        SNIPPETS_REGISTER_PASS_RELATIVE(Place::Before, ov::intel_cpu::pass::BrgemmToBrgemmCPU,
+                                    ov::intel_cpu::tpp::pass::BrgemmToBrgemmTPP);
+        // Note: There could be several ConvertConstantsToScalars instances in the pipeline
+        SNIPPETS_REGISTER_PASS_ABSOLUTE(Place::PipelineEnd, ov::intel_cpu::tpp::pass::ScalarToScalarTPP);
         SNIPPETS_REGISTER_PASS_RELATIVE(Place::After, ov::intel_cpu::tpp::pass::BrgemmToBrgemmTPP,
                                         ov::intel_cpu::tpp::pass::EltwiseToEltwiseTPP);
     }
-//    if (snippetAttrs.snippet->has_domain_sensitive_ops()) {
-//        SNIPPETS_REGISTER_PASS_RELATIVE(Place::Before, ov::intel_cpu::pass::BrgemmToBrgemmCPU,
-//                                        ov::intel_cpu::tpp::pass::EltwiseToEltwiseTPP);
-//    }
 #endif
 
 #undef SNIPPETS_REGISTER_PASS
