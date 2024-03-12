@@ -35,7 +35,6 @@ std::vector<size_t> get_buffer_loop_ids(const std::vector<size_t>& lhs, const st
 ov::Shape compute_allocation_shape(const LinearIR::LoopManagerPtr& loop_manager,
                                    const std::vector<size_t>& buffer_loop_ids,
                                    const ExpressionPort& parent_expr_output,
-                                   const std::set<ExpressionPort>& expr_inputs,
                                    const int allocation_rank) {
     const auto& parent_expr = parent_expr_output.get_expr();
     const auto& parent_loop_ids = parent_expr->get_loop_ids();
@@ -183,7 +182,6 @@ void InsertBuffers::insertion(LinearIR& linear_ir,
             const auto allocation_shape = compute_allocation_shape(loop_manager,
                                                                    buffer_loop_ids,
                                                                    parent_expr_output,
-                                                                   {*entry_port},
                                                                    m_buffer_allocation_rank);
             const auto buffer = std::make_shared<op::IntermediateMemoryBuffer>(parent->output(parent_port), allocation_shape);
             linear_ir.insert_node(buffer, std::vector<ExpressionPort>{ parent_expr_output }, buffer_loop_ids, false, pos, { *entry_port });
@@ -270,7 +268,6 @@ void InsertBuffers::insertion(LinearIR& linear_ir,
             const auto allocation_shape = compute_allocation_shape(loop_manager,
                                                                    buffer_loop_ids,
                                                                    *exit_port,
-                                                                   child_exprs_inputs,
                                                                    m_buffer_allocation_rank);
             auto buffer = std::make_shared<op::IntermediateMemoryBuffer>(node->output(port_idx), allocation_shape);
             // We cannot insert Node output connector on Buffer output because not all consumers of Node needs Buffer
