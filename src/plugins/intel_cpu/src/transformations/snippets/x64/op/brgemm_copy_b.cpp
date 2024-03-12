@@ -104,7 +104,7 @@ ov::Shape intel_cpu::BrgemmCopyB::get_data_repacking_shape_old(const ov::snippet
 }
 
 ov::Shape intel_cpu::BrgemmCopyB::get_compensation_shape(const ov::snippets::VectorDims& planar_dims) const {
-    return ov::Shape{m_N_blk};
+    return ov::Shape{m_inner_n_block};
 }
 
 std::shared_ptr<Node> intel_cpu::BrgemmCopyB::clone_with_new_inputs(const OutputVector& new_args) const {
