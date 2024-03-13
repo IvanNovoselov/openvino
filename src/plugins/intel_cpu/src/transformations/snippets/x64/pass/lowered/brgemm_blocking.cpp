@@ -155,6 +155,12 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
                 *++copy_b_subtensor.rbegin() = *++copy_b_planar_dims.rbegin();
             }
 
+            // TODO: some tests fail on SPR if the loop is marked. Need to investigate
+            if (block_size_k == k) {
+                brgemm->set_beta(0.f);
+                return;
+            }
+
             const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it, false);
             const auto loop_end_it = std::next(expr_it);
 
