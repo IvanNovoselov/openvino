@@ -64,20 +64,23 @@ pass::SetBrgemmCPUBlockingParams::SetBrgemmCPUBlockingParams() {
         const auto& M = *(brgemm_in0_dims.rbegin() + 1);
         const auto& K = *brgemm_in0_dims.rbegin();
         const auto& N = *brgemm_in1_dims.rbegin();
+        const auto m_blk = get_block_size_m(M);
+        const auto k_blk = get_block_size_k(K);
+        const auto n_blk = get_block_size_n(N);
+
         if (brgemm->is_with_data_repacking()) {
             const auto brgemm_copy_b = brgemm->get_brgemm_copy();
             const auto brgemmVNNIFactor = brgemm_copy_b->get_brgemm_vnni_factor();
-            const size_t copy_b_block_size_k = get_block_size_k(K);
-            std::cout << "[ INFO ] copy_b_block_size_k = " << copy_b_block_size_k << std::endl;
-            OPENVINO_ASSERT(copy_b_block_size_k == K || copy_b_block_size_k % brgemmVNNIFactor == 0,
+            std::cout << "[ INFO ] copy_b_block_size_k = " << k_blk << std::endl;
+            OPENVINO_ASSERT(k_blk == K || k_blk % brgemmVNNIFactor == 0,
                             "Block size which is not divisible by 4 is not supported for brgemm data repacking.");
-            brgemm_copy_b->set_k_block_size(copy_b_block_size_k);
-            brgemm_copy_b->set_n_block_size(get_block_size_n(N));
+            brgemm_copy_b->set_k_block_size(k_blk);
+            brgemm_copy_b->set_n_block_size(n_blk);
         }
 
-        brgemm->set_m_block_size(get_block_size_m(M));
-        brgemm->set_k_block_size(get_block_size_k(K));
-        brgemm->set_n_block_size(get_block_size_n(N));
+        brgemm->set_m_block_size(m_blk);
+        brgemm->set_k_block_size(k_blk);
+        brgemm->set_n_block_size(n_blk);
         return false;
     };
 
