@@ -49,38 +49,41 @@ jit_brgemm_copy_b_emitter::jit_brgemm_copy_b_emitter(jit_generator* h, cpu_isa_t
     const auto& N = *(transposed_shape.rbegin());
     const auto& K = *(transposed_shape.rbegin() + 1);
 
-    const auto& brgemm_prc_in0 = brgemm_repack->get_src_element_type();
-    const auto& brgemm_prc_in1 = brgemm_repack->get_input_element_type(0);
-
-    m_LDB = brgemm_prc_in1 == ov::element::f32 ? leading_dimension : rnd_up(N, brgemm_repack->get_n_block_size());
-
-    const auto dt_in0 = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::ElementTypeToDataType(brgemm_prc_in0));
-    const auto dt_in1 = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::ElementTypeToDataType(brgemm_prc_in1));
-
-    const auto brgemmVNNIFactor = 4 / brgemm_prc_in0.size();
-    const auto use_amx = mayiuse(avx512_core_amx) && brgemm_prc_in0 != ov::element::f32 && (K % brgemmVNNIFactor == 0) && (N % brgemmVNNIFactor == 0);
-
     const auto& subtensor = in_desc->get_subtensor();
     for (const auto& out_desc : expr->get_output_port_descriptors()) {
         OV_CPU_JIT_EMITTER_ASSERT(out_desc->get_subtensor() == subtensor, "all subtensors must be equal");
     }
     m_N_blk = *subtensor.rbegin();
     m_K_blk = *++subtensor.rbegin();
-    init_brgemm_copy(m_kernel, leading_dimension, m_N_blk, m_LDB, m_K_blk, use_amx, dt_in0, dt_in1);
+
+    m_inner_N_block = brgemm_repack->get_n_inner_block_size();
+    m_inner_N_tail = m_N_blk % m_inner_N_block;
+    m_LDB = m_brgemm_prc == ov::element::f32 ? leading_dimension : rnd_up(N, m_inner_N_block);
+
+    const auto& brgemm_prc_src = brgemm_repack->get_src_element_type();
+    m_brgemm_prc = brgemm_repack->get_input_element_type(0);
+    m_brgemmVNNIFactor = brgemm_repack->get_brgemm_vnni_factor();
+
+    const auto use_amx = mayiuse(avx512_core_amx) && brgemm_prc_src != ov::element::f32 && (K % m_brgemmVNNIFactor == 0) && (N % m_brgemmVNNIFactor == 0);
+
+    const auto src_dt = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::ElementTypeToDataType(brgemm_prc_src));
+    const auto wei_dt = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::ElementTypeToDataType(m_brgemm_prc));
+
+    init_brgemm_copy(m_kernel, leading_dimension, m_inner_N_block, m_inner_N_tail, m_LDB, m_K_blk, use_amx, src_dt, wei_dt);
 }
 
 void jit_brgemm_copy_b_emitter::init_brgemm_copy(std::unique_ptr<matmul::jit_brgemm_matmul_copy_b_t>& kernel,
-                                                 size_t N, size_t N_blk, size_t LDB, size_t K, bool is_with_amx,
-                                                 dnnl_data_type_t dt_in0, dnnl_data_type_t dt_in1) const {
+                                                 size_t N, size_t N_blk, size_t N_tail, size_t LDB, size_t K,
+                                                 bool is_with_amx, dnnl_data_type_t src_dt, dnnl_data_type_t wei_dt) const {
     matmul::brgemm_matmul_conf_t brgCopyKernelConf;
-    brgCopyKernelConf.src_dt = dt_in0;
-    brgCopyKernelConf.wei_dt = dt_in1;
+    brgCopyKernelConf.src_dt = src_dt;
+    brgCopyKernelConf.wei_dt = wei_dt;
     brgCopyKernelConf.wei_n_blk = static_cast<int>(N_blk);
     brgCopyKernelConf.wei_tag = dnnl_abcd;  // What's about other ranks?
     brgCopyKernelConf.copy_B_wei_stride = 0;
     brgCopyKernelConf.LDB = static_cast<dim_t>(LDB);
     brgCopyKernelConf.N =  static_cast<dim_t>(N);
-    brgCopyKernelConf.N_tail =  0;
+    brgCopyKernelConf.N_tail = static_cast<dim_t>(N_tail);
     brgCopyKernelConf.N_blk =  static_cast<dim_t>(N_blk);
     brgCopyKernelConf.K =  static_cast<dim_t>(K);
     brgCopyKernelConf.K_blk =  static_cast<dim_t>(K);
@@ -93,8 +96,8 @@ void jit_brgemm_copy_b_emitter::init_brgemm_copy(std::unique_ptr<matmul::jit_brg
         brgCopyKernelConf.isa = avx512_core_amx;
         brgCopyKernelConf.s8s8_compensation_required = false;
     } else {
-        brgCopyKernelConf.isa = dt_in0 == dnnl_data_type_t::dnnl_bf16 ? avx512_core_bf16 : avx512_core_vnni;
-        brgCopyKernelConf.s8s8_compensation_required = dt_in0 == dnnl_data_type_t::dnnl_s8;
+        brgCopyKernelConf.isa = src_dt == dnnl_data_type_t::dnnl_bf16 ? avx512_core_bf16 : avx512_core_vnni;
+        brgCopyKernelConf.s8s8_compensation_required = src_dt == dnnl_data_type_t::dnnl_s8;
     }
 
     brgCopyKernelConf.has_zero_point_a = false;
@@ -122,18 +125,33 @@ void jit_brgemm_copy_b_emitter::emit_impl(const std::vector<size_t>& in, const s
 
     std::cout << "[ INFO ] BrgemmCopyB emitter: common info\n";
     std::cout << "\t m_N_blk = " << m_N_blk << std::endl;
+    std::cout << "\t m_inner_N_block = " << m_inner_N_block << std::endl;
+    std::cout << "\t m_inner_N_tail = " << m_inner_N_tail << std::endl;
     std::cout << "\t m_K_blk = " << m_K_blk << std::endl;
+    std::cout << "\t m_LDB = " << m_LDB << std::endl;
     std::cout << "\t with compensations = " << m_with_comp << std::endl;
     std::cout << "\t m_in_offset = " << m_in_offset << std::endl;
     std::cout << "\t m_out_offset = " << m_out_offset << std::endl;
     std::cout << "\t m_comp_offset = " << m_comp_offset << std::endl;
 
-    std::cout << "[ INFO ] BrgemmCopyB emitter: new version\n";
-    emit_kernel_call(m_kernel.get(), src, dst, comp, m_in_offset, m_out_offset, m_comp_offset);
+    std::cout << "[ INFO ] BrgemmCopyB emitter: inner loop\n";
+    const size_t data_size = m_brgemm_prc.size();
+    for (size_t nb = 0; nb < div_up(m_N_blk, m_inner_N_block); nb++) {
+        const size_t offset_in = m_in_offset + nb * m_inner_N_block * data_size;
+        const size_t offset_out = m_out_offset + nb * m_inner_N_block * m_brgemmVNNIFactor * data_size;
+        const size_t offset_comp = m_with_comp ? m_comp_offset + nb * m_inner_N_block * sizeof(int32_t) : 0;
+
+        const bool is_N_tail = (m_N_blk - nb * m_inner_N_block < m_inner_N_block);
+        const auto current_N_blk = is_N_tail ? m_inner_N_tail : m_inner_N_block;
+        std::cout << "\t it = " << nb << std::endl;
+        std::cout << "\t current_N_blk = " << current_N_blk << std::endl;
+
+        emit_kernel_call(m_kernel.get(), src, dst, comp, current_N_blk, m_K_blk, offset_in, offset_out, offset_comp);
+    }
 }
 
 void jit_brgemm_copy_b_emitter::emit_kernel_call(const matmul::jit_brgemm_matmul_copy_b_t* kernel, Reg64 src, Reg64 dst, Reg64 comp,
-                                                 size_t offset_in, size_t offset_out, size_t offset_comp) const {
+                                                 size_t N, size_t K, size_t offset_in, size_t offset_out, size_t offset_comp) const {
     const auto data_ptr = [&](Xmm xmm, Xbyak::Reg64 reg, size_t bytes_offset) {
         h->uni_vmovq(reg, xmm);
         if (bytes_offset) h->add(reg, bytes_offset);
@@ -181,11 +199,11 @@ void jit_brgemm_copy_b_emitter::emit_kernel_call(const matmul::jit_brgemm_matmul
     size_t abi_param_count = sizeof(abi_param_regs) / sizeof(abi_param_regs[0]);
 
     h->sub(h->rsp, num_args_passed_on_stack * gpr_size);
-    push_value(m_N_blk, abi_param_count + 0);
-    push_value(m_K_blk, abi_param_count + 1);
+    push_value(N, abi_param_count + 0);
+    push_value(K, abi_param_count + 1);
 #else
-    h->mov(abi_param5, m_N_blk);
-    h->mov(abi_param6, m_K_blk);
+    h->mov(abi_param5, N);
+    h->mov(abi_param6, K);
 #endif
 
     internal_call_rsp_align();

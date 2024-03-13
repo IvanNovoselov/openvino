@@ -74,12 +74,8 @@ pass::SetBrgemmCPUBlockingParams::SetBrgemmCPUBlockingParams() {
             const size_t copy_b_block_size_k = use_amx ? get_block_size_k(K) : K;
             OPENVINO_ASSERT(copy_b_block_size_k == K || copy_b_block_size_k % brgemmVNNIFactor == 0,
                             "Block size which is not divisible by 4 is not supported for brgemm data repacking.");
-            static const std::set<size_t> supported_by_one_dnn_block_sizes{16, 32, 48, 64};
-            const size_t copy_b_block_size_n = get_block_size_n(N);
-            OPENVINO_ASSERT(supported_by_one_dnn_block_sizes.count(copy_b_block_size_n), "brgemm_copy_b: N block is not supported by oneDNN");
-
             brgemm_copy_b->set_k_block_size(copy_b_block_size_k);
-            brgemm_copy_b->set_n_block_size(copy_b_block_size_n);
+            brgemm_copy_b->set_n_block_size(get_block_size_n(N));
         }
 
         brgemm->set_m_block_size(get_block_size_m(M));

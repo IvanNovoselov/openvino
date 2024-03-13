@@ -94,13 +94,13 @@ void intel_cpu::BrgemmCopyB::compute_block_size_values(const size_t blk_size_k, 
 
 ov::Shape intel_cpu::BrgemmCopyB::get_data_repacking_shape(const ov::snippets::VectorDims& planar_dims) const {
     const auto& K = *(planar_dims.rbegin() + 1);
-    return ov::Shape{rnd_up(K, m_brgemmVNNIFactor), m_N_blk};
+    return ov::Shape{rnd_up(K, m_brgemmVNNIFactor), m_inner_n_block};
 }
 
 ov::Shape intel_cpu::BrgemmCopyB::get_data_repacking_shape_old(const ov::snippets::VectorDims& planar_dims) const {
     const auto& N = *planar_dims.rbegin();
     const auto& K = *(planar_dims.rbegin() + 1);
-    return ov::Shape{rnd_up(K, m_brgemmVNNIFactor), rnd_up(N, m_N_blk)};
+    return ov::Shape{rnd_up(K, m_brgemmVNNIFactor), rnd_up(N, m_inner_n_block)};
 }
 
 ov::Shape intel_cpu::BrgemmCopyB::get_compensation_shape(const ov::snippets::VectorDims& planar_dims) const {

@@ -27,10 +27,10 @@ private:
     void emit_impl(const std::vector<size_t>& in, const std::vector<size_t>& out) const override;
 
     void init_brgemm_copy(std::unique_ptr<dnnl::impl::cpu::x64::matmul::jit_brgemm_matmul_copy_b_t>& kernel,
-                          size_t N, size_t N_blk, size_t LDB, size_t K, bool is_with_amx,
-                          dnnl_data_type_t dt_in0, dnnl_data_type_t dt_in1) const;
+                          size_t N, size_t N_blk, size_t N_tail, size_t LDB, size_t K,
+                          bool is_with_amx, dnnl_data_type_t dt_in0, dnnl_data_type_t dt_in1) const;
     void emit_kernel_call(const dnnl::impl::cpu::x64::matmul::jit_brgemm_matmul_copy_b_t* kernel,
-                          Xbyak::Reg64 src, Xbyak::Reg64 dst, Xbyak::Reg64 comp,
+                          Xbyak::Reg64 src, Xbyak::Reg64 dst, Xbyak::Reg64 comp, size_t N, size_t K,
                           size_t offset_in, size_t offset_out, size_t offset_comp) const;
 
     static void execute(dnnl::impl::cpu::x64::matmul::jit_brgemm_matmul_copy_b_t* kernel,
@@ -38,9 +38,11 @@ private:
 
     std::unique_ptr<dnnl::impl::cpu::x64::matmul::jit_brgemm_matmul_copy_b_t> m_kernel;
 
-    size_t m_N_blk = 0lu;
-    size_t m_K_blk = 0lu;
-    size_t m_LDB = 0lu;
+    ov::element::Type m_brgemm_prc;
+    size_t m_N_blk, m_inner_N_block, m_inner_N_tail;
+    size_t m_K_blk;
+    size_t m_LDB;
+    size_t m_brgemmVNNIFactor;
 
     size_t m_in_offset = 0lu;
     size_t m_out_offset = 0lu;
