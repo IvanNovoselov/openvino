@@ -37,12 +37,14 @@ void Generator::generate(lowered::LinearIR& linear_ir, LoweringResult& result, c
     //    3. OptimizeLoopSingleEvaluation must be called after CleanupLoopOffsets
     //       since CleanupLoopOffsets can't handle loops with evaluate_once = true
     lowered_pipeline.register_pass<lowered::pass::AssignRegisters>(reg_type_mapper);
-    // std::string postfix = ".xml";
-    // lowered_pipeline.register_pass<lowered::pass::SerializeDataFlow>("/home/vgolubev/models/data_flow" + postfix);
+    std::string postfix = ".xml";
+    if (std::getenv("SERIALIZE"))
+        lowered_pipeline.register_pass<lowered::pass::SerializeDataFlow>("/home/vgolubev/models/data_flow" + postfix);
     lowered_pipeline.register_pass<lowered::pass::InsertSpecificIterations>();
     lowered_pipeline.register_pass<lowered::pass::CleanupLoopOffsets>();
     lowered_pipeline.register_pass<lowered::pass::OptimizeLoopSingleEvaluation>();
-    // lowered_pipeline.register_pass<lowered::pass::SerializeControlFlow>("/home/vgolubev/models/control_flow" + postfix);
+    if (std::getenv("SERIALIZE"))
+        lowered_pipeline.register_pass<lowered::pass::SerializeControlFlow>("/home/vgolubev/models/control_flow" + postfix);
     lowered_pipeline.run(linear_ir);
     linear_ir.init_emitters(target);
 
