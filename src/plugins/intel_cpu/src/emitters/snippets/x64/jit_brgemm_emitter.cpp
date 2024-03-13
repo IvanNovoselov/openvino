@@ -121,6 +121,11 @@ jit_brgemm_emitter::jit_brgemm_emitter(jit_generator* h, cpu_isa_t isa, const ov
     m_store_offset_c = brgemm_node->get_offset_c();
     if (m_with_scratch)
         m_load_offset_scratch = brgemm_node->get_offset_scratch();
+    std::cout << "[ COMPILATION ] BrgemmCPU emitter:\n";
+    std::cout << "\t m_ctx.M = " << m_ctx.M << std::endl;
+    std::cout << "\t m_ctx.N = " << m_ctx.N << std::endl;
+    std::cout << "\t m_ctx.K = " << m_ctx.K << std::endl;
+    std::cout << "\t m_ctx.LDB = " << m_ctx.LDB << std::endl;
 }
 
 std::set<std::vector<element::Type>> jit_brgemm_emitter::get_supported_precisions(const std::shared_ptr<ov::Node>& node) {

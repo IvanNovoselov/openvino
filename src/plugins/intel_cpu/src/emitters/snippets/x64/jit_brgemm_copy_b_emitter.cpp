@@ -123,7 +123,7 @@ void jit_brgemm_copy_b_emitter::emit_impl(const std::vector<size_t>& in, const s
     Xbyak::Reg64 dst(static_cast<int>(out[0]));
     Xbyak::Reg64 comp(static_cast<int>(m_with_comp ? out[1] : 0));
 
-    std::cout << "[ INFO ] BrgemmCopyB emitter: common info\n";
+    std::cout << "[ COMPILATION ] BrgemmCopyB emitter\n";
     std::cout << "\t m_N_blk = " << m_N_blk << std::endl;
     std::cout << "\t m_inner_N_block = " << m_inner_N_block << std::endl;
     std::cout << "\t m_inner_N_tail = " << m_inner_N_tail << std::endl;
@@ -134,7 +134,7 @@ void jit_brgemm_copy_b_emitter::emit_impl(const std::vector<size_t>& in, const s
     std::cout << "\t m_out_offset = " << m_out_offset << std::endl;
     std::cout << "\t m_comp_offset = " << m_comp_offset << std::endl;
 
-    std::cout << "[ INFO ] BrgemmCopyB emitter: inner loop\n";
+    std::cout << "\t Inner loop:\n";
     const size_t data_size = m_brgemm_prc.size();
     for (size_t nb = 0; nb < div_up(m_N_blk, m_inner_N_block); nb++) {
         const size_t offset_in = m_in_offset + nb * m_inner_N_block * data_size;
@@ -143,8 +143,8 @@ void jit_brgemm_copy_b_emitter::emit_impl(const std::vector<size_t>& in, const s
 
         const bool is_N_tail = (m_N_blk - nb * m_inner_N_block < m_inner_N_block);
         const auto current_N_blk = is_N_tail ? m_inner_N_tail : m_inner_N_block;
-        std::cout << "\t it = " << nb << std::endl;
-        std::cout << "\t current_N_blk = " << current_N_blk << std::endl;
+        std::cout << "\t\t it = " << nb << std::endl;
+        std::cout << "\t\t current_N_blk = " << current_N_blk << std::endl;
 
         emit_kernel_call(m_kernel.get(), src, dst, comp, current_N_blk, m_K_blk, offset_in, offset_out, offset_comp);
     }

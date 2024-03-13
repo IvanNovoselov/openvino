@@ -34,7 +34,6 @@ pass::SetBrgemmCPUBlockingParams::SetBrgemmCPUBlockingParams() {
             return false;
         }
 
-        const auto& input_1_precision = brgemm->get_input_element_type(1);
         // Ticket: 113745
         // TODO: extend block size selection heuristics
         auto get_block_size_m = [&](const size_t M) -> size_t {
@@ -47,8 +46,10 @@ pass::SetBrgemmCPUBlockingParams::SetBrgemmCPUBlockingParams() {
             if (auto custom = std::getenv("K")) {
                 return std::atoi(custom);
             }
-            if (input_1_precision != ov::element::f32)
+            // TODO: remove this WA
+            if (brgemm->get_input_element_type(0) == ov::element::i8) {
                 return K;
+            }
             return K > 1024 ? 1024 : K > 512 ? 512 : K;
         };
         auto get_block_size_n = [&](const size_t N) -> size_t {
@@ -66,12 +67,8 @@ pass::SetBrgemmCPUBlockingParams::SetBrgemmCPUBlockingParams() {
         if (brgemm->is_with_data_repacking()) {
             const auto brgemm_copy_b = brgemm->get_brgemm_copy();
             const auto brgemmVNNIFactor = brgemm_copy_b->get_brgemm_vnni_factor();
-            // TODO: do we really need this special handling of AMX case?
-            const bool isAMXSupported = dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx512_core_amx);
-            const auto precision = brgemm_copy_b->get_src_element_type();
-            const bool use_amx = isAMXSupported && precision != ov::element::f32 && (K % brgemmVNNIFactor == 0) && (N % brgemmVNNIFactor == 0);
-
-            const size_t copy_b_block_size_k = use_amx ? get_block_size_k(K) : K;
+            const size_t copy_b_block_size_k = get_block_size_k(K);
+            std::cout << "[ INFO ] copy_b_block_size_k = " << copy_b_block_size_k << std::endl;
             OPENVINO_ASSERT(copy_b_block_size_k == K || copy_b_block_size_k % brgemmVNNIFactor == 0,
                             "Block size which is not divisible by 4 is not supported for brgemm data repacking.");
             brgemm_copy_b->set_k_block_size(copy_b_block_size_k);
