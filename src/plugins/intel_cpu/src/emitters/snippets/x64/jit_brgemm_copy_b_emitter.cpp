@@ -56,7 +56,7 @@ jit_brgemm_copy_b_emitter::jit_brgemm_copy_b_emitter(jit_generator* h, cpu_isa_t
     m_inner_N_block = brgemm_repack->get_n_inner_block_size();
     m_inner_N_tail = m_N_blk % m_inner_N_block;
 
-    const auto& buffer_shape = brgemm_repack->get_needed_buffer_shape(expr->get_output_port_descriptor(0)->get_shape());
+    const auto& buffer_shape = brgemm_repack->get_needed_buffer_shape();
     // Note: we never repack tensors with f32 precision. Maybe remove this code path for now?
     m_LDB = m_brgemm_prc == ov::element::f32 ? leading_dimension : *buffer_shape.rbegin();
 

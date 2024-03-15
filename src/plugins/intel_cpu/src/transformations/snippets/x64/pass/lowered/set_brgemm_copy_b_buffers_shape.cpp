@@ -28,8 +28,7 @@ bool ov::intel_cpu::pass::SetBrgemmCopyBBuffersShape::run(snippets::lowered::Lin
         const auto& expr = *expr_it;
         if (auto copy_b = ov::as_type_ptr<ov::intel_cpu::BrgemmCopyB>(expr->get_node())) {
             const auto buffer = get_buffer_from_output(expr, 0);
-            const auto& out_desc = expr->get_output_port_descriptor(0);
-            const auto buffer_shape = copy_b->get_needed_buffer_shape(out_desc->get_shape());
+            const auto buffer_shape = copy_b->get_needed_buffer_shape();
             buffer->set_allocation_shape(buffer_shape);
             if (copy_b->is_with_compensations()) {
                 const auto compensations_buffer = get_buffer_from_output(expr, 1);

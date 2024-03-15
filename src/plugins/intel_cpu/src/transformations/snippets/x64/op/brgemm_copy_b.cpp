@@ -92,10 +92,8 @@ void intel_cpu::BrgemmCopyB::compute_block_size_values(const size_t blk_size_k, 
     m_N_blk = blk_size_n != 0 ? blk_size_n : *input_shape.rbegin();
 }
 
-ov::Shape intel_cpu::BrgemmCopyB::get_needed_buffer_shape(const ov::snippets::VectorDims& planar_dims) const {
-    const auto& K = *(planar_dims.rbegin() + 1);
-    const auto rounded_K = rnd_up(K, m_brgemmVNNIFactor);
-    return ov::Shape{rounded_K, rnd_up(m_N_blk, m_inner_n_block)};
+ov::Shape intel_cpu::BrgemmCopyB::get_needed_buffer_shape() const {
+    return ov::Shape{rnd_up(m_K_blk, m_brgemmVNNIFactor), rnd_up(m_N_blk, m_inner_n_block)};
 }
 
 std::shared_ptr<Node> intel_cpu::BrgemmCopyB::clone_with_new_inputs(const OutputVector& new_args) const {

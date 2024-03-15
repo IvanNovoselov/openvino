@@ -151,13 +151,9 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
             const auto block_size_k = brgemm->get_k_block_size() < k ? brgemm->get_k_block_size() : k;
             *in_0_subtensor.rbegin() = block_size_k;
             *(in_1_subtensor.rbegin() + 1) = block_size_k;
-            if (brgemm->is_with_data_repacking()) {
-                const auto& copy_b_desc = copy_b_expr->get_input_port_descriptor(0);
-                const auto& shape = copy_b_desc->get_shape();
-                const auto& layout = copy_b_desc->get_layout();
-                const auto copy_b_planar_dims = ov::snippets::utils::get_planar_vdims(shape, layout);
-                *++copy_b_subtensor.rbegin() = *++copy_b_planar_dims.rbegin();
-            }
+            if (brgemm->is_with_data_repacking())
+                *++copy_b_subtensor.rbegin() = block_size_k;
+
             if (block_size_k == k) {
                 brgemm->set_beta(0.f);
                 return;
@@ -170,8 +166,6 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
                                           brgemm->is_with_data_repacking()
                                               ? LoopPort(copy_b_expr->get_input_port(0), true, 1)
                                               : LoopPort(brgemm_expr->get_input_port(1), true, 1)};
-            // if (brgemm->is_with_compensations())
-            //     entries.emplace_back(brgemm_expr->get_input_port(2), false, 1);
             std::vector<LoopPort> exits{LoopPort(brgemm_expr->get_output_port(0), false)};
             const auto id = loop_manager->mark_loop(loop_begin_it, loop_end_it, k, block_size_k, entries, exits);
             const auto loop_info = loop_manager->get_loop_info(id);

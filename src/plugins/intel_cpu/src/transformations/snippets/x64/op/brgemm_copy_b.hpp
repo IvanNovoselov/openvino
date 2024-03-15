@@ -45,8 +45,7 @@ public:
     void set_k_block_size(size_t block_size) { m_K_blk = block_size; }
     void set_n_block_size(size_t block_size) { m_N_blk = block_size; }
 
-    // TODO: remove + change emitter logic
-    ov::Shape get_needed_buffer_shape(const ov::snippets::VectorDims& planar_dims) const;
+    ov::Shape get_needed_buffer_shape() const;
 
     Type get_type() const { return m_type; }
     size_t get_brgemm_vnni_factor() const { return m_brgemmVNNIFactor; }
