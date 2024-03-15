@@ -79,7 +79,7 @@ jit_brgemm_emitter::jit_brgemm_emitter(jit_generator* h, cpu_isa_t isa, const ov
     init_in_scheduling_params(input_0_desc);
     if (brgemm_node->is_with_data_repacking()) {
         const auto& brgemm_copy = brgemm_node->get_brgemm_copy();
-        const auto& allocated_shape = brgemm_copy->get_data_repacking_shape_old(input_1_desc->get_shape());
+        const auto& allocated_shape = brgemm_copy->get_needed_buffer_shape(input_1_desc->get_shape());
         leading_dimensions.push_back(*allocated_shape.rbegin());
     } else {
         init_in_scheduling_params(input_1_desc);

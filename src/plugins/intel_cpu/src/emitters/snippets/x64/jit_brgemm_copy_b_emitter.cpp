@@ -46,9 +46,6 @@ jit_brgemm_copy_b_emitter::jit_brgemm_copy_b_emitter(jit_generator* h, cpu_isa_t
         leading_dimension = jit_brgemm_emitter::get_in_leading_dim(original_shape, layout);
     }
 
-    const auto& N = *(transposed_shape.rbegin());
-    const auto& K = *(transposed_shape.rbegin() + 1);
-
     const auto& subtensor = in_desc->get_subtensor();
     for (const auto& out_desc : expr->get_output_port_descriptors()) {
         OV_CPU_JIT_EMITTER_ASSERT(out_desc->get_subtensor() == subtensor, "all subtensors must be equal");
@@ -58,12 +55,17 @@ jit_brgemm_copy_b_emitter::jit_brgemm_copy_b_emitter(jit_generator* h, cpu_isa_t
 
     m_inner_N_block = brgemm_repack->get_n_inner_block_size();
     m_inner_N_tail = m_N_blk % m_inner_N_block;
-    m_LDB = m_brgemm_prc == ov::element::f32 ? leading_dimension : rnd_up(N, m_inner_N_block);
+
+    const auto& buffer_shape = brgemm_repack->get_needed_buffer_shape(expr->get_output_port_descriptor(0)->get_shape());
+    // Note: we never repack tensors with f32 precision. Maybe remove this code path for now?
+    m_LDB = m_brgemm_prc == ov::element::f32 ? leading_dimension : *buffer_shape.rbegin();
 
     const auto& brgemm_prc_src = brgemm_repack->get_src_element_type();
     m_brgemm_prc = brgemm_repack->get_input_element_type(0);
     m_brgemmVNNIFactor = brgemm_repack->get_brgemm_vnni_factor();
 
+    const auto& N = *(transposed_shape.rbegin());
+    const auto& K = *(transposed_shape.rbegin() + 1);
     const auto use_amx = mayiuse(avx512_core_amx) && brgemm_prc_src != ov::element::f32 && (K % m_brgemmVNNIFactor == 0) && (N % m_brgemmVNNIFactor == 0);
 
     const auto src_dt = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::ElementTypeToDataType(brgemm_prc_src));
