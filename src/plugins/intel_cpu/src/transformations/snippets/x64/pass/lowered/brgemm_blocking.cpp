@@ -101,6 +101,8 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
             const auto block_size_m = brgemm->get_m_block_size() < m ? brgemm->get_m_block_size() : m;
             *(in_0_subtensor.rbegin() + 1) = block_size_m;
             *(out_subtensor.rbegin() + 1) = block_size_m;
+            if (block_size_m == m)
+                return;
 
             const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it, true);
             const auto loop_end_it = std::next(expr_it);
@@ -123,7 +125,9 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
             *in_1_subtensor.rbegin() = block_size_n;
             *out_subtensor.rbegin() = block_size_n;
             if (brgemm->is_with_data_repacking())
-                *copy_b_subtensor.rbegin() = block_size_n >= n ? n : block_size_n;
+                *copy_b_subtensor.rbegin() = block_size_n;
+            if (block_size_n == n)
+                return;
 
             const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it, true);
             const auto loop_end_it = std::next(expr_it);
@@ -153,6 +157,10 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
                 const auto& layout = copy_b_desc->get_layout();
                 const auto copy_b_planar_dims = ov::snippets::utils::get_planar_vdims(shape, layout);
                 *++copy_b_subtensor.rbegin() = *++copy_b_planar_dims.rbegin();
+            }
+            if (block_size_k == k) {
+                brgemm->set_beta(0.f);
+                return;
             }
 
             const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it, true);
