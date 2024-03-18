@@ -43,12 +43,6 @@ pass::SetBrgemmCPUBlockingParams::SetBrgemmCPUBlockingParams() {
             return 32;
         };
         auto get_block_size_k = [&](const size_t K) -> size_t {
-            // Note: it's impossible to compute compensations + brgemm by blocks
-            if (brgemm->is_with_compensations()) {
-                // TODO: remove this warning
-                std::cout << "[ WARNING ] brgemm with compensations: block by K can't be applied\n";
-                return K;
-            }
             if (auto custom = std::getenv("K")) {
                 return std::atoi(custom);
             }

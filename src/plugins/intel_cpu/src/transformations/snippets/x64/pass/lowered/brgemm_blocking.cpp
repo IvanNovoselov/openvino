@@ -162,10 +162,14 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
             const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it, true);
             const auto loop_end_it = std::next(expr_it);
 
-            std::vector<LoopPort> entries{LoopPort(brgemm_expr->get_input_port(0), true, 0),
-                                          brgemm->is_with_data_repacking()
-                                              ? LoopPort(copy_b_expr->get_input_port(0), true, 1)
-                                              : LoopPort(brgemm_expr->get_input_port(1), true, 1)};
+            std::vector<LoopPort> entries{LoopPort(brgemm_expr->get_input_port(0), true, 0)};
+            if (brgemm->is_with_data_repacking()) {
+                 entries.emplace_back(copy_b_expr->get_input_port(0), true, 1);
+            } else {
+                 entries.emplace_back(brgemm_expr->get_input_port(1), true, 1);
+                if (brgemm->is_with_compensations())
+                    entries.emplace_back(brgemm_expr->get_input_port(2), true, 1);
+            }
             std::vector<LoopPort> exits{LoopPort(brgemm_expr->get_output_port(0), false)};
             const auto id = loop_manager->mark_loop(loop_begin_it, loop_end_it, k, block_size_k, entries, exits);
             const auto loop_info = loop_manager->get_loop_info(id);
