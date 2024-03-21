@@ -29,8 +29,7 @@ private:
                                                                            const snippets::lowered::LinearIR::constExprIt& brgemm_it);
 
     static snippets::lowered::LinearIR::constExprIt get_loop_begin_pos(snippets::lowered::LinearIR& linear_ir,
-                                                                       const snippets::lowered::LinearIR::constExprIt& brgemm_it,
-                                                                       bool shared_loop_with_repacking);
+                                                                       const snippets::lowered::LinearIR::constExprIt& brgemm_it);
 };
 
 }  // namespace pass

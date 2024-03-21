@@ -37,16 +37,14 @@ LinearIR::constExprIt BrgemmBlocking::move_new_memory_buffer(LinearIR& linear_ir
     return std::prev(brgemm_it);
 }
 
-LinearIR::constExprIt BrgemmBlocking::get_loop_begin_pos(LinearIR& linear_ir,
-                                                         const LinearIR::constExprIt& brgemm_it,
-                                                         bool shared_loop_with_repacking) {
+LinearIR::constExprIt BrgemmBlocking::get_loop_begin_pos(LinearIR& linear_ir, const LinearIR::constExprIt& brgemm_it) {
     auto loop_begin_it = brgemm_it;
     const auto& brgemm_expr = *brgemm_it;
     const auto brgemm = ov::as_type_ptr<ov::intel_cpu::BrgemmCPU>(brgemm_expr->get_node());
     if (brgemm->is_amx()) {
         loop_begin_it = move_new_memory_buffer(linear_ir, brgemm_it);
     }
-    if (shared_loop_with_repacking && brgemm->is_with_data_repacking()) {
+    if (brgemm->is_with_data_repacking()) {
         const auto& copy_b = brgemm->get_brgemm_copy();
         const auto& copy_b_expr = linear_ir.get_expr_by_node(copy_b);
         loop_begin_it = linear_ir.find(copy_b_expr);
@@ -104,7 +102,7 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
             if (block_size_m == m)
                 return;
 
-            const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it, true);
+            const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it);
             const auto loop_end_it = std::next(expr_it);
 
             std::vector<LoopPort> entries{LoopPort(brgemm_expr->get_input_port(0), true)};
@@ -129,7 +127,7 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
             if (block_size_n == n)
                 return;
 
-            const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it, true);
+            const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it);
             const auto loop_end_it = std::next(expr_it);
 
             std::vector<LoopPort> entries{LoopPort(brgemm_expr->get_input_port(0), false)};
@@ -159,7 +157,7 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
                 return;
             }
 
-            const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it, true);
+            const auto loop_begin_it = get_loop_begin_pos(linear_ir, expr_it);
             const auto loop_end_it = std::next(expr_it);
 
             std::vector<LoopPort> entries{LoopPort(brgemm_expr->get_input_port(0), true, 0)};
