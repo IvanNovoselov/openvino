@@ -41,7 +41,6 @@ private:
     ov::element::Type m_brgemm_prc;
     size_t m_N_blk, m_inner_N_block, m_inner_N_tail;
     size_t m_K_blk;
-    size_t m_LDB;
     size_t m_brgemmVNNIFactor;
 
     size_t m_in_offset = 0lu;

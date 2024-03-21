@@ -58,7 +58,7 @@ jit_brgemm_copy_b_emitter::jit_brgemm_copy_b_emitter(jit_generator* h, cpu_isa_t
 
     const auto& buffer_shape = brgemm_repack->get_needed_buffer_shape();
     // Note: we never repack tensors with f32 precision. Maybe remove this code path for now?
-    m_LDB = m_brgemm_prc == ov::element::f32 ? leading_dimension : *buffer_shape.rbegin();
+    auto LDB = m_brgemm_prc == ov::element::f32 ? leading_dimension : *buffer_shape.rbegin();
 
     const auto& brgemm_prc_src = brgemm_repack->get_src_element_type();
     m_brgemm_prc = brgemm_repack->get_input_element_type(0);
@@ -71,7 +71,7 @@ jit_brgemm_copy_b_emitter::jit_brgemm_copy_b_emitter(jit_generator* h, cpu_isa_t
     const auto src_dt = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::ElementTypeToDataType(brgemm_prc_src));
     const auto wei_dt = static_cast<dnnl_data_type_t>(DnnlExtensionUtils::ElementTypeToDataType(m_brgemm_prc));
 
-    init_brgemm_copy(m_kernel, leading_dimension, m_inner_N_block, m_inner_N_tail, m_LDB, m_K_blk, use_amx, src_dt, wei_dt);
+    init_brgemm_copy(m_kernel, leading_dimension, m_inner_N_block, m_inner_N_tail, LDB, m_K_blk, use_amx, src_dt, wei_dt);
 }
 
 void jit_brgemm_copy_b_emitter::init_brgemm_copy(std::unique_ptr<matmul::jit_brgemm_matmul_copy_b_t>& kernel,
@@ -107,8 +107,7 @@ void jit_brgemm_copy_b_emitter::init_brgemm_copy(std::unique_ptr<matmul::jit_brg
     brgCopyKernelConf.src_zp_type = dnnl::impl::cpu::x64::none;
 
     auto status = matmul::create_brgemm_matmul_copy_b(kernel, &brgCopyKernelConf);
-    if (status != dnnl_success)
-        OV_CPU_JIT_EMITTER_THROW("cannot create kernel due to invalid params");
+    OV_CPU_JIT_EMITTER_ASSERT(status == dnnl_success, "cannot create kernel due to invalid params");
 }
 
 void jit_brgemm_copy_b_emitter::validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const {
@@ -125,18 +124,6 @@ void jit_brgemm_copy_b_emitter::emit_impl(const std::vector<size_t>& in, const s
     Xbyak::Reg64 dst(static_cast<int>(out[0]));
     Xbyak::Reg64 comp(static_cast<int>(m_with_comp ? out[1] : 0));
 
-    std::cout << "[ COMPILATION ] BrgemmCopyB emitter\n";
-    std::cout << "\t m_N_blk = " << m_N_blk << std::endl;
-    std::cout << "\t m_inner_N_block = " << m_inner_N_block << std::endl;
-    std::cout << "\t m_inner_N_tail = " << m_inner_N_tail << std::endl;
-    std::cout << "\t m_K_blk = " << m_K_blk << std::endl;
-    std::cout << "\t m_LDB = " << m_LDB << std::endl;
-    std::cout << "\t with compensations = " << m_with_comp << std::endl;
-    std::cout << "\t m_in_offset = " << m_in_offset << std::endl;
-    std::cout << "\t m_out_offset = " << m_out_offset << std::endl;
-    std::cout << "\t m_comp_offset = " << m_comp_offset << std::endl;
-
-    std::cout << "\t Inner loop:\n";
     const size_t data_size = m_brgemm_prc.size();
     for (size_t nb = 0; nb < div_up(m_N_blk, m_inner_N_block); nb++) {
         const size_t offset_in = m_in_offset + nb * m_inner_N_block * data_size;
@@ -145,8 +132,6 @@ void jit_brgemm_copy_b_emitter::emit_impl(const std::vector<size_t>& in, const s
 
         const bool is_N_tail = (m_N_blk - nb * m_inner_N_block < m_inner_N_block);
         const auto current_N_blk = is_N_tail ? m_inner_N_tail : m_inner_N_block;
-        std::cout << "\t\t it = " << nb << std::endl;
-        std::cout << "\t\t current_N_blk = " << current_N_blk << std::endl;
 
         emit_kernel_call(m_kernel.get(), src, dst, comp, current_N_blk, m_K_blk, offset_in, offset_out, offset_comp);
     }

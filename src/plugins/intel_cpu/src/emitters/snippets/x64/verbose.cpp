@@ -127,13 +127,16 @@ std::string init_info_jit_brgemm_emitter(const jit_brgemm_emitter *emitter) {
 std::string init_info_jit_brgemm_copy_b_emitter(const jit_brgemm_copy_b_emitter *emitter) {
     std::stringstream ss;
     ss << "Emitter_type_name:jit_brgemm_copy_b_emitter"
-       << " m_LDB:" << emitter->m_LDB
-       << " m_K_blk:" << emitter->m_K_blk
+       << " m_brgemm_prc:" << emitter->m_brgemm_prc
        << " m_N_blk:" << emitter->m_N_blk
-       << " m_with_comp:" << emitter->m_with_comp
+       << " m_inner_N_block:" << emitter->m_inner_N_block
+       << " m_inner_N_tail:" << emitter->m_inner_N_tail
+       << " m_K_blk:" << emitter->m_K_blk
+       << " m_brgemmVNNIFactor:" << emitter->m_brgemmVNNIFactor
        << " m_in_offset:" << emitter->m_in_offset
        << " m_out_offset:" << emitter->m_out_offset
-       << " m_comp_offset:" << emitter->m_comp_offset;
+       << " m_comp_offset:" << emitter->m_comp_offset
+       << " m_with_comp:" << emitter->m_with_comp;
 
     return ss.str();
 }
