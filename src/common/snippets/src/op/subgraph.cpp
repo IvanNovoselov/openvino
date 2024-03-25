@@ -52,6 +52,9 @@
 #include "ov_ops/type_relaxed.hpp"
 #include "openvino/pass/serialize.hpp"
 
+#include "snippets/lowered/pass/serialize_control_flow.hpp"
+#include "snippets/lowered/pass/serialize_data_flow.hpp"
+
 #include <algorithm>
 #include <memory>
 #include <array>
@@ -472,6 +475,28 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const std::shared_ptr<lower
         perf_count_pass.run(linear_ir, linear_ir.cbegin(), linear_ir.cend());
     }
 #endif
+//    lowered::pass::SerializeControlFlow("snsdebug_control.xml").run(linear_ir);
+//    lowered::pass::SerializeDataFlow("snsdebug_data.xml").run(linear_ir);
+    for (auto expr = linear_ir.begin(); expr != linear_ir.end(); expr++) {
+        const auto& op = expr->get()->get_node();
+        if (ov::is_type<snippets::op::Brgemm>(op)) {
+            auto& rt_info = op->get_rt_info();
+            const auto& found = rt_info.find("BrgemmCPU_Nblocking");
+            if (found != rt_info.end()) {
+                do {
+                    const auto& op = expr->get()->get_node();
+                    if (ov::is_type<snippets::op::Load>(op) ||
+                        ov::is_type<snippets::op::BroadcastLoad>(op) ||
+                        ov::is_type<snippets::op::Store>(op)) {
+                        const auto& ma = ov::as_type_ptr<snippets::op::MemoryAccess>(op);
+                        std::cerr << "Skipped memory access: " << op->get_friendly_name() << "\n";
+                        ma->set_input_count(0);
+                    }
+                } while (++expr != linear_ir.end() && !ov::is_type<snippets::op::Brgemm>(expr->get()->get_node()));
+            }
+        }
+    }
+
     m_generator->generate(linear_ir, lowering_result, compile_params);
 
     VectorDims parallel_exec_domain = linear_ir.get_master_shape();
