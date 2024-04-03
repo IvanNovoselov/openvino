@@ -472,6 +472,40 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const std::shared_ptr<lower
         perf_count_pass.run(linear_ir, linear_ir.cbegin(), linear_ir.cend());
     }
 #endif
+    for (auto expr = linear_ir.begin(); expr != linear_ir.end(); expr++) {
+        const auto& op = expr->get()->get_node();
+        if (ov::is_type<snippets::op::Brgemm>(op)) {
+            auto& rt_info = op->get_rt_info();
+            const auto& found = rt_info.find("BrgemmCPU_Nblocking");
+            std::shared_ptr<snippets::op::IntermediateMemoryBuffer> first_buffer{nullptr};
+            if (found != rt_info.end()) {
+                std::cerr << get_friendly_name() << " @ ";
+                for (size_t i = 0; i < get_input_size(); i++) {
+                    std::cerr << "in[" << i << "] @ " << get_input_source_output(i).get_partial_shape().to_string();
+                    if (i + 1 < get_input_size())
+                        std::cerr << " @ ";
+                }
+                std::cerr << "\n" << std::flush;
+                do {
+                    const auto& op = expr->get()->get_node();
+                    if (ov::is_type<snippets::op::Load>(op) ||
+                        ov::is_type<snippets::op::BroadcastLoad>(op)) {
+                        const auto& ma = ov::as_type_ptr<snippets::op::MemoryAccess>(op);
+                        std::cerr << "Skipped memory access (input): " << op->get_friendly_name() << "\n";
+                        ma->set_input_count(0);
+                    } else if (ov::is_type<snippets::op::Store>(op)) {
+//                        const auto& ma = ov::as_type_ptr<snippets::op::MemoryAccess>(op);
+//                        std::cerr << "Skipped memory access (output): " << op->get_friendly_name() << "\n";
+//                        if (op->get_friendly_name() != "Store_39628")
+//                            ma->set_output_count(0);
+//                        else
+//                            ma->set_output_count(2);
+                    }
+                } while (++expr != linear_ir.end() && !ov::is_type<snippets::op::Brgemm>(expr->get()->get_node()));
+            }
+        }
+    }
+
     m_generator->generate(linear_ir, lowering_result, compile_params);
 
     VectorDims parallel_exec_domain = linear_ir.get_master_shape();
