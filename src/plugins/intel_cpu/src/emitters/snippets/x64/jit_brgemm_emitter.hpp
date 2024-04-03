@@ -43,6 +43,7 @@ private:
         bool is_with_amx;
         bool is_with_comp;
         float beta;
+        std::string name;
     };
     static void init_brgemm_kernel(brgemmCtx& ctx, std::unique_ptr<dnnl::impl::cpu::x64::brgemm_kernel_t>& brgKernel);
 

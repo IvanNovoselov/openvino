@@ -113,6 +113,7 @@ jit_brgemm_emitter::jit_brgemm_emitter(jit_generator* h, cpu_isa_t isa, const ov
     m_ctx.beta = brgemm_node->get_beta();
     m_ctx.is_with_amx = brgemm_node->is_amx();
     m_ctx.is_with_comp = brgemm_node->is_with_compensations();
+    m_ctx.name = brgemm_node->get_friendly_name();
 
     init_brgemm_kernel(m_ctx, m_kernel);
 
@@ -264,6 +265,16 @@ void jit_brgemm_emitter::kernel_execute(const dnnl::impl::cpu::x64::brgemm_kerne
     brgemm_p.do_apply_comp = static_cast<size_t>(ctx->is_with_comp);
     brgemm_p.skip_accm = 0;
     brgemm_p.BS = 1;  // default value
+    const std::string MM2_name = "__module.joint_blocks.0/aten::scaled_dot_product_attention/ScaledDotProductAttention";
+//    std::cerr << "Name: " << ctx->name << "\n";
+//    if (ctx->name == "296" || ctx->name.find("MatMul_53982") != std::string::npos)
+//        brgemm_p.ptr_C = const_cast<void*>(brgemm_p.ptr_B);
+    if (ctx->name == "324" || ctx->name.find(MM2_name) != std::string::npos)
+        brgemm_p.ptr_A = brgemm_p.ptr_C;
+//
+//    std::cerr << "A: " << reinterpret_cast<const void*>(brgemm_call_args->A) << "\n";
+//    std::cerr << "B: " << reinterpret_cast<const void*>(brgemm_call_args->B) << "\n";
+//    std::cerr << "C: " << reinterpret_cast<const void*>(brgemm_call_args->C) << "\n";
     OV_CPU_JIT_EMITTER_ASSERT(brg_kernel != nullptr, "has nullptr kernel");
     (*brg_kernel)(&brgemm_p);
 }

@@ -496,8 +496,8 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const std::shared_ptr<lower
                     } else if (ov::is_type<snippets::op::Store>(op)) {
                         const auto& ma = ov::as_type_ptr<snippets::op::MemoryAccess>(op);
                         std::cerr << "Skipped memory access (output): " << op->get_friendly_name() << "\n";
-                        if (op->get_friendly_name() != "Store_39628" &&
-                            op->get_friendly_name().find("Store_84050") == string::npos)
+//                        if (op->get_friendly_name() != "Store_39628" &&
+//                            op->get_friendly_name().find("Store_84050") == string::npos)
                             ma->set_output_count(0);
 //                        else
 //                            ma->set_output_count(2);
