@@ -141,8 +141,6 @@ bool BrgemmBlocking::run(LinearIR& linear_ir, LinearIR::constExprIt begin, Linea
 
             std::vector<LoopPort> exits{LoopPort(brgemm_expr->get_output_port(0), true)};
             loop_manager->mark_loop(loop_begin_it, loop_end_it, n, block_size_n, 0, entries, exits);
-            auto& rt_info = brgemm->get_rt_info();
-            rt_info["BrgemmCPU_Nblocking"] = true;
         };
 
         auto apply_k_blocking = [&]() {
