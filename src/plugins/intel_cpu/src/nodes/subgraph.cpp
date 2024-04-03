@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <array>
 #include <vector>
+#include <chrono>
 
 #if defined(__linux__) && defined(SNIPPETS_DEBUG_CAPS)
 #include "emitters/snippets/x64/jit_segfault_detector_emitter.hpp"
@@ -543,6 +544,9 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
 #if defined(__linux__) && defined(SNIPPETS_DEBUG_CAPS)
     segfault_detector();
 #endif
+    decltype(std::chrono::high_resolution_clock::now()) start;
+    if (snippetAttrs.snippet->has_domain_sensitive_ops())
+        start = std::chrono::high_resolution_clock::now();
     parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
         [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
             int64_t indexes[] = {d0, d1, d2, d3, d4};
@@ -550,6 +554,10 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
             update_ptrs(call_args, inMemPtrs, outMemPtrs);
             callable(&call_args, indexes);
         });
+    if (snippetAttrs.snippet->has_domain_sensitive_ops()) {
+        auto end = std::chrono::high_resolution_clock::now() - start;
+        exec_times.push_back(std::chrono::duration<double, std::milli>(end).count());
+    }
 }
 
 void Snippet::SnippetJitExecutor::schedule_nt(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {

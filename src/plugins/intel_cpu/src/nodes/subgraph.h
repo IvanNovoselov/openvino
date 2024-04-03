@@ -91,6 +91,16 @@ private:
             void exec(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) override;
 
             bool schedule_created();
+            ~SnippetJitExecutor() {
+                if (snippetAttrs.snippet->has_domain_sensitive_ops()) {
+                    std::cerr << "@" << snippetAttrs.snippet->get_friendly_name() << " : ";
+                    double num = exec_times.size();
+                    double res = 0;
+                    for (auto a : exec_times)
+                        res += a / num;
+                    std::cerr << res << " : " << num << "\n";
+                }
+            }
 
         private:
             static const size_t rank6D {6};
@@ -125,6 +135,7 @@ private:
             // Buffer scratchpad
             std::vector<uint8_t> buffer_scratchpad = {};
             size_t buffer_scratchpad_size = 0;
+            std::vector<double> exec_times;
 
 #ifdef SNIPPETS_DEBUG_CAPS
             inline void segfault_detector();
