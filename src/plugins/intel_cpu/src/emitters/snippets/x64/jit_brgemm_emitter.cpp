@@ -175,6 +175,27 @@ void jit_brgemm_emitter::emit_impl(const std::vector<size_t>& in, const std::vec
         Xbyak::Reg64 input_1(static_cast<int>(in[1]));
         Xbyak::Reg64 input_2(static_cast<int>(m_with_scratch ? in[2] : 0));  // scratch. Default reg index is 0 if there isn't scratch
         Xbyak::Reg64 output_0(static_cast<int>(out[0]));
+        //
+        const std::string MM2_name = "__module.joint_blocks.0/aten::scaled_dot_product_attention/ScaledDotProductAttention";
+        if (m_ctx.name == "296" || m_ctx.name.find("MatMul_53982") != std::string::npos) {
+            Xbyak::Reg64 reg_runtime_params(abi_param1.getIdx());
+//            h->push(input_0);
+//            h->push(input_1);
+            h->push(output_0);
+//            h->mov(input_0, h->ptr[reg_runtime_params + GET_OFF(buffer_scratchpad_ptr)]);
+//            h->mov(input_1, h->ptr[reg_runtime_params + GET_OFF(buffer_scratchpad_ptr)]);
+            h->mov(output_0, h->ptr[reg_runtime_params + GET_OFF(buffer_scratchpad_ptr)]);
+        } else if (m_ctx.name == "324" ||
+                   m_ctx.name.find(MM2_name) != std::string::npos) {
+            Xbyak::Reg64 reg_runtime_params(abi_param1.getIdx());
+            h->push(input_0);
+//            h->push(input_1);
+            h->push(output_0);
+            h->mov(input_0, h->ptr[reg_runtime_params + GET_OFF(buffer_scratchpad_ptr)]);
+//            h->mov(input_1, h->ptr[reg_runtime_params + GET_OFF(buffer_scratchpad_ptr)]);
+            h->mov(output_0, h->ptr[reg_runtime_params + GET_OFF(buffer_scratchpad_ptr)]);
+        }
+        //
         emit_brgemm_kernel_call(m_kernel.get(),
                                 input_0,
                                 input_1,
@@ -184,6 +205,16 @@ void jit_brgemm_emitter::emit_impl(const std::vector<size_t>& in, const std::vec
                                 m_load_offset_b,
                                 m_load_offset_scratch,
                                 m_store_offset_c);
+        if (m_ctx.name == "296" || m_ctx.name.find("MatMul_53982") != std::string::npos) {
+            h->pop(output_0);
+//            h->pop(input_1);
+//            h->pop(input_0);
+        } else if (m_ctx.name == "324" ||
+                   m_ctx.name.find(MM2_name) != std::string::npos) {
+            h->pop(output_0);
+//            h->pop(input_1);
+            h->pop(input_0);
+        }
     } else {
         OV_CPU_JIT_EMITTER_THROW("requires at least avx512_core instruction set");
     }
@@ -269,9 +300,8 @@ void jit_brgemm_emitter::kernel_execute(const dnnl::impl::cpu::x64::brgemm_kerne
 //    std::cerr << "Name: " << ctx->name << "\n";
 //    if (ctx->name == "296" || ctx->name.find("MatMul_53982") != std::string::npos)
 //        brgemm_p.ptr_C = const_cast<void*>(brgemm_p.ptr_B);
-    if (ctx->name == "324" || ctx->name.find(MM2_name) != std::string::npos)
-        brgemm_p.ptr_A = brgemm_p.ptr_C;
-//
+//    if (ctx->name == "324" || ctx->name.find(MM2_name) != std::string::npos)
+//        brgemm_p.ptr_A = brgemm_p.ptr_C;
 //    std::cerr << "A: " << reinterpret_cast<const void*>(brgemm_call_args->A) << "\n";
 //    std::cerr << "B: " << reinterpret_cast<const void*>(brgemm_call_args->B) << "\n";
 //    std::cerr << "C: " << reinterpret_cast<const void*>(brgemm_call_args->C) << "\n";
