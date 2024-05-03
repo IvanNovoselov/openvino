@@ -74,6 +74,8 @@ BrgemmToBrgemmTPP::BrgemmToBrgemmTPP() {
                                                               brgemm_in0_desc->get_layout(),
                                                               brgemm_in1_desc->get_layout(),
                                                               brgemm_out_desc->get_layout());
+        } else {
+            return false;
         }
         OPENVINO_ASSERT(brgemm_tpp, "Failed to create BrgemmTPP node in the BrgemmToBrgemmTPP pass");
         // Set blocking params
