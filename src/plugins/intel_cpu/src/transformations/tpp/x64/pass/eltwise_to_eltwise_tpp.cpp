@@ -44,6 +44,9 @@ EltwiseToEltwiseTPP::EltwiseToEltwiseTPP() {
                                snippets::lowered::PortDescriptor::ServiceDimensions::FULL_DIM :
                                64;
         ov::replace_node_update_name(node, tpp_eltwise);
+        replace_node(node, tpp_eltwise);
+        tpp_eltwise->set_friendly_name(node->get_friendly_name());
+        copy_runtime_info(node, tpp_eltwise);
         for (size_t i = 0; i < node->get_input_size(); i++)
             snippets::lowered::set_port_desc(tpp_eltwise->input(i), {M_block, N_block});
 
