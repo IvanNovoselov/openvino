@@ -12,6 +12,30 @@ using namespace dnnl::impl::cpu::x64;
 
 namespace ov {
 namespace intel_cpu {
+namespace {
+void reduced_call_preamble(dnnl::impl::cpu::x64::jit_generator* h) {
+    // gprs
+    Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->r12, h->r13, h->r14, h->r15,
+                                     h->rax, h->rbx, h->rcx, h->rdx, h->rdi, h->rsi, h->rbp};
+    const auto gpr_size = sizeof(gprs_to_save[0]);
+    size_t n_gprs_to_save = sizeof(gprs_to_save) / gpr_size;
+
+    h->sub(h->rsp, n_gprs_to_save * gpr_size);
+    for (size_t i = 0; i < n_gprs_to_save; ++i)
+        h->mov(h->ptr[h->rsp + i * gpr_size], gprs_to_save[i]);
+}
+
+void reduced_call_postamble(dnnl::impl::cpu::x64::jit_generator* h) {
+    // restore gpr registers
+    Xbyak::Operand gprs_to_save[] = {h->r8, h->r9, h->r10, h->r11, h->r12, h->r13, h->r14, h->r15,
+                                     h->rax, h->rbx, h->rcx, h->rdx, h->rdi, h->rsi, h->rbp};
+    const auto gpr_size = sizeof(gprs_to_save[0]);
+    size_t n_gprs_to_save = sizeof(gprs_to_save) / gpr_size;
+    for (int i = n_gprs_to_save - 1; i >= 0; --i)
+        h->mov(gprs_to_save[i], h->ptr[h->rsp + i * gpr_size]);
+    h->add(h->rsp, n_gprs_to_save * gpr_size);
+}
+} //namespace
 
 VectorDims TppEmitter::get_projected_subtensor(const snippets::lowered::PortDescriptorPtr& desc) {
     auto shape = desc->get_shape();
@@ -77,7 +101,8 @@ void TppEmitter::emit_code(const std::vector<size_t> &in, const std::vector<size
 }
 
 void TppEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size_t>& out) const {
-    internal_call_preamble();
+    reduced_call_preamble(h);
+//    internal_call_preamble();
     // Note: 4 args is currently enough for unary and binary ops.
     // To enable ternary ops, we will have to pass extra regs on stack for Windows,
     std::array<Xbyak::Reg64, 4> abi_params{abi_param1, abi_param2, abi_param3, abi_param4};
@@ -119,7 +144,8 @@ void TppEmitter::emit_impl(const std::vector<size_t>& in, const std::vector<size
 #ifdef _WIN32
     h->add(h->rsp, (num_kernel_args + 1) * gpr_size);
 #endif
-    internal_call_postamble();
+    reduced_call_postamble(h);
+//    internal_call_postamble();
 }
 
 libxsmm_datatype TppEmitter::ov_to_xsmm_dtype(ov::element::Type_t elemet_type) {
