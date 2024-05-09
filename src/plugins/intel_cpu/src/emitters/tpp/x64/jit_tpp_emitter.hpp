@@ -32,8 +32,8 @@ public:
     TppEmitter(dnnl::impl::cpu::x64::jit_generator* h,
                dnnl::impl::cpu::x64::cpu_isa_t isa,
                const ov::snippets::lowered::ExpressionPtr& expr);
-    void emit_code(const std::vector<size_t> &in,
-                   const std::vector<size_t> &out) const;
+    void emit_code(const std::vector<size_t>& in, const std::vector<size_t>& out,
+                   const std::vector<size_t>& pool_vec_idxs, const std::vector<size_t>& pool_gpr_idxs) const override;
     static libxsmm_datatype ov_to_xsmm_dtype(ov::element::Type_t elemet_type);
 
 protected:
