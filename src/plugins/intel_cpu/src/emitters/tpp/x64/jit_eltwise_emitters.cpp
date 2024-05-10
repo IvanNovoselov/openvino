@@ -72,7 +72,7 @@ void BinaryEltwiseTppEmitter::execute_kernel(libxsmm_meltwfunction_binary eltwis
     param.in0.primary = in0;
     param.in1.primary = in1;
     param.out.primary = out0;
-//    eltwise_kernel(&param);
+    eltwise_kernel(&param);
 }
 
 libxsmm_blasint BinaryEltwiseTppEmitter::get_broadcasted_dim(libxsmm_blasint dim0, libxsmm_blasint dim1, std::pair<bool, bool>& bcast_flags) {
@@ -113,7 +113,7 @@ void UnaryEltwiseTppEmitter::execute_kernel(libxsmm_meltwfunction_unary eltwise_
     param.op.primary = nullptr;
     param.in.primary = in0;
     param.out.primary = out0;
-//    eltwise_kernel(&param);
+    eltwise_kernel(&param);
 }
 
 std::set<std::vector<element::Type>> UnaryEltwiseTppEmitter::get_supported_precisions(const std::shared_ptr<ov::Node>& node) {
