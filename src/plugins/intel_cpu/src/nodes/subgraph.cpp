@@ -567,13 +567,23 @@ void Snippet::SnippetJitExecutor::schedule_6d(const std::vector<MemoryPtr>& inMe
 #if defined(__linux__) && defined(SNIPPETS_DEBUG_CAPS)
     segfault_detector();
 #endif
-    parallel_for5d(dom[0], dom[1], dom[2], dom[3], dom[4],
-        [&](int64_t d0, int64_t d1, int64_t d2, int64_t d3, int64_t d4) {
-            int64_t indexes[] = {d0, d1, d2, d3, d4};
-            jit_snippets_call_args call_args;
-            update_ptrs(call_args, inMemPtrs, outMemPtrs);
+    int nthr = std::min(parallel_get_max_threads(), static_cast<int>(harnessWorkAmount));
+    parallel_nt(nthr, [&](const int ithr, const int nthr) {
+        jit_snippets_call_args call_args;
+        update_ptrs(call_args, inMemPtrs, outMemPtrs);
+
+        size_t start = 0, end = 0;
+        splitter(harnessWorkAmount, nthr, ithr, start, end);
+
+        size_t indexes[] = {0, 0, 0, 0, 0};
+        size_t dom[] = {parallel_exec_domain[0], parallel_exec_domain[1], parallel_exec_domain[2],
+                        parallel_exec_domain[3], parallel_exec_domain[4]};
+        parallel_it_init(start, indexes[0], dom[0], indexes[1], dom[1], indexes[2], dom[2], indexes[3], dom[3], indexes[4], dom[4]);
+        for (size_t iwork = start; iwork < end; ++iwork) {
             callable(&call_args, indexes);
-        });
+            parallel_it_step(indexes[0], dom[0], indexes[1], dom[1], indexes[2], dom[2], indexes[3], dom[3], indexes[4], dom[4]);
+        }
+    });
 }
 
 void Snippet::SnippetJitExecutor::schedule_nt(const std::vector<MemoryPtr>& inMemPtrs, const std::vector<MemoryPtr>& outMemPtrs) {
