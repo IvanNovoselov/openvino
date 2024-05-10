@@ -486,6 +486,17 @@ snippets::Schedule Subgraph::generate_from_linear_ir(const std::shared_ptr<lower
         perf_count_pass.run(linear_ir, linear_ir.cbegin(), linear_ir.cend());
     }
 #endif
+    if (!config.m_has_domain_sensitive_ops) {
+        for (auto expr : linear_ir) {
+            if (auto mem_access = std::dynamic_pointer_cast<modifier::MemoryAccess>(expr->get_node())) {
+                if (ov::is_type<snippets::op::Load>(expr->get_node()))
+                    mem_access->set_input_count(0);
+                else if (ov::is_type<snippets::op::Store>(expr->get_node()))
+                    mem_access->set_output_count(0);
+            }
+        }
+    }
+
     m_generator->generate(linear_ir, lowering_result, compile_params);
 
     VectorDims parallel_exec_domain = linear_ir.get_master_shape();
