@@ -46,6 +46,7 @@ public:
         friend class MemoryAccess;
     };
     using PortMap = std::map<size_t, PortDescriptor>;
+    bool is_tpp = false;
 
     void set_input_count(size_t count, size_t idx = 0);
     void set_output_count(size_t count, size_t idx = 0);

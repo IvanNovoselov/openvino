@@ -17,6 +17,7 @@ namespace modifier {
  */
 class TensorProcessingPrimitive : virtual public snippets::modifier::MemoryAccess {
     public:
+        TensorProcessingPrimitive() : snippets::modifier::MemoryAccess() {is_tpp = true;}
         void clone_memory_access_ports(const TensorProcessingPrimitive& other) {
             m_input_ports = other.m_input_ports;
             m_output_ports = other.m_output_ports;

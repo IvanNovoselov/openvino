@@ -28,7 +28,9 @@ void propagate_updated_subtensor_through_loop(const LinearIR& linear_ir,
     if (most_outer_loop) {
         for (const auto& port : loop_info->get_entry_points()) {
             const auto& reg_type = port.expr_port->get_descriptor_ptr()->get_reg().type;
-            if ((port.is_incremented && reg_type == RegType::gpr) || (reg_type == RegType::vec)) {
+            const auto& mem_access = std::dynamic_pointer_cast<modifier::MemoryAccess>(port.expr_port->get_expr()->get_node());
+            const bool is_incremented = port.is_incremented || (mem_access && mem_access->is_tpp);
+            if ((is_incremented && reg_type == RegType::gpr) || (reg_type == RegType::vec)) {
                 const auto& expr = port.expr_port->get_expr();
                 const auto& desc = port.expr_port->get_descriptor_ptr();
                 auto subtensor = desc->get_subtensor();
@@ -51,7 +53,9 @@ void propagate_updated_subtensor_through_loop(const LinearIR& linear_ir,
 
     auto update_only_dim_idx_with_subtensor_value = [&](const LinearIR::LoopManager::LoopPort& port) {
         const auto& reg_type = port.expr_port->get_descriptor_ptr()->get_reg().type;
-        if ((port.is_incremented && reg_type == RegType::gpr) || (reg_type == RegType::vec)) {
+        const auto& mem_access = std::dynamic_pointer_cast<modifier::MemoryAccess>(port.expr_port->get_expr()->get_node());
+        const bool is_incremented = port.is_incremented || (mem_access && mem_access->is_tpp);
+        if ((is_incremented && reg_type == RegType::gpr) || (reg_type == RegType::vec)) {
             const auto desc = port.expr_port->get_descriptor_ptr();
             const auto expr = port.expr_port->get_expr();
             const auto parent_desc = expr->get_input_port_connector(port.expr_port->get_index())->get_source().get_descriptor_ptr();
