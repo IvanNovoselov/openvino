@@ -109,7 +109,7 @@ std::shared_ptr<BrgemmCompiledKernel> BrgemmKernelExecutor::compile_kernel(const
                                    config.get_LDA(), config.get_LDB(), config.get_LDC(),
                                    config.get_M(), config.get_N(), config.get_K(), nullptr);
 
-    std::shared_ptr<BrgemmCompiledKernel> compiled_kernel{};
+    auto compiled_kernel = std::make_shared<BrgemmCompiledKernel>();
 
     OV_CPU_JIT_EMITTER_ASSERT(status == dnnl_success, "Cannot initialize brgemm descriptor due to invalid params");
     if (config.is_with_amx()) {
@@ -124,8 +124,7 @@ std::shared_ptr<BrgemmCompiledKernel> BrgemmKernelExecutor::compile_kernel(const
 
     return compiled_kernel;
 }
-
-BrgemmKernelConfig BrgemmKernelExecutor::update_config(const ov::snippets::lowered::ExpressionPtr& expr, const BrgemmKernelConfig& old_config) const {
+void BrgemmKernelExecutor::update_config(const ov::snippets::lowered::ExpressionPtr& expr, BrgemmKernelConfig& config) const {
     auto get_projected_input_subtensor = [](const snippets::lowered::PortDescriptorPtr& desc) {
         // Note: for output shape you will need get_preordered_vdims()
         auto shape = snippets::utils::get_planar_vdims(desc->get_shape(), desc->get_layout());
@@ -162,9 +161,7 @@ BrgemmKernelConfig BrgemmKernelExecutor::update_config(const ov::snippets::lower
     const auto N = DIM_CAST(*get_projected_input_subtensor(input_pds[1]).rbegin());
     // Matrix C (output)
     const auto LDC = DIM_CAST(snippets::utils::get_out_leading_dim(output_pds[0]));
-    auto config = old_config;
     config.update(M, N, K, LDA, LDB, LDC);
-    return config;
 }
 
 void BrgemmKernelExecutor::execute(const BrgemmKernelExecutor* executor, call_args* args) {

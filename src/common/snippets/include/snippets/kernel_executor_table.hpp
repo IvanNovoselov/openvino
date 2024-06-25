@@ -28,7 +28,7 @@ public:
         virtual bool is_completed() const = 0;
 
         /*** Return deep copy of the config */
-        virtual std::shared_ptr<GenericConfig> clone() const = 0;
+        virtual std::unique_ptr<GenericConfig> get_clone_ptr() const = 0;
 
         /*** Compute hash for fast comparison operations or caching support */
         virtual size_t hash() const = 0;
@@ -74,18 +74,18 @@ public:
 
     // Note: override when final is redundant, but needed to avoid warnings on some compilers
     void update_by_expression(const ov::snippets::lowered::ExpressionPtr& expr) override final { // NOLINT
-        m_config = update_config(expr, m_config);
+        update_config(expr, m_config);
         OPENVINO_ASSERT(m_config.is_completed(), "Failed to update kernel config in update_by_expression");
-        m_kernel = update_kernel(m_config);
+        update_kernel(m_config, m_kernel);
         OPENVINO_ASSERT(m_kernel, "Failed to compile kernel executor");
     }
     void update_by_config(const GenericConfig& new_config) override final { // NOLINT
         if (static_cast<GenericConfig&>(m_config) == new_config)
             return;
-        const auto& new_ptr = std::dynamic_pointer_cast<Conf>(&new_config);
+        const auto& new_ptr = dynamic_cast<const Conf*>(&new_config);
         OPENVINO_ASSERT(new_config.is_completed() && new_ptr, "Failed to update kernel config in get_config");
         m_config = *new_ptr;
-        m_kernel = update_kernel(m_config);
+        update_kernel(m_config, m_kernel);
         OPENVINO_ASSERT(m_kernel, "Failed to compile kernel executor");
     }
     const GenericConfig& get_config() const override { return m_config; }
@@ -106,10 +106,10 @@ public:
 
 protected:
     /*** Updates stored kernel config based on runtime info from expression (e.g. new input shapes). */
-    virtual Conf update_config(const ov::snippets::lowered::ExpressionPtr& expr, const Conf& config) const = 0;
+    virtual void update_config(const ov::snippets::lowered::ExpressionPtr& expr, Conf& config) const = 0;
     /*** Updates stored kernel in accordance with the passed config. Recompilation of the kernel is
      * performed only if necessary, otherwise an appropriate kernel is retrieved from cache. */
-    virtual std::shared_ptr<KernelType> update_kernel(const Conf& c) const = 0;
+    virtual void update_kernel(const Conf& c, std::shared_ptr<KernelType>& kernel) const = 0;
 
 private:
     /** Contains all the necessary information to compile a desired kernel*/

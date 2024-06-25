@@ -18,8 +18,8 @@ public:
     BrgemmKernelConfig() = default;
     bool is_completed() const override;
     size_t hash() const override { return m_hash; }
-    std::shared_ptr<GenericConfig> clone() const override {
-        return std::make_shared<BrgemmKernelConfig>(*this);
+    std::unique_ptr<GenericConfig> get_clone_ptr() const override {
+        return std::unique_ptr<BrgemmKernelConfig>( new BrgemmKernelConfig(*this));
     }
     void update(dnnl_dim_t M, dnnl_dim_t N, dnnl_dim_t K, dnnl_dim_t LDA, dnnl_dim_t LDB, dnnl_dim_t LDC);
 
@@ -88,7 +88,7 @@ public:
 
 protected:
     std::shared_ptr<BrgemmCompiledKernel> compile_kernel(const BrgemmKernelConfig& c) const override;
-    BrgemmKernelConfig update_config(const ov::snippets::lowered::ExpressionPtr& expr, const BrgemmKernelConfig& config) const override;
+    void update_config(const ov::snippets::lowered::ExpressionPtr& expr, BrgemmKernelConfig& config) const override;
 };
 #define GET_OFF_BRGEMM_ARGS(field) offsetof(BrgemmKernelExecutor::call_args, field)
 }   // namespace intel_cpu

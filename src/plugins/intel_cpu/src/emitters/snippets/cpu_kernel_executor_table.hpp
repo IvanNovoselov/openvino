@@ -21,14 +21,14 @@ public:
          size_t hash() const { return config.hash(); }
          bool operator==(const Key& rhs) const { return config == rhs.config; }
      };
-    std::shared_ptr<KernelType> update_kernel(const Conf& config) const override final { // NOLINT
+    void update_kernel(const Conf& config, std::shared_ptr<KernelType>& kernel) const override final { // NOLINT
         const auto& cache = m_kernel_cache.lock();
         OPENVINO_ASSERT(cache, "Invalid kernel cache pointer in CPUKernelExecutor::update_kernel()");
         const auto& lookup_result = cache->getOrCreate(Key(config),
                                                        [this](const Key& k) {
                                                             return compile_kernel(k.config);
                                                        });
-        return lookup_result.first;
+        kernel = lookup_result.first;
     }
 
 protected:
