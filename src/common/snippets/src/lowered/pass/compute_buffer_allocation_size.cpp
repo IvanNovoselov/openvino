@@ -8,6 +8,8 @@
 #include "snippets/utils.hpp"
 #include "snippets/itt.hpp"
 
+#include "snippets/lowered/pass/serialize_control_flow.hpp"
+
 
 namespace ov {
 namespace snippets {
@@ -79,6 +81,7 @@ bool ComputeBufferAllocationSize::run(LinearIR& linear_ir, lowered::LinearIR::co
     OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "Snippets::ComputeBufferAllocationSize")
 
     const auto& loop_manager = linear_ir.get_loop_manager();
+    snippets::lowered::pass::SerializeControlFlow("snsdebug_compute_allocation_size.xml").run(linear_ir);
 
     const auto& buffer_expressions = linear_ir.get_buffers();
     for (const auto& buffer_expr : buffer_expressions) {

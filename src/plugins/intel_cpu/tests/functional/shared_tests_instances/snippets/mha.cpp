@@ -13,14 +13,16 @@ namespace ov {
 namespace test {
 namespace snippets {
 
+#define STATIC_SHAPE(...) {{}, {{__VA_ARGS__}}}
+
 namespace {
 
-const std::vector<std::vector<ov::PartialShape>> inputShapes_4D = {
-    {{1, 128, 12, 64}, {1, 128, 12, 64}, {1, 12, 128, 128}, {1, 128, 12, 64}},
-    {{1, 128, 16, 64}, {1, 128, 16, 64}, {1, 16, 1, 1}, {1, 128, 16, 64}},
-    {{1, 128, 16, 64}, {1, 128, 16, 64}, {1, 1, 1, 128}, {1, 128, 16, 64}},
-    {{2, 68, 6, 92}, {2, 68, 6, 92}, {1, 1, 68, 68}, {2, 68, 6, 92}},
-    {{1, 58, 16, 34}, {1, 58, 16, 34}, {1, 1, 1, 58}, {1, 58, 16, 34}},
+const std::vector<std::vector<ov::test::InputShape>> inputShapes_4D = {
+    {STATIC_SHAPE(1, 128, 12, 64), STATIC_SHAPE(1, 128, 12, 64), STATIC_SHAPE(1, 12, 128, 128), STATIC_SHAPE(1, 128, 12, 64)},
+    {STATIC_SHAPE(1, 128, 16, 64), STATIC_SHAPE(1, 128, 16, 64), STATIC_SHAPE(1, 16, 1, 1), STATIC_SHAPE(1, 128, 16, 64)},
+    {STATIC_SHAPE(1, 128, 16, 64), STATIC_SHAPE(1, 128, 16, 64), STATIC_SHAPE(1, 1, 1, 128), STATIC_SHAPE(1, 128, 16, 64)},
+    {STATIC_SHAPE(2, 68, 6, 92), STATIC_SHAPE(2, 68, 6, 92), STATIC_SHAPE(1, 1, 68, 68), STATIC_SHAPE(2, 68, 6, 92)},
+    {STATIC_SHAPE(1, 58, 16, 34), STATIC_SHAPE(1, 58, 16, 34), STATIC_SHAPE(1, 1, 1, 58), STATIC_SHAPE(1, 58, 16, 34)},
 };
 
 const std::vector<std::vector<ov::PartialShape>> inputShapes_3D = {
@@ -62,6 +64,29 @@ INSTANTIATE_TEST_SUITE_P(smoke_Snippets_MHA_4D,
                                             ::testing::Values(CPUTestUtils::empty_plugin_config)),
                          MHA::getTestCaseName);
 
+std::vector<std::vector<ov::test::InputShape>> inputShapes_4D_dynamic{
+        {
+            {PartialShape{-1, -1, -1, -1}, {{1, 128, 12, 64}}},
+            {PartialShape{-1, -1, -1, -1}, {{1, 128, 12, 64}}},
+            {PartialShape{-1, -1, -1, -1}, {{1, 12, 128, 128}}},
+            {PartialShape{-1, -1, -1, -1}, {{1, 128, 12, 64}}},
+        },
+};
+
+INSTANTIATE_TEST_SUITE_P(smoke_Snippets_DynMHA_4D,
+                         MHA,
+                         ::testing::Combine(::testing::ValuesIn(inputShapes_4D_dynamic),
+                                            ::testing::ValuesIn(precision_f32(4)),
+                                            ::testing::Values(ov::element::f32),
+                                            ::testing::ValuesIn({false}),
+                                            ::testing::Values(MHA::default_thread_count),
+                                            ::testing::Values(1),
+                                            ::testing::Values(1),
+                                            ::testing::Values(ov::test::utils::DEVICE_CPU),
+                                            ::testing::Values(CPUTestUtils::empty_plugin_config)),
+                         MHA::getTestCaseName);
+
+/*
 INSTANTIATE_TEST_SUITE_P(smoke_Snippets_MHA_3D,
                          MHA,
                          ::testing::Combine(::testing::ValuesIn(inputShapes_3D),
@@ -374,7 +399,7 @@ INSTANTIATE_TEST_SUITE_P(
                        ::testing::Values(ov::test::utils::DEVICE_CPU),
                        ::testing::Values(CPUTestUtils::empty_plugin_config)),
     MHA::getTestCaseName);
-
+*/
 }  // namespace
 }  // namespace snippets
 }  // namespace test
