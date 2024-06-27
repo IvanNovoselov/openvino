@@ -8,6 +8,7 @@
 #include "common/utils.hpp"
 #include "dnnl_extension_utils.h"
 #include "transformations/snippets/x64/op/brgemm_cpu.hpp"
+#include "openvino/op/matmul.hpp"
 
 #define DIM_CAST(X) static_cast<dnnl_dim_t>(X)
 #define DTYPE_CAST(X) static_cast<dnnl_data_type_t>(DnnlExtensionUtils::ElementTypeToDataType(X))
@@ -169,27 +170,41 @@ void BrgemmKernelExecutor::execute(const BrgemmKernelExecutor* executor, call_ar
     const auto& config = static_cast<const BrgemmKernelConfig&>(executor->get_config());
     OV_CPU_JIT_EMITTER_ASSERT(kernel, "has nullptr compiler kernel or invalid config");
 
-    const auto tile_config = args->amx_tile_config;
-    if (config.is_with_amx() && tile_config && !config.compatible(tile_config)) {
-        *tile_config = static_cast<amx_tile_config_t>(config);
-        cpu::x64::amx_tile_configure(kernel->palette);
+//    const auto tile_config = args->amx_tile_config;
+//    if (config.is_with_amx() && tile_config && !config.compatible(tile_config)) {
+//        *tile_config = static_cast<amx_tile_config_t>(config);
+//        cpu::x64::amx_tile_configure(kernel->palette);
+//    }
+//
+//    cpu::x64::brgemm_kernel_params_t brgemm_p;
+//
+//    brgemm_p.batch = nullptr;  // default value
+//    brgemm_p.ptr_A = args->A;
+//    brgemm_p.ptr_B = args->B;
+//    brgemm_p.ptr_C = args->C;
+//    brgemm_p.ptr_D = args->C;
+//    brgemm_p.ptr_buf = args->scratch;
+//    brgemm_p.ptr_bias = nullptr;
+//    brgemm_p.do_post_ops = static_cast<size_t>(config.is_with_comp());
+//    brgemm_p.do_apply_comp = static_cast<size_t>(config.is_with_comp());
+//    brgemm_p.skip_accm = 0;
+//    brgemm_p.BS = 1;  // default value
+//    OV_CPU_JIT_EMITTER_ASSERT(kernel->compiled_kernel, "has nullptr kernel");
+//    (*kernel->compiled_kernel)(&brgemm_p);
+
+    auto A = reinterpret_cast<const float*>(args->A);
+    auto B = reinterpret_cast<const float*>(args->B);
+    auto C = reinterpret_cast<float*>(args->C);
+    for (dnnl_dim_t m = 0; m < config.get_M(); m++) {
+        for (dnnl_dim_t n = 0; n < config.get_N(); n++, B++) {
+            C[n] = 0;
+            for (dnnl_dim_t k = 0; k < config.get_K(); k++)
+                C[n] += A[k] * B[k * config.get_LDB()];
+        }
+        B -= config.get_N();
+        A += config.get_LDA();
+        C += config.get_LDC();
     }
-
-    cpu::x64::brgemm_kernel_params_t brgemm_p;
-
-    brgemm_p.batch = nullptr;  // default value
-    brgemm_p.ptr_A = args->A;
-    brgemm_p.ptr_B = args->B;
-    brgemm_p.ptr_C = args->C;
-    brgemm_p.ptr_D = args->C;
-    brgemm_p.ptr_buf = args->scratch;
-    brgemm_p.ptr_bias = nullptr;
-    brgemm_p.do_post_ops = static_cast<size_t>(config.is_with_comp());
-    brgemm_p.do_apply_comp = static_cast<size_t>(config.is_with_comp());
-    brgemm_p.skip_accm = 0;
-    brgemm_p.BS = 1;  // default value
-    OV_CPU_JIT_EMITTER_ASSERT(kernel->compiled_kernel, "has nullptr kernel");
-    (*kernel->compiled_kernel)(&brgemm_p);
 }
 
 }   // namespace intel_cpu
