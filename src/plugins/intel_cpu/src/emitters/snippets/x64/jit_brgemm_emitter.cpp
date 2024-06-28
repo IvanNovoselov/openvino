@@ -23,9 +23,6 @@ jit_brgemm_emitter::jit_brgemm_emitter(jit_generator* h, cpu_isa_t isa,
                                        jit_emitter(h, isa) {
     in_out_type_ = emitter_in_out_map::gpr_to_gpr;
     const auto& brgemm_node = as_type_ptr<ov::intel_cpu::BrgemmCPU>(expr->get_node());
-
-    m_with_scratch = brgemm_node->is_with_scratchpad();
-
     const auto& brg0Prc = brgemm_node->get_input_element_type(0);
     const auto& brg1Prc = brgemm_node->get_input_element_type(1);
     BrgemmKernelConfig kernel_config(brg0Prc, brg1Prc,
@@ -40,12 +37,30 @@ jit_brgemm_emitter::jit_brgemm_emitter(jit_generator* h, cpu_isa_t isa,
     OV_CPU_JIT_EMITTER_ASSERT(!snippets::utils::is_dynamic_vdims(expr->get_input_port_descriptor(0)->get_shape()) &&
                               !snippets::utils::is_dynamic_vdims(expr->get_input_port_descriptor(1)->get_shape()),
                               "Jit emitter is called when the shapes are unknown");
+    auto get_cluster_id = [](const snippets::lowered::ExpressionPort& p) {
+        // Note: NewMemoryBuffer is used as a scratchpad and can't be dynamic, so we don't need to account for them here
+        if (const auto buffer = ov::as_type_ptr<ov::snippets::op::IntermediateMemoryBuffer>(p.get_expr()->get_node()))
+            return buffer->get_cluster_id();
+        else
+            return SIZE_MAX;
+    };
+    m_memory_offsets = {brgemm_node->get_offset_a(), brgemm_node->get_offset_b(), brgemm_node->get_offset_c()};
+    m_buffer_ids = {get_cluster_id(expr->get_input_port_connector(0)->get_source()), get_cluster_id(expr->get_input_port_connector(1)->get_source())};
+    for (const auto& child : expr->get_output_port_connector(0)->get_consumers())
+        if (!ov::is_type<snippets::op::LoopEnd>(child.get_expr()->get_node()))
+            m_buffer_ids.push_back(get_cluster_id(child));
 
-    m_load_offset_a = brgemm_node->get_offset_a();
-    m_load_offset_b = brgemm_node->get_offset_b();
-    m_store_offset_c = brgemm_node->get_offset_c();
-    if (m_with_scratch)
-        m_load_offset_scratch = brgemm_node->get_offset_scratch();
+    if (brgemm_node->is_with_scratchpad()) {
+        m_memory_offsets.push_back(brgemm_node->get_offset_scratch());
+        m_buffer_ids.push_back(SIZE_MAX);
+    }
+    // Note: check for illegal configuration. For example, possible if more than one non-LoopEnd output is connected to the expr.
+    OV_CPU_JIT_EMITTER_ASSERT(m_buffer_ids.size() == m_memory_offsets.size(), "Mismatching number of buffer ids and memory offsets");
+    for (size_t i = 0; i < m_memory_offsets.size(); i++) {
+        OV_CPU_JIT_EMITTER_ASSERT(!snippets::utils::is_dynamic_value(m_memory_offsets[i]) ||
+                                   m_buffer_ids[i] != SIZE_MAX,
+                                   "Buffer ids must be specified for dynamic offsets to read values in runtime");
+    }
 }
 
 std::set<std::vector<element::Type>> jit_brgemm_emitter::get_supported_precisions(const std::shared_ptr<ov::Node>& node) {
@@ -69,54 +84,47 @@ std::set<std::vector<element::Type>> jit_brgemm_emitter::get_supported_precision
 }
 
 void jit_brgemm_emitter::validate_arguments(const std::vector<size_t> &in, const std::vector<size_t> &out) const {
-    OV_CPU_JIT_EMITTER_ASSERT((m_with_scratch && in.size() == 3) || (!m_with_scratch && in.size() == 2),
+    OV_CPU_JIT_EMITTER_ASSERT(m_memory_offsets.size() == in.size() + 1 && (out.size() == 1),
                               "expects 3 inputs if there are compensations/wsp");
 }
 
 void jit_brgemm_emitter::emit_impl(const std::vector<size_t>& in, const std::vector<size_t>& out) const {
+#define REG(X) Xbyak::Reg64(static_cast<int>(X))
     validate_arguments(in, out);
     if (host_isa_ == cpu::x64::avx512_core) {
-        Xbyak::Reg64 input_0(static_cast<int>(in[0]));
-        Xbyak::Reg64 input_1(static_cast<int>(in[1]));
-        Xbyak::Reg64 input_2(static_cast<int>(m_with_scratch ? in[2] : 0));  // scratch. Default reg index is 0 if there isn't scratch
-        Xbyak::Reg64 output_0(static_cast<int>(out[0]));
-        emit_brgemm_kernel_call(input_0,
-                                input_1,
-                                input_2,
-                                output_0,
-                                m_load_offset_a,
-                                m_load_offset_b,
-                                m_load_offset_scratch,
-                                m_store_offset_c);
+        std::vector<Xbyak::Reg64> mem_ptrs{REG(in[0]), REG(in[1]), REG(out[0])};
+        if (in.size() > 2)
+            mem_ptrs.emplace_back(REG(in[2]));
+        emit_brgemm_kernel_call(mem_ptrs, m_memory_offsets);
     } else {
         OV_CPU_JIT_EMITTER_THROW("requires at least avx512_core instruction set");
     }
+#undef REG
 }
-
-void jit_brgemm_emitter::emit_brgemm_kernel_call(Reg64 addr_A, Reg64 addr_B, Reg64 scratch, Reg64 addr_C,
-                                                 const size_t in0_kernel_offset, const size_t in1_kernel_offset,
-                                                 const size_t in2_kernel_offset, const size_t out0_kernel_offset) const {
+void jit_brgemm_emitter::emit_brgemm_kernel_call(const std::vector<Xbyak::Reg64>& mem_ptrs, const std::vector<size_t>& mem_offsets) const {
     internal_call_preamble();
     h->mov(h->rbp, reinterpret_cast<uint64_t>(BrgemmKernelExecutor::execute));
     auto reserved_stack_size = sizeof(BrgemmKernelExecutor::call_args);
     // Reserve memory on the stack
     h->sub(h->rsp, reserved_stack_size);
 
-    auto write_addr_on_stack = [&](size_t arg_offset, Reg64 addr, size_t addr_offset) {
+    auto write_addr_on_stack = [&](size_t arg_offset, Reg64 addr, size_t addr_offset, size_t buffer_id) {
         const auto stack_frame = h->qword[h->rsp + arg_offset];
+        // Note: we spoil addr registers here, but it doesn't matter because the initial values will be restored in the postamble anyway
+        if (snippets::utils::is_dynamic_value(addr_offset))
+            h->add(addr,  h->ptr[abi_param1 + GET_OFF(buffer_offsets) + buffer_id * sizeof(size_t)]);
+        else
+            h->add(addr, addr_offset);
         h->mov(stack_frame, addr);
-        if (addr_offset) h->add(stack_frame, addr_offset);
     };
+    const std::vector<size_t> brgemm_args_offsets {GET_OFF_BRGEMM_ARGS(A), GET_OFF_BRGEMM_ARGS(B), GET_OFF_BRGEMM_ARGS(C),
+                                                   GET_OFF_BRGEMM_ARGS(scratch)};
+    for (size_t i = 0; i < mem_ptrs.size(); i++)
+        write_addr_on_stack(brgemm_args_offsets[i], mem_ptrs[i], mem_offsets[i], m_buffer_ids[i]);
 
-    write_addr_on_stack(GET_OFF_BRGEMM_ARGS(A), addr_A, in0_kernel_offset);
-    write_addr_on_stack(GET_OFF_BRGEMM_ARGS(B), addr_B, in1_kernel_offset);
-    write_addr_on_stack(GET_OFF_BRGEMM_ARGS(C), addr_C, out0_kernel_offset);
-
-    if (m_with_scratch) {
-        write_addr_on_stack(GET_OFF_BRGEMM_ARGS(scratch), scratch, in2_kernel_offset);
-    } else {
+    // No scratchpad => need to write nullptr manually
+    if (mem_ptrs.size() < 4)
         h->mov(h->qword[h->rsp + GET_OFF_BRGEMM_ARGS(scratch)], reinterpret_cast<uintptr_t>(nullptr));
-    }
 
     // abi_param1 always contains jit_snippets_call_args which has amx tile config for each thread
     h->lea(h->r10, h->ptr[abi_param1 + GET_OFF(amx_tile_config)]);
