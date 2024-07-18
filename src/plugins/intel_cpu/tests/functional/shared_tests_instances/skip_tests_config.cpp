@@ -510,7 +510,7 @@ std::vector<std::string> disabledTestPatterns() {
         retVector.emplace_back(R"(.*(BF|bf)16.*)");
         retVector.emplace_back(R"(.*bfloat16.*)");
     }
-    if (!ov::with_cpu_x86_avx512_core()) {
+    if (!ov::with_cpu_x86_avx2()) {
         // MatMul in Snippets uses BRGEMM that is supported only on AVX2 (and newer) platforms
         // Disabled Snippets MHA tests as well because MHA pattern contains MatMul
         retVector.emplace_back(R"(.*Snippets.*MHA.*)");
