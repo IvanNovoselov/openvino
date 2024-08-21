@@ -218,6 +218,7 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
         for (size_t n = 0; n < num_expressions; n++) {
             // Regs that are live on entering the operation = regs used by the op + (all other regs alive - regs defined by the op)
             // copy regs from lifeOut to lifeIn while ignoring regs in def
+            // life_in = used + life_out - defined
             std::set_difference(life_out_gpr[n].begin(), life_out_gpr[n].end(),
                                 defined_gpr[n].begin(), defined_gpr[n].end(),
                                 std::inserter(life_in_gpr[n], life_in_gpr[n].begin()));
@@ -241,6 +242,8 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
                     }
                     if (k == num_expressions)
                         OPENVINO_THROW("assign registers can't find target op in the body");
+                    // get child's id to update life_in for an appropriate expression
+                    // add all life_in from the consumer to life_out of the producer
                     life_out_vec[n].insert(life_in_vec[k].begin(), life_in_vec[k].end());
                     life_out_gpr[n].insert(life_in_gpr[k].begin(), life_in_gpr[k].end());
                 }
