@@ -22,13 +22,15 @@
 namespace ov {
 namespace snippets {
 namespace op {
-
+// Accessor class to test private interface
+class SubgarphTestAccessor;
 /**
  * @interface Subgraph
  * @brief An operation that is implemented by a model
  * @ingroup snippets
  */
 class Subgraph : public ov::op::util::SubGraphOp {
+    friend class SubgarphTestAccessor;
 public:
     OPENVINO_OP("Subgraph", "SnippetsOpset", ov::op::util::SubGraphOp);
     // < 1, 42, 17, 15, 16> < 0, 1, 2, 3, 1>

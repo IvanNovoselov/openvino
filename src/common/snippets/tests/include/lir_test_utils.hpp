@@ -8,10 +8,23 @@
 #include "lir_comparator.hpp"
 #include "snippets/lowered/linear_ir.hpp"
 #include "snippets/lowered/pass/pass.hpp"
+#include "snippets/op/subgraph.hpp"
+#include "snippets/lowered/linear_ir.hpp"
+
+
+class ov::snippets::op::SubgarphTestAccessor {
+public:
+    using LinearIR = ov::snippets::lowered::LinearIR;
+    using Subgraph = ov::snippets::op::Subgraph;
+    static std::shared_ptr<LinearIR> get_subgraph_lir(const std::shared_ptr<Subgraph>& subgraph) {
+        return subgraph->m_linear_ir;
+    }
+};
 
 namespace ov {
 namespace test {
 namespace snippets {
+
 class LoweredPassTestsF : public ov::test::TestsCommon {
 public:
     LoweredPassTestsF();
