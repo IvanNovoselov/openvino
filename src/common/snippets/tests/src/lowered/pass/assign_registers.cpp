@@ -7,6 +7,10 @@
 #include "lowering_utils.hpp"
 #include "snippets/lowered/linear_ir_builder.hpp"
 #include "snippets/utils/utils.hpp"
+#include "snippets/pass/tokenization.hpp"
+#include "snippets/lowered/pass/insert_specific_iterations.hpp"
+#include "snippets/lowered/pass/validate_expanded_loops.hpp"
+#include "snippets/lowered/pass/optimize_loop_single_evaluation.hpp"
 
 #include "snippets/lowered/pass/serialize_control_flow.hpp"
 namespace ov {
@@ -26,11 +30,11 @@ void AssignRegistersTest::SetUp() {
     std::vector<PartialShape> input_shapes{{2, 68, 6, 92}, {2, 68, 6, 92}, {1, 1, 68, 68}, {2, 68, 6, 92}};
     std::vector<element::Type> input_precisions(4, element::f32);
     const auto& body = std::make_shared<ov::test::snippets::MHAFunction>(input_shapes, input_precisions, true, false)->getOriginal();
-    NodeVector subgraph_inputs;
-    for (const auto& par : body->get_parameters())
-        subgraph_inputs.push_back(par->clone_with_new_inputs({}));
-    subgraph = std::make_shared<ov::snippets::op::Subgraph>(subgraph_inputs, body);
     generator = std::make_shared<DummyGenerator>();
+    ov::snippets::pass::SnippetsTokenization::Config tokenization_config(8, generator->get_target_machine()->get_reg_count(),
+                                                                         true, true, false, {4});
+    ov::snippets::pass::SnippetsTokenization(tokenization_config).run_on_model(body);
+    subgraph = LoweringTests::getSubgraph(body);
     subgraph->set_generator(generator);
     subgraph->set_tile_rank(2);
 }
@@ -378,18 +382,31 @@ bool AssignRegistersRef::run(ov::snippets::lowered::LinearIR& linear_ir) {
 
 TEST_F(AssignRegistersTest, AssignRegistersTest) {
     subgraph->data_flow_transformations();
-    subgraph->control_flow_transformations();
+
+    auto lowered_pass_config = std::make_shared<ov::snippets::lowered::pass::PassConfig>();
+    lowered_pass_config->disable<ov::snippets::lowered::pass::InsertSpecificIterations>();
+    lowered_pass_config->disable<ov::snippets::lowered::pass::ValidateExpandedLoops>();
+    lowered_pass_config->disable<ov::snippets::lowered::pass::OptimizeLoopSingleEvaluation>();
+    subgraph->control_flow_transformations(8, 256, std::make_shared<ov::snippets::IShapeInferSnippetsFactory>(), lowered_pass_config);
     linear_ir = ov::snippets::op::SubgarphTestAccessor::get_subgraph_lir(subgraph);
 
     linear_ir_ref = ov::snippets::lowered::LinearIRBuilder().clone(linear_ir);
-    for (const auto& expr : *linear_ir_ref)
-        expr->set_reg_info({});
+    for (const auto& expr : *linear_ir_ref) {
+        auto rinfo = expr->get_reg_info();
+        auto& in = rinfo.first;
+        auto& out = rinfo.second;
+        std::fill(in.begin(), in.end(), ov::snippets::Reg());
+        std::fill(out.begin(), out.end(), ov::snippets::Reg());
+        expr->set_reg_info(rinfo);
+    }
 
     auto reg_type_mapper = [&](const ov::Output<Node>& out) -> ov::snippets::RegType{
-        return generator->get_op_out_reg_type(out);
+        return subgraph->get_generator()->get_op_out_reg_type(out);
     };
     auto ref_assign_pass = AssignRegistersRef(reg_type_mapper, generator->get_target_machine()->get_reg_count());
     ref_assign_pass.run(*linear_ir_ref);
+    ov::snippets::lowered::pass::SerializeControlFlow("snsdebug_control.xml").run(*linear_ir);
+    ov::snippets::lowered::pass::SerializeControlFlow("snsdebug_control_ref.xml").run(*linear_ir_ref);
 }
 
 }  // namespace snippets
