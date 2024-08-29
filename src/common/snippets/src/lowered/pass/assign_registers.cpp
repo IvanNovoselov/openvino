@@ -171,28 +171,20 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
         std::cerr << "========================================\n";
     };
 
-    // todo: this part if O(N*N), so it's slow for large subgraphs. Can we simplify it? At least add an early stopping criteria
     bool converged = false;
-    int num_iterations = 0;
     while (!converged) {
-        print_life_info();
         converged = true;
-        for (auto expr_it = linear_ir.begin(); expr_it != linear_ir.end(); expr_it++) {
+        // Note: we are traversing backwards, so next_expr is the one that was visited on the prev iteration
+        ExpressionPtr next_expr = nullptr;
+        for (auto expr_it = linear_ir.rbegin(); expr_it != linear_ir.rend(); expr_it++) {
             const auto& expr =  *expr_it;
             // Regs that are live on entering the operation = regs used by the op + (all other regs alive - regs defined by the op)
             // copy regs from lifeOut to lifeIn while ignoring regs in def
             // life_in = used + life_out - defined
             auto& life = life_info[expr];
             std::set<Reg> in, out;
-//            for (const auto& out_conn : expr->get_output_port_connectors()) {
-//                for (const auto& child_input : out_conn->get_consumers()) {
-//                    auto& child_life = life_info[child_input.get_expr()];
-//                    out.insert(child_life.in.begin(), child_life.in.end());
-//                }
-//            }
-            auto next_expr_it = std::next(expr_it);
-            if (next_expr_it != linear_ir.end()) {
-                auto& next_life = life_info[*next_expr_it];
+            if (next_expr) {
+                auto& next_life = life_info[next_expr];
                 out.insert(next_life.in.begin(), next_life.in.end());
             }
 
@@ -204,13 +196,9 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
             life.in = std::move(in);
             // toodo: we don't really have to store out
             life.out = std::move(out);
+            next_expr = expr;
         }
-        num_iterations++;
     }
-
-    print_life_info();
-    std::cerr << num_iterations << "\n";
-    OPENVINO_THROW("num_iterations");
 
     struct by_starting {
         auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
@@ -238,7 +226,7 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
 //    }
 
 
-
+    print_life_info();
     std::map<Reg, std::pair<int, int>> reg_life_range;
     for (const auto& expr : exprs) {
         const auto& life = life_info[expr];
@@ -301,9 +289,7 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
             }
             // allocate
             if (active.size() == reg_pool.size()) {
-                // todo: if it is LoopBegin or LoopEnd that requires gpr, and we don't have any in the pool,
-                //  then assign SIZE_MAX-1 as a flag to spill a reg inside emitter
-                OPENVINO_THROW("can't allocate registers for a snippet ");
+                OPENVINO_THROW("Can't allocate registers for a snippet: not enough registers");
             } else {
                 register_map[unique_reg] = bank.top();
                 bank.pop();
