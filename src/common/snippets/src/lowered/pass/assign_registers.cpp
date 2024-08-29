@@ -9,6 +9,10 @@
 #include "snippets/itt.hpp"
 #include "snippets/utils/utils.hpp"
 
+//todo: remove debug headers
+#include "snippets/lowered/pass/serialize_control_flow.hpp"
+
+
 // This header is needed to avoid MSVC warning "C2039: 'inserter': is not a member of 'std'"
 #include <iterator>
 
@@ -18,6 +22,7 @@ namespace lowered {
 namespace pass {
 
 void AssignRegisters::set_reg_types(LinearIR& linear_ir) {
+    std::map<RegType, size_t> reg_counter;
     for (const auto& expr : linear_ir) {
         const auto op = expr->get_node();
         if (ov::is_type<op::LoopEnd>(op) ||
@@ -28,7 +33,6 @@ void AssignRegisters::set_reg_types(LinearIR& linear_ir) {
 #endif
         )
             continue;
-        std::map<RegType, size_t> reg_counter;
         OPENVINO_ASSERT(expr->get_output_count() == op->get_output_size(), "Incorrect count of output port descriptors!");
         for (size_t i = 0; i < expr->get_output_count(); ++i) {
             const auto reg_type = m_reg_type_mapper(op->output(i));
@@ -112,15 +116,24 @@ AssignRegisters::RegMap AssignRegisters::assign_regs_manually(LinearIR& linear_i
 bool AssignRegisters::run(LinearIR& linear_ir) {
     OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "Snippets::AssignRegisters")
 
+    //todo: remove debug prtin helper
+    auto print_reg = [](const Reg& r) {
+        std::string res = regTypeToStr(r.type) + " " + std::to_string(r.idx);
+        return res;
+    };
+
     const auto& exprs = linear_ir.get_ops();
-    size_t num_expressions = exprs.size();
+//    size_t num_expressions = exprs.size();
 
     set_reg_types(linear_ir);
     const auto& manually_assigned_regs = assign_regs_manually(linear_ir);
 
+    ov::snippets::lowered::pass::SerializeControlFlow("snsdebug_assign_control.xml").run(linear_ir);
+
     struct life_info_t {
         std::set<Reg> in;
         std::set<Reg> out;
+        std::set<Reg> used;
         std::set<Reg> defined;
         int id = -1;
     };
@@ -130,35 +143,75 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
     for (const auto& expr : exprs) {
         auto& life = life_info[expr];
         for (const auto& in : expr->get_input_port_descriptors())
-            life.in.insert(get_reg(in));
+            life.used.insert(get_reg(in));
         for (const auto& out : expr->get_output_port_descriptors())
             life.defined.insert(get_reg(out));
         life.id = expr_id++;
     }
 
-    // todo: this part if O(N*N), so it's slow for large subgraphs. Can we simplify it? At least add an early stopping criteria
-    for (size_t i = 0; i < num_expressions; i++) {
+    // todo: remove
+    auto print_life_info = [&]() {
         for (const auto& expr : exprs) {
+            std::cerr << expr->get_node()->get_friendly_name() << " :";
+            const auto& life = life_info[expr];
+            std::cerr << "\n    IO: ";
+            for (auto r : life.in)
+                std::cerr << print_reg(r) << ", ";
+            std::cerr << " | ";
+            for (auto r : life.out)
+                std::cerr << print_reg(r) << ", ";
+            std::cerr << "\n    UD: ";
+            for (auto r : life.used)
+                std::cerr << print_reg(r) << ", ";
+            std::cerr << " | ";
+            for (auto r : life.defined)
+                std::cerr << print_reg(r) << ", ";
+            std::cerr << "\n";
+        }
+        std::cerr << "========================================\n";
+    };
+
+    // todo: this part if O(N*N), so it's slow for large subgraphs. Can we simplify it? At least add an early stopping criteria
+    bool converged = false;
+    int num_iterations = 0;
+    while (!converged) {
+        print_life_info();
+        converged = true;
+        for (auto expr_it = linear_ir.begin(); expr_it != linear_ir.end(); expr_it++) {
+            const auto& expr =  *expr_it;
             // Regs that are live on entering the operation = regs used by the op + (all other regs alive - regs defined by the op)
             // copy regs from lifeOut to lifeIn while ignoring regs in def
             // life_in = used + life_out - defined
             auto& life = life_info[expr];
-            std::set_difference(life.out.begin(), life.out.end(),
-                                life.defined.begin(), life.defined.end(),
-                                std::inserter(life.in, life.in.begin()));
-        }
-        for (const auto& expr : exprs) {
-            if (is_type<ov::op::v0::Result>(expr->get_node()))
-                continue;
-            auto& life = life_info[expr];
-            for (const auto& out : expr->get_output_port_connectors()) {
-                for (const auto& child_input : out->get_consumers()) {
-                    auto& child_life = life_info[child_input.get_expr()];
-                    life.out.insert(child_life.in.begin(), child_life.in.end());
-                }
+            std::set<Reg> in, out;
+//            for (const auto& out_conn : expr->get_output_port_connectors()) {
+//                for (const auto& child_input : out_conn->get_consumers()) {
+//                    auto& child_life = life_info[child_input.get_expr()];
+//                    out.insert(child_life.in.begin(), child_life.in.end());
+//                }
+//            }
+            auto next_expr_it = std::next(expr_it);
+            if (next_expr_it != linear_ir.end()) {
+                auto& next_life = life_info[*next_expr_it];
+                out.insert(next_life.in.begin(), next_life.in.end());
             }
+
+            in = life.used;
+            std::set_difference(out.begin(), out.end(),
+                                life.defined.begin(), life.defined.end(),
+                                std::inserter(in, in.begin()));
+            converged = converged && in == life.in;
+            life.in = std::move(in);
+            // toodo: we don't really have to store out
+            life.out = std::move(out);
         }
+        num_iterations++;
     }
+
+    print_life_info();
+    std::cerr << num_iterations << "\n";
+    OPENVINO_THROW("num_iterations");
+
     struct by_starting {
         auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
             return lhs.first < rhs.first|| (lhs.first == rhs.first && lhs.second < rhs.second);
@@ -173,16 +226,30 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
     // todo: why do we need to reverse when building life intervals?
 //    std::reverse(life_in_vec.begin(), life_in_vec.end());
 //    std::reverse(life_in_gpr.begin(), life_in_gpr.end());
+//    for (const auto& expr : exprs) {
+//        auto node = expr->get_node();
+//        std::cerr << node->get_friendly_name() << " : ";
+//        for (auto in : expr->get_input_port_descriptors())
+//            std::cerr << print_reg(in->get_reg()) << ", ";
+//        std::cerr << " | ";
+//        for (auto out : expr->get_output_port_descriptors())
+//            std::cerr << print_reg(out->get_reg()) << ", ";
+//        std::cerr << "\n";
+//    }
+
+
+
     std::map<Reg, std::pair<int, int>> reg_life_range;
     for (const auto& expr : exprs) {
         const auto& life = life_info[expr];
         // Init start time for regs defined by this expr
         for (auto d : life.defined) {
-            OPENVINO_ASSERT(reg_life_range.count(d) == 0);
+            OPENVINO_ASSERT(reg_life_range.count(d) == 0, "Register can't be alive until it's defined");
             reg_life_range[d].first = life.id;
         }
         // Update end time for regs that are alive
         for (auto r : life.in) {
+            OPENVINO_ASSERT(reg_life_range.count(r), "Register must be defined when it's live");
             auto& d = reg_life_range.at(r).second;
             d = std::max(d, life.id);
         }

@@ -12,7 +12,9 @@
 #include "snippets/lowered/pass/validate_expanded_loops.hpp"
 #include "snippets/lowered/pass/optimize_loop_single_evaluation.hpp"
 
+// todo: remove debug headers
 #include "snippets/lowered/pass/serialize_control_flow.hpp"
+#include "subgraph_simple.hpp"
 namespace ov {
 namespace test {
 namespace snippets {
@@ -27,9 +29,12 @@ AssignRegistersTest::AssignRegistersTest() : LoweredPassTestsF() {
 
 
 void AssignRegistersTest::SetUp() {
-    std::vector<PartialShape> input_shapes{{2, 68, 6, 92}, {2, 68, 6, 92}, {1, 1, 68, 68}, {2, 68, 6, 92}};
-    std::vector<element::Type> input_precisions(4, element::f32);
-    const auto& body = std::make_shared<ov::test::snippets::MHAFunction>(input_shapes, input_precisions, true, false)->getOriginal();
+//    std::vector<PartialShape> input_shapes{{2, 68, 6, 92}, {2, 68, 6, 92}, {1, 1, 68, 68}, {2, 68, 6, 92}};
+//    std::vector<element::Type> input_precisions(4, element::f32);
+//    const auto& body = std::make_shared<ov::test::snippets::MHAFunction>(input_shapes, input_precisions, true, false)->getOriginal();
+
+    std::vector<PartialShape> input_shapes{{2, 68, 6, 92}, {2, 68, 6, 92}, {2, 68, 6, 92}};
+    const auto& body = std::make_shared<ov::test::snippets::EltwiseThreeInputsFunction>(input_shapes)->getOriginal();
     generator = std::make_shared<DummyGenerator>();
     ov::snippets::pass::SnippetsTokenization::Config tokenization_config(8, generator->get_target_machine()->get_reg_count(),
                                                                          true, true, false, {4});
@@ -269,6 +274,76 @@ bool AssignRegistersRef::run(ov::snippets::lowered::LinearIR& linear_ir) {
             n++;
         }
     }
+
+    // todo: remove debug print
+    {
+        std::cerr << "===========================================\n Used regs: \n";
+        for (const auto& expr : exprs) {
+            std::vector<tensor> used_gpr_tensors, used_vec_tensors;
+            std::vector<tensor> defined_gpr_tensors, defined_vec_tensors;
+            for (size_t j = 0; j < expr->get_input_count(); ++j) {
+                const auto& in = expr->get_input_port(j);
+                switch (in.get_descriptor_ptr()->get_reg().type) {
+                    case RegType::vec:
+                        used_vec_tensors.push_back(in.get_port_connector_ptr());
+                        break;
+                    case RegType::gpr:
+                        used_gpr_tensors.push_back(in.get_port_connector_ptr());
+                        break;
+                    default:
+                        OPENVINO_THROW("Unsupported reg type detected");
+                }
+            }
+            for (size_t j = 0; j < expr->get_output_count(); ++j) {
+                const auto& out = expr->get_output_port(j);
+                switch (out.get_descriptor_ptr()->get_reg().type) {
+                    case RegType::vec:
+                        defined_vec_tensors.push_back(out.get_port_connector_ptr());
+                        break;
+                    case RegType::gpr:
+                        defined_gpr_tensors.push_back(out.get_port_connector_ptr());
+                        break;
+                    default:
+                        OPENVINO_THROW("Unsupported reg type detected");
+                }
+            }
+            std::cerr << expr->get_node()->get_friendly_name() << " : ";
+            std::cerr << " iVEC: ";
+            for (auto x : tensor2reg(used_vec_tensors, regs_vec))
+                std::cerr << x << ", ";
+            std::cerr << " iGPR: ";
+            for (auto x : tensor2reg(used_gpr_tensors, regs_gpr))
+                std::cerr << x << ", ";
+            std::cerr << " | ";
+            std::cerr << " oVEC: ";
+            for (auto x : tensor2reg(defined_vec_tensors, regs_vec))
+                std::cerr << x << ", ";
+            std::cerr << " oGPR: ";
+            for (auto x : tensor2reg(defined_gpr_tensors, regs_gpr))
+                std::cerr << x << ", ";
+            std::cerr << "\n";
+        }
+        std::cerr << "===========================================\n Live ranges: \n";
+        int i = 0;
+        for (const auto& expr : exprs) {
+            std::cerr << expr->get_node()->get_friendly_name() << " : ";
+            std::cerr << " iVEC: ";
+            for (auto x : life_in_vec[i])
+                std::cerr << x << " ,";
+            std::cerr << " iGPR: ";
+            for (auto x : life_in_gpr[i])
+                std::cerr << x << " ,";
+            std::cerr << " | ";
+            std::cerr << " oVEC: ";
+            for (auto x : life_out_vec[i])
+                std::cerr << x << " ,";
+            std::cerr << " oGPR: ";
+            for (auto x : life_out_gpr[i])
+                std::cerr << x << " ,";
+            std::cerr << "\n";
+            i++;
+        }
+    }
     struct by_starting {
         auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
             return lhs.first < rhs.first|| (lhs.first == rhs.first && lhs.second < rhs.second);
@@ -382,6 +457,7 @@ bool AssignRegistersRef::run(ov::snippets::lowered::LinearIR& linear_ir) {
 
 TEST_F(AssignRegistersTest, AssignRegistersTest) {
     subgraph->data_flow_transformations();
+    ov::pass::Serialize("snsdebug_data.xml", "snsdebug_data.bin").run_on_model(subgraph->body_ptr());
 
     auto lowered_pass_config = std::make_shared<ov::snippets::lowered::pass::PassConfig>();
     lowered_pass_config->disable<ov::snippets::lowered::pass::InsertSpecificIterations>();
@@ -405,7 +481,7 @@ TEST_F(AssignRegistersTest, AssignRegistersTest) {
     };
     auto ref_assign_pass = AssignRegistersRef(reg_type_mapper, generator->get_target_machine()->get_reg_count());
     ref_assign_pass.run(*linear_ir_ref);
-    ov::snippets::lowered::pass::SerializeControlFlow("snsdebug_control.xml").run(*linear_ir);
+//    ov::snippets::lowered::pass::SerializeControlFlow("snsdebug_control.xml").run(*linear_ir);
     ov::snippets::lowered::pass::SerializeControlFlow("snsdebug_control_ref.xml").run(*linear_ir_ref);
 }
 
