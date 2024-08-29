@@ -26,7 +26,9 @@ public:
     bool run(LinearIR& linear_ir) override;
 
 private:
+    using RegMap = std::map<PortConnectorPtr, Reg>;
     void set_reg_types(LinearIR& linear_ir);
+    RegMap assign_regs_manually(LinearIR& linear_ir) const;
 
     std::function<RegType(const ov::Output<Node>& out)> m_reg_type_mapper;
     size_t reg_count;

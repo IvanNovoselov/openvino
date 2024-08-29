@@ -13,6 +13,14 @@ bool operator==(const Reg& lhs, const Reg& rhs) {
 bool operator!=(const Reg& lhs, const Reg& rhs) {
     return !(lhs == rhs);
 }
+bool operator<(const Reg& lhs, const Reg& rhs) {
+    return lhs.type < rhs.type ||
+           (lhs.type == rhs.type && lhs.idx < rhs.idx);
+}
+bool operator>(const Reg& lhs, const Reg& rhs) {
+    return lhs.type > rhs.type ||
+           (lhs.type == rhs.type && lhs.idx > rhs.idx);
+}
 
 std::string regTypeToStr(const RegType& type) {
     switch (type) {

@@ -22,13 +22,17 @@ enum class RegType { gpr, vec, undefined };
  * @brief Register representation: type of register and index
  */
 struct Reg {
+    enum {UNDEFINED_IDX = std::numeric_limits<size_t>::max()};
     Reg() = default;
     Reg(RegType type_, size_t idx_) : type(type_), idx(idx_) {}
 
-    RegType type = RegType::gpr;
-    size_t idx = 0;
+    bool is_defined() const  { return  type != RegType::undefined && idx != UNDEFINED_IDX; }
+    RegType type = RegType::undefined;
+    size_t idx = UNDEFINED_IDX;
 
     friend bool operator==(const Reg& lhs, const Reg& rhs);
+    friend bool operator<(const Reg& lhs, const Reg& rhs);
+    friend bool operator>(const Reg& lhs, const Reg& rhs);
     friend bool operator!=(const Reg& lhs, const Reg& rhs);
 };
 using RegInfo = std::pair<std::vector<Reg>, std::vector<Reg>>;
