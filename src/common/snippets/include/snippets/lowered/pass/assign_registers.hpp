@@ -27,7 +27,8 @@ public:
 
 private:
     using RegMap = std::map<Reg, Reg>;
-    void set_reg_types(LinearIR& linear_ir);
+    using Interval = std::pair<double, double>;
+    void set_reg_types(LinearIR& linear_ir, std::map<Reg, std::pair<double, double>>& reg_life_range);
     RegMap assign_regs_manually(LinearIR& linear_ir) const;
 
     std::function<RegType(const ov::Output<Node>& out)> m_reg_type_mapper;

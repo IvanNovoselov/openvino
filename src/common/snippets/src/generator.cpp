@@ -67,38 +67,38 @@ RegType Generator::get_op_out_reg_type(const ov::Output<Node>& out) const {
     if (reg_type != RegType::undefined)
         return reg_type;
     const auto op = out.get_node_shared_ptr();
-    if (std::dynamic_pointer_cast<ov::op::v0::Parameter>(op) ||
-        std::dynamic_pointer_cast<ov::op::v0::Result>(op) ||
-        std::dynamic_pointer_cast<op::LoopBegin>(op) ||
-        std::dynamic_pointer_cast<op::LoopEnd>(op) ||
-        std::dynamic_pointer_cast<op::Brgemm>(op) ||
-        std::dynamic_pointer_cast<op::IntermediateMemoryBuffer>(op) ||
-        std::dynamic_pointer_cast<op::NewMemoryBuffer>(op) ||
-        std::dynamic_pointer_cast<op::RankNormalization>(op) ||
-        std::dynamic_pointer_cast<op::Reshape>(op) ||
-        std::dynamic_pointer_cast<snippets::op::Store>(op)
+    if (ov::is_type<ov::op::v0::Parameter>(op) ||
+        is_type<ov::op::v0::Result>(op) ||
+        is_type<op::LoopBegin>(op) ||
+        is_type<op::LoopEnd>(op) ||
+        is_type<op::Brgemm>(op) ||
+        is_type<op::IntermediateMemoryBuffer>(op) ||
+        is_type<op::NewMemoryBuffer>(op) ||
+        is_type<op::RankNormalization>(op) ||
+        is_type<op::Reshape>(op) ||
+        is_type<snippets::op::Store>(op)
 #ifdef SNIPPETS_DEBUG_CAPS
-        || std::dynamic_pointer_cast<op::PerfCountBeginBase>(op)
-        || std::dynamic_pointer_cast<op::PerfCountEndBase>(op)
+        || is_type<op::PerfCountBeginBase>(op)
+        || is_type<op::PerfCountEndBase>(op)
 #endif
         )
         return RegType::gpr;
-    else if (std::dynamic_pointer_cast<snippets::op::Load>(op) ||
-             std::dynamic_pointer_cast<snippets::op::BroadcastLoad>(op) ||
+    else if (is_type<snippets::op::Load>(op) ||
+             is_type<snippets::op::BroadcastLoad>(op) ||
              ov::op::util::is_unary_elementwise_arithmetic(op) ||
              ov::op::util::is_binary_elementwise_arithmetic(op) ||
              ov::op::util::is_binary_elementwise_comparison(op) ||
              ov::op::util::is_binary_elementwise_logical(op) ||
-             std::dynamic_pointer_cast<ov::op::v1::LogicalNot>(op) ||
-             std::dynamic_pointer_cast<ov::op::v0::PRelu>(op) ||
-             std::dynamic_pointer_cast<ov::op::v0::Convert>(op) ||
-             std::dynamic_pointer_cast<ov::op::v1::Select>(op) ||
-             std::dynamic_pointer_cast<op::VectorBuffer>(op) ||
-             std::dynamic_pointer_cast<op::BroadcastMove>(op) ||
-             std::dynamic_pointer_cast<op::Scalar>(op) ||
-             std::dynamic_pointer_cast<op::HorizonMax>(op) ||
-             std::dynamic_pointer_cast<op::HorizonSum>(op) ||
-             std::dynamic_pointer_cast<op::Fill>(op))
+             is_type<ov::op::v1::LogicalNot>(op) ||
+             is_type<ov::op::v0::PRelu>(op) ||
+             is_type<ov::op::v0::Convert>(op) ||
+             is_type<ov::op::v1::Select>(op) ||
+             is_type<op::VectorBuffer>(op) ||
+             is_type<op::BroadcastMove>(op) ||
+             is_type<op::Scalar>(op) ||
+             is_type<op::HorizonMax>(op) ||
+             is_type<op::HorizonSum>(op) ||
+             is_type<op::Fill>(op))
         return RegType::vec;
     else
         OPENVINO_THROW("Register type of the operation " + std::string(op->get_type_name()) + " isn't determined!");

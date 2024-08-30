@@ -347,16 +347,15 @@ std::shared_ptr<snippets::Generator> intel_cpu::CPUGenerator::clone() const {
 
 ov::snippets::RegType intel_cpu::CPUGenerator::get_specific_op_out_reg_type(const ov::Output<ov::Node>& out) const {
     const auto op = out.get_node_shared_ptr();
-    if (std::dynamic_pointer_cast<intel_cpu::BrgemmCPU>(op) ||
+    if (is_type<intel_cpu::BrgemmCPU>(op) ||
 #ifdef SNIPPETS_LIBXSMM_TPP
         std::dynamic_pointer_cast<intel_cpu::tpp::modifier::TensorProcessingPrimitive>(op) ||
-        std::dynamic_pointer_cast<intel_cpu::tpp::op::Scalar>(op) ||
+        is_type<intel_cpu::tpp::op::Scalar>(op) ||
 #endif
-        std::dynamic_pointer_cast<intel_cpu::BrgemmCopyB>(op))
+        is_type<intel_cpu::BrgemmCopyB>(op))
         return ov::snippets::RegType::gpr;
-    else if (
-        std::dynamic_pointer_cast<intel_cpu::FusedMulAdd>(op) ||
-        std::dynamic_pointer_cast<intel_cpu::SwishNode>(op))
+    else if (is_type<intel_cpu::FusedMulAdd>(op) ||
+             is_type<intel_cpu::SwishNode>(op))
         return ov::snippets::RegType::vec;
     else
        return ov::snippets::RegType::undefined;

@@ -21,7 +21,7 @@ namespace snippets {
 namespace lowered {
 namespace pass {
 
-void AssignRegisters::set_reg_types(LinearIR& linear_ir) {
+void AssignRegisters::set_reg_types(LinearIR& linear_ir, std::map<Reg, std::pair<double, double>>& reg_life_range) {
     std::map<RegType, size_t> reg_counter;
     for (const auto& expr : linear_ir) {
         const auto op = expr->get_node();
@@ -38,10 +38,14 @@ void AssignRegisters::set_reg_types(LinearIR& linear_ir) {
             const auto reg_type = m_reg_type_mapper(op->output(i));
             const auto& reg = Reg(reg_type, reg_counter[reg_type]++);
             expr->get_output_port_descriptor(i)->set_reg(reg);
+            const double start = expr->get_exec_num();
+            double stop = start;
             // propogate to consumers
             for (const auto& consumer : expr->get_output_port_connector(i)->get_consumers()) {
                 consumer.get_descriptor_ptr()->set_reg(reg);
+                stop = std::max(stop, consumer.get_expr()->get_exec_num());
             }
+            reg_life_range[reg] = std::make_pair(start, stop);
         }
     }
 }
@@ -115,128 +119,73 @@ AssignRegisters::RegMap AssignRegisters::assign_regs_manually(LinearIR& linear_i
 
 bool AssignRegisters::run(LinearIR& linear_ir) {
     OV_ITT_SCOPED_TASK(ov::pass::itt::domains::SnippetsTransform, "Snippets::AssignRegisters")
+    OV_ITT_SCOPE_CHAIN(FIRST_INFERENCE, taskChain, ov::pass::itt::domains::SnippetsTransform, "Snippets::AssignRegisters", "RegTypesAssign");
 
     //todo: remove debug prtin helper
-    auto print_reg = [](const Reg& r) {
-        std::string res = regTypeToStr(r.type) + " " + std::to_string(r.idx);
-        return res;
-    };
+//    auto print_reg = [](const Reg& r) {
+//        std::string res = regTypeToStr(r.type) + " " + std::to_string(r.idx);
+//        return res;
+//    };
 
     const auto& exprs = linear_ir.get_ops();
 //    size_t num_expressions = exprs.size();
-
-    set_reg_types(linear_ir);
+    std::map<Reg, Interval> reg_life_range;
+    set_reg_types(linear_ir, reg_life_range);
+    OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "Manual");
     auto assigned_reg_map = assign_regs_manually(linear_ir);
 
-    ov::snippets::lowered::pass::SerializeControlFlow("snsdebug_assign_control.xml").run(linear_ir);
+    OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "LifeRange");
 
-    struct life_info_t {
-        std::set<Reg> in;
-        std::set<Reg> out;
-        std::set<Reg> used;
-        std::set<Reg> defined;
-        int id = -1;
-    };
-    std::unordered_map<ExpressionPtr, life_info_t> life_info;
-    auto get_reg = [](const PortDescriptorPtr& pd) { return pd->get_reg(); };
-    int expr_id = 0;
-    for (const auto& expr : exprs) {
-        auto& life = life_info[expr];
-        for (const auto& in : expr->get_input_port_descriptors())
-            life.used.insert(get_reg(in));
-        for (const auto& out : expr->get_output_port_descriptors())
-            life.defined.insert(get_reg(out));
-        life.id = expr_id++;
-    }
+//    ov::snippets::lowered::pass::SerializeControlFlow("snsdebug_assign_control.xml").run(linear_ir);
+
 
     // todo: remove
-    auto print_life_info = [&]() {
-        for (const auto& expr : exprs) {
-            std::cerr << expr->get_node()->get_friendly_name() << " :";
-            const auto& life = life_info[expr];
-            std::cerr << "\n    IO: ";
-            for (auto r : life.in)
-                std::cerr << print_reg(r) << ", ";
-            std::cerr << " | ";
-            for (auto r : life.out)
-                std::cerr << print_reg(r) << ", ";
-            std::cerr << "\n    UD: ";
-            for (auto r : life.used)
-                std::cerr << print_reg(r) << ", ";
-            std::cerr << " | ";
-            for (auto r : life.defined)
-                std::cerr << print_reg(r) << ", ";
-            std::cerr << "\n";
-        }
-        std::cerr << "========================================\n";
-    };
+//    auto print_life_info = [&]() {
+//        for (const auto& expr : exprs) {
+//            std::cerr << expr->get_node()->get_friendly_name() << " :";
+//            const auto& life = life_info[expr];
+//            std::cerr << "\n    IO: ";
+//            for (auto r : life.in)
+//                std::cerr << print_reg(r) << ", ";
+//            std::cerr << " | ";
+//            for (auto r : life.out)
+//                std::cerr << print_reg(r) << ", ";
+//            std::cerr << "\n    UD: ";
+//            for (auto r : life.used)
+//                std::cerr << print_reg(r) << ", ";
+//            std::cerr << " | ";
+//            for (auto r : life.defined)
+//                std::cerr << print_reg(r) << ", ";
+//            std::cerr << "\n";
+//        }
+//        std::cerr << "========================================\n";
+//    };
 
-    bool converged = false;
-    while (!converged) {
-        converged = true;
-        // Note: we are traversing backwards, so next_expr is the one that was visited on the prev iteration
-        ExpressionPtr next_expr = nullptr;
-        for (auto expr_it = linear_ir.rbegin(); expr_it != linear_ir.rend(); expr_it++) {
-            const auto& expr =  *expr_it;
-            // Regs that are live on entering the operation = regs used by the op + (all other regs alive - regs defined by the op)
-            // copy regs from lifeOut to lifeIn while ignoring regs in def
-            // life_in = used + life_out - defined
-            auto& life = life_info[expr];
-            std::set<Reg> in, out;
-            if (next_expr) {
-                auto& next_life = life_info[next_expr];
-                out.insert(next_life.in.begin(), next_life.in.end());
-            }
-
-            in = life.used;
-            std::set_difference(out.begin(), out.end(),
-                                life.defined.begin(), life.defined.end(),
-                                std::inserter(in, in.begin()));
-            converged = converged && in == life.in;
-            life.in = std::move(in);
-            // toodo: we don't really have to store out
-            life.out = std::move(out);
-            next_expr = expr;
-        }
-    }
-
+    OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "LifeIntervals");
     struct by_starting {
-        auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
+        auto operator()(const Interval& lhs, const Interval& rhs) const -> bool {
             return lhs.first < rhs.first|| (lhs.first == rhs.first && lhs.second < rhs.second);
         }
     };
 
     struct by_ending {
-        auto operator()(const std::pair<int, int>& lhs, const std::pair<int, int>& rhs) const -> bool {
+        auto operator()(const Interval& lhs, const Interval& rhs) const -> bool {
             return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
         }
     };
 
 
-    print_life_info();
-    std::map<Reg, std::pair<int, int>> reg_life_range;
-    for (const auto& expr : exprs) {
-        const auto& life = life_info[expr];
-        // Init start time for regs defined by this expr
-        for (auto d : life.defined) {
-            OPENVINO_ASSERT(reg_life_range.count(d) == 0, "Register can't be alive until it's defined");
-            reg_life_range[d].first = life.id;
-        }
-        // Update end time for regs that are alive
-        for (auto r : life.in) {
-            OPENVINO_ASSERT(reg_life_range.count(r), "Register must be defined when it's live");
-            auto& d = reg_life_range.at(r).second;
-            d = std::max(d, life.id);
-        }
-    }
+//    print_life_info();
 
     // override live range for manually assigned registers
+    const auto first = linear_ir.begin()->get()->get_exec_num();
+    const auto last = linear_ir.rbegin()->get()->get_exec_num();
     for (auto reg_manreg : assigned_reg_map)
-        reg_life_range[reg_manreg.first] = {0, exprs.size() - 1};
+        reg_life_range[reg_manreg.first] = {first, last};
 
     // A variable live interval - is a range (start, stop) of op indexes, such that
     // the variable is alive within this range (defined but not used by the last user)
-    std::map<std::pair<int, int>, Reg, by_starting> live_intervals_vec, live_intervals_gpr;
+    std::map<Interval, Reg, by_starting> live_intervals_vec, live_intervals_gpr;
     for (const auto& regint : reg_life_range) {
         const auto& reg = regint.first;
         switch (reg.type) {
@@ -252,12 +201,27 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
         }
     }
 
+    OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "Pools");
+    // todo: vec_/gpr_pool are hardware-specific and should be provided by a backend, e.g. overloaded generator
+    std::set<Reg> vec_pool, gpr_pool;
+    std::set<Reg> assigned;
+    for (const auto& reg_manreg : assigned_reg_map)
+        assigned.insert(reg_manreg.second);
+    for (size_t i = 0; i < reg_count; i++) {
+        const auto vacant_vec = Reg(RegType::vec, i);
+        if (assigned.count(vacant_vec) == 0)
+            vec_pool.insert(vacant_vec);
+        const auto vacant_gpr = Reg(RegType::gpr, i);
+        if (assigned.count(vacant_gpr) == 0)
+            gpr_pool.insert(vacant_gpr);
+    }
 
+    OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "Assignment");
     auto linescan_assign_registers = [](const decltype(live_intervals_vec)& live_intervals,
                                         const std::set<Reg>& reg_pool) {
         // http://web.cs.ucla.edu/~palsberg/course/cs132/linearscan.pdf
         // todo: do we need multimap? <=> can an op have two inputs from the same op?
-        std::map<std::pair<int, int>, Reg, by_ending> active;
+        std::map<Interval, Reg, by_ending> active;
         // uniquely defined register => reused reg (reduced subset enabled by reg by reusage)
         std::map<Reg, Reg> register_map;
         std::stack<Reg> bank;
@@ -265,7 +229,7 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
         for (auto rit = reg_pool.crbegin(); rit != reg_pool.crend(); rit++)
             bank.push(*rit);
 
-        std::pair<int, int> interval, active_interval;
+        Interval interval, active_interval;
         Reg unique_reg, active_unique_reg;
         for (const auto& interval_reg : live_intervals) {
             std::tie(interval, unique_reg) = interval_reg;
@@ -287,24 +251,13 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
         }
         return register_map;
     };
-    // todo: vec_/gpr_pool are hardware-specific and should be provided by a backend, e.g. overloaded generator
-    std::set<Reg> vec_pool, gpr_pool;
-    std::set<Reg> assigned;
-    for (const auto& reg_manreg : assigned_reg_map)
-        assigned.insert(reg_manreg.second);
-    for (size_t i = 0; i < reg_count; i++) {
-        const auto vacant_vec = Reg(RegType::vec, i);
-        if (assigned.count(vacant_vec) == 0)
-            vec_pool.insert(vacant_vec);
-        const auto vacant_gpr = Reg(RegType::gpr, i);
-        if (assigned.count(vacant_gpr) == 0)
-            gpr_pool.insert(vacant_gpr);
-    }
 
     const auto& map_vec = linescan_assign_registers(live_intervals_vec, vec_pool);
     assigned_reg_map.insert(map_vec.begin(), map_vec.end());
     const auto& map_gpr = linescan_assign_registers(live_intervals_gpr, gpr_pool);
     assigned_reg_map.insert(map_gpr.begin(), map_gpr.end());
+
+    OV_ITT_SCOPE_NEXT(FIRST_INFERENCE, taskChain, "Postprocessing");
 
     for (const auto& expr : exprs) {
         for (const auto& in : expr->get_input_port_descriptors())
