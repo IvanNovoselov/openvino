@@ -50,21 +50,21 @@ AssignRegisters::RegMap AssignRegisters::assign_regs_manually(LinearIR& linear_i
     RegMap manually_assigned;
     size_t io_index = 0;
     for (const auto& param : linear_ir.get_parameters()) {
-        manually_assigned[param->get_output_port_connector(0)] = Reg(RegType::gpr, io_index);
+        manually_assigned[param->get_output_port_descriptor(0)->get_reg()] = Reg(RegType::gpr, io_index);
         // TODO [96434]: Support shape infer ops in arbitrary place in pipeline, not just after inputs
         // shape infer ops sequence after input
         const auto& shape_infer_consumers = utils::get_first_child_shape_infer_expr_seq(param);
         for (const auto& child_shape_infer_expr : shape_infer_consumers) {
-            manually_assigned[child_shape_infer_expr->get_output_port_connector(0)] = Reg(RegType::gpr, io_index);
+            manually_assigned[child_shape_infer_expr->get_output_port_descriptor(0)->get_reg()] = Reg(RegType::gpr, io_index);
         }
         io_index++;
     }
     for (const auto& result : linear_ir.get_results()) {
-        manually_assigned[result->get_input_port_connector(0)] = Reg(RegType::gpr, io_index);
+        manually_assigned[result->get_input_port_descriptor(0)->get_reg()] = Reg(RegType::gpr, io_index);
         // shape infer ops sequence before result
         const auto& shape_infer_sources = utils::get_first_parent_shape_infer_expr_seq(result);
         for (const auto& parent_shape_infer_expr : shape_infer_sources) {
-            manually_assigned[parent_shape_infer_expr->get_input_port_connector(0)] = Reg(RegType::gpr, io_index);
+            manually_assigned[parent_shape_infer_expr->get_input_port_descriptor(0)->get_reg()] = Reg(RegType::gpr, io_index);
         }
         io_index++;
     }
@@ -77,36 +77,36 @@ AssignRegisters::RegMap AssignRegisters::assign_regs_manually(LinearIR& linear_i
             const auto reg_idx = reg_buffer_idx_offset + buffer->get_reg_group();
             // All buffers have one common data pointer
             if (ov::is_type<op::IntermediateMemoryBuffer>(buffer)) {
-                for (const auto& input : expr->get_input_port_connectors()) {
-                    manually_assigned[input] = Reg(RegType::gpr, reg_idx);
+                for (const auto& input : expr->get_input_port_descriptors()) {
+                    manually_assigned[input->get_reg()] = Reg(RegType::gpr, reg_idx);
                     // shape infer ops in the middle of subgraph. IntermediateMemoryBuffer is inserted before reshape as new loop should start.
                     // child shape info ops share the same memory as IntermediateMemoryBuffer.
                     const auto& shape_infer_consumers = utils::get_first_child_shape_infer_expr_seq(expr);
                     for (const auto& child_shape_infer_expr : shape_infer_consumers) {
-                        manually_assigned[child_shape_infer_expr->get_input_port_connector(0)] =
-                        manually_assigned[child_shape_infer_expr->get_output_port_connector(0)] =
+                        manually_assigned[child_shape_infer_expr->get_input_port_descriptor(0)->get_reg()] =
+                        manually_assigned[child_shape_infer_expr->get_output_port_descriptor(0)->get_reg()] =
                                 Reg(RegType::gpr, reg_idx);
                     }
                 }
             }
-            manually_assigned[expr->get_output_port_connector(0)] = Reg(RegType::gpr, reg_idx);
+            manually_assigned[expr->get_output_port_descriptor(0)->get_reg()] = Reg(RegType::gpr, reg_idx);
         } else if (ov::is_type<op::HorizonMax>(op) || ov::is_type<op::HorizonSum>(op)) {
             // Only in ReduceDecomposition Reduce ops use HorizonMax/HorizonSum and VectorBuffer.
             // We should manually set the one vector register for VectorBuffer and Max/Sum output to simulate a accumulator
             // TODO [96351]: We should rewrite accumulator pattern using another way
             const auto& input_tensor = expr->get_input_port_connector(0);
-            const auto& input_expr = input_tensor->get_source().get_expr();
-            const auto& input_expr_input_tensors = input_expr->get_input_port_connectors();
-            for (const auto& tensor : input_expr_input_tensors) {
-                const auto parent_expr = tensor->get_source().get_expr();
+            const auto& input = input_tensor->get_source();
+            for (const auto& tensor : input.get_expr()->get_input_port_connectors()) {
+                const auto parent = tensor->get_source();
+                const auto parent_expr = parent.get_expr();
                 if (ov::is_type<op::Fill>(parent_expr->get_node())) {
                     if (ov::is_type<op::VectorBuffer>(parent_expr->get_input_port_connector(0)->get_source().get_expr()->get_node())) {
-                        manually_assigned[tensor] = Reg(RegType::vec, accumulator_reg);
-                        manually_assigned[parent_expr->get_input_port_connector(0)] = Reg(RegType::vec, accumulator_reg);
+                        manually_assigned[parent.get_descriptor_ptr()->get_reg()] = Reg(RegType::vec, accumulator_reg);
+                        manually_assigned[parent_expr->get_input_port_descriptor(0)->get_reg()] = Reg(RegType::vec, accumulator_reg);
                     }
                 }
             }
-            manually_assigned[input_tensor] = Reg(RegType::vec, accumulator_reg);
+            manually_assigned[input.get_descriptor_ptr()->get_reg()] = Reg(RegType::vec, accumulator_reg);
             accumulator_reg++;
         }
     }
@@ -126,7 +126,7 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
 //    size_t num_expressions = exprs.size();
 
     set_reg_types(linear_ir);
-    const auto& manually_assigned_regs = assign_regs_manually(linear_ir);
+    auto assigned_reg_map = assign_regs_manually(linear_ir);
 
     ov::snippets::lowered::pass::SerializeControlFlow("snsdebug_assign_control.xml").run(linear_ir);
 
@@ -211,19 +211,6 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
             return lhs.second < rhs.second || (lhs.second == rhs.second && lhs.first < rhs.first);
         }
     };
-    // todo: why do we need to reverse when building life intervals?
-//    std::reverse(life_in_vec.begin(), life_in_vec.end());
-//    std::reverse(life_in_gpr.begin(), life_in_gpr.end());
-//    for (const auto& expr : exprs) {
-//        auto node = expr->get_node();
-//        std::cerr << node->get_friendly_name() << " : ";
-//        for (auto in : expr->get_input_port_descriptors())
-//            std::cerr << print_reg(in->get_reg()) << ", ";
-//        std::cerr << " | ";
-//        for (auto out : expr->get_output_port_descriptors())
-//            std::cerr << print_reg(out->get_reg()) << ", ";
-//        std::cerr << "\n";
-//    }
 
 
     print_life_info();
@@ -242,6 +229,11 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
             d = std::max(d, life.id);
         }
     }
+
+    // override live range for manually assigned registers
+    for (auto reg_manreg : assigned_reg_map)
+        reg_life_range[reg_manreg.first] = {0, exprs.size() - 1};
+
     // A variable live interval - is a range (start, stop) of op indexes, such that
     // the variable is alive within this range (defined but not used by the last user)
     std::map<std::pair<int, int>, Reg, by_starting> live_intervals_vec, live_intervals_gpr;
@@ -288,21 +280,18 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
                 bank.push(register_map[active_unique_reg]);
             }
             // allocate
-            if (active.size() == reg_pool.size()) {
-                OPENVINO_THROW("Can't allocate registers for a snippet: not enough registers");
-            } else {
-                register_map[unique_reg] = bank.top();
-                bank.pop();
-                active.insert(interval_reg);
-            }
+            OPENVINO_ASSERT(active.size() != reg_pool.size(), "Can't allocate registers for a snippet: not enough registers");
+            register_map[unique_reg] = bank.top();
+            bank.pop();
+            active.insert(interval_reg);
         }
         return register_map;
     };
     // todo: vec_/gpr_pool are hardware-specific and should be provided by a backend, e.g. overloaded generator
     std::set<Reg> vec_pool, gpr_pool;
     std::set<Reg> assigned;
-    for (const auto& r : manually_assigned_regs)
-        assigned.insert(r.second);
+    for (const auto& reg_manreg : assigned_reg_map)
+        assigned.insert(reg_manreg.second);
     for (size_t i = 0; i < reg_count; i++) {
         const auto vacant_vec = Reg(RegType::vec, i);
         if (assigned.count(vacant_vec) == 0)
@@ -312,24 +301,16 @@ bool AssignRegisters::run(LinearIR& linear_ir) {
             gpr_pool.insert(vacant_gpr);
     }
 
-    auto unique2reused_map_vec = linescan_assign_registers(live_intervals_vec, vec_pool);
-    auto unique2reused_map_gpr = linescan_assign_registers(live_intervals_gpr, gpr_pool);
+    const auto& map_vec = linescan_assign_registers(live_intervals_vec, vec_pool);
+    assigned_reg_map.insert(map_vec.begin(), map_vec.end());
+    const auto& map_gpr = linescan_assign_registers(live_intervals_gpr, gpr_pool);
+    assigned_reg_map.insert(map_gpr.begin(), map_gpr.end());
 
     for (const auto& expr : exprs) {
-        for (size_t i = 0; i < expr->get_input_count(); ++i) {
-            const auto& desc = expr->get_input_port_descriptor(i);
-            auto con = expr->get_input_port_connector(i);
-            const auto& manual =  manually_assigned_regs.find(con);
-            if (manual != manually_assigned_regs.end()) {
-                desc->set_reg(manual->second);
-            } else {
-                const auto reg = desc->get_reg();
-                if (reg.type == RegType::gpr)
-                    desc->set_reg(unique2reused_map_gpr.at(reg));
-                else if (reg.type == RegType::vec)
-                    desc->set_reg(unique2reused_map_vec.at(reg));
-            }
-        }
+        for (const auto& in : expr->get_input_port_descriptors())
+            in->set_reg(assigned_reg_map[in->get_reg()]);
+        for (const auto& out : expr->get_output_port_descriptors())
+            out->set_reg(assigned_reg_map[out->get_reg()]);
     }
     return false;
 }
