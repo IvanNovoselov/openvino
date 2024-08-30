@@ -16,6 +16,11 @@
 // This header is needed to avoid MSVC warning "C2039: 'inserter': is not a member of 'std'"
 #include <iterator>
 
+// todo:
+//  1. Move set_reg_types to a separate pass
+//  2. Modify set_reg_types, so it stores a set of live regs for every expression
+//  3. Implement abstract to physical mapping as a separate backend-specific pass
+
 namespace ov {
 namespace snippets {
 namespace lowered {
@@ -40,6 +45,21 @@ void AssignRegisters::set_reg_types(LinearIR& linear_ir, std::map<Reg, std::pair
             expr->get_output_port_descriptor(i)->set_reg(reg);
             const double start = expr->get_exec_num();
             double stop = start;
+
+            // examine live reg:
+            //  for (r : live_reg) {
+            //   if (start > r->end) // reg is dead
+            //      live_reg.erase(r)
+            //  }
+            // alternatively:
+            // std::map<double, Reg, std::greater<double>> live_reg; // store in descending order
+            // live_reg.erase(live_reg.lower_bound(start); live_reg.end()); // remove all elements lower than start (not equal)
+            // alternatively:
+            // std::map<double, Reg>> live_reg; // store in ascending order
+            // live_reg.erase(live_reg.begin(), live_reg.upper_bound(start); live_reg.end()); // remove all elements lower than start (not equal)
+
+            // insert reg into live
+
             // propogate to consumers
             for (const auto& consumer : expr->get_output_port_connector(i)->get_consumers()) {
                 consumer.get_descriptor_ptr()->set_reg(reg);
