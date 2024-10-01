@@ -57,8 +57,6 @@ void fill_empty_output_names(const Output<Node>& target_output_node, const Outpu
 
 
 std::shared_ptr<op::Subgraph> wrap_nodes_as_subgraph(const NodeVector& ordered_ops) {
-    /* ====== Subgraph creation ======= */
-
     std::string fused_names;
     ov::OutputVector body_inputs, subgraph_inputs, body_outputs;
     ov::ParameterVector body_parameters;
@@ -100,11 +98,9 @@ std::shared_ptr<op::Subgraph> wrap_nodes_as_subgraph(const NodeVector& ordered_o
             } else if (body_ops_set.count(parent) == 0) {
                 auto parameter = std::make_shared<ov::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
                 body_parameters.push_back(parameter);
-                body_parameters.back()->set_friendly_name(input.get_node()->get_friendly_name());
+                body_parameters.back()->set_friendly_name(input.get_source_output().get_node_shared_ptr()->get_friendly_name());
                 body_inputs.push_back(parameter->output(0));
-
                 subgraph_inputs.push_back(input.get_source_output());
-
                 node->input(i).replace_source_output(parameter);
             }
         }
@@ -156,6 +152,7 @@ std::shared_ptr<op::Subgraph> wrap_nodes_as_subgraph(const NodeVector& ordered_o
         act_body->get_parameters()[i]->set_friendly_name(body_parameters[i]->get_friendly_name());
     }
     subgraph->get_rt_info()["originalLayersNames"] = fused_names;
+    ov::snippets::utils::update_out_tensor_name(subgraph);
     return subgraph;
 }
 
@@ -237,10 +234,8 @@ bool tokenize_node(const std::shared_ptr<ov::Node>& node, const SnippetsTokeniza
     };
 
     auto create_single_node_subgraph = [&](const std::shared_ptr<Node> &node) {
-        auto subgraph = wrap_node_as_subgraph(node);
+        auto subgraph = wrap_nodes_as_subgraph({node});
         subgraph->get_rt_info()["originalLayersNames"] = getFusedNames(node) + node->get_friendly_name();
-        ov::replace_node(node, subgraph);
-        update_out_tensor_name(subgraph);
     };
 
     auto abort = [&](const std::string& message) {

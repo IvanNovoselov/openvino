@@ -19,7 +19,6 @@ void fill_empty_output_names(const Output<Node>& target_output_node, const Outpu
 
 // todo: add description
 std::shared_ptr<op::Subgraph> wrap_nodes_as_subgraph(const NodeVector& ordered_ops);
-std::shared_ptr<op::Subgraph> wrap_node_as_subgraph(const std::shared_ptr<ov::Node>& node);
 
 // Non-scalar Constants are tokenized as Parameters inside Subgraph body but some operations with constant inputs
 // should have explicit Constants even if they're non-scalar (Reshape, Transpose, Broadcast)
