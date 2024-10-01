@@ -59,7 +59,7 @@ ov::snippets::pass::TokenizeMLPSnippets::TokenizeMLPSnippets(const SnippetsToken
 
 
         /* ====== Subgraph creation ======= */
-
+        /*
         ov::OutputVector body_inputs, subgraph_inputs;
         ov::ParameterVector body_parameters;
         ov::ResultVector body_results;
@@ -123,13 +123,7 @@ ov::snippets::pass::TokenizeMLPSnippets::TokenizeMLPSnippets(const SnippetsToken
 
         // mark the Subgraph as Completed to not allow Snippets to include any nodes into the MHA Subgraph in common Tokenization
         SetSnippetsSubgraphType(subgraph, SnippetsSubgraphType::Completed);
-
-
-
-
-
-        ov::replace_node();
-
+        */
     };
 
     auto matcher = std::make_shared<ov::pass::pattern::Matcher>(fc_matmul, matcher_name);
