@@ -58,50 +58,49 @@ void fill_empty_output_names(const Output<Node>& target_output_node, const Outpu
 
 std::shared_ptr<op::Subgraph> wrap_nodes_as_subgraph(const NodeVector& ordered_ops) {
     std::string fused_names;
-    ov::OutputVector body_inputs, subgraph_inputs, body_outputs;
+    ov::OutputVector subgraph_inputs;
     ov::ParameterVector body_parameters;
     ov::ResultVector body_results;
     std::vector<std::set<Input<Node>>> subgraph_result_inputs;
     std::unordered_set<std::shared_ptr<ov::Node>> body_ops_set(ordered_ops.begin(), ordered_ops.end());
+    std::unordered_map<std::shared_ptr<ov::Node>, std::shared_ptr<ov::opset1::Parameter>> parent2parameter;
 
     auto create_body_inputs = [&](const std::shared_ptr<ov::Node>& node) -> void {
         for (size_t i = 0; i < node->get_input_size(); ++i) {
             const auto input = node->input(i);
-            const auto parent = input.get_source_output().get_node_shared_ptr();
+            const auto source_output = input.get_source_output();
+            const auto parent = source_output.get_node_shared_ptr();
             const auto constant = ov::as_type_ptr<ov::op::v0::Constant>(parent);
             if (constant && (ov::shape_size(input.get_shape()) == 1 ||
                              ov::is_type<ov::op::v0::FakeQuantize>(node) ||
                              constant_input_should_be_inside_body(node))) {
-                // If Constant has one consumer - target node, we add Constant to body_inputs
-                // If Constant has several consumers, we should check that all these consumers are inside Subgraph body
-                // and if all of them are inside body, we can explicitly add Constant to the body_inputs, otherwise we should
-                // make a copy and add copy of Constant to body_inputs
+                // If Constant has one or several consumers inside the body - it would be placed there automatically
+                // based on topological sorting
+                // However, if Constant has several consumers, and NOT all of them are inside the body, we should
+                // make a copy of the Constant
                 // For example, this case is especially valid for Transposes nodes
                 //              (several Transposes have the same order so there can be the common Constant with this order)
-                if (constant->get_output_target_inputs(0).size() == 1) {
-                    body_inputs.push_back(input.get_source_output());
-                } else {
-                    const auto constant_consumers = constant->get_output_target_inputs(0);
-                    bool all_consumers_are_inside = std::all_of(constant_consumers.begin(), constant_consumers.end(),
-                                                                [&ordered_ops](const ov::Input<ov::Node>& input) {
-                                                                    return std::find(ordered_ops.begin(), ordered_ops.end(),
-                                                                                     input.get_node()->shared_from_this()) != ordered_ops.end();
-                                                                });
-                    if (all_consumers_are_inside) {
-                        body_inputs.push_back(input.get_source_output());
-                    } else {
-                        const auto constant_copy = constant->clone_with_new_inputs({});
-                        node->set_argument(input.get_index(), constant_copy);
-                        body_inputs.push_back(constant_copy);
-                    }
+
+                const auto& consumers = constant->get_users();
+                bool all_consumers_are_inside = std::all_of(consumers.begin(), consumers.end(),
+                                                            [&body_ops_set](const std::shared_ptr<ov::Node>& n) {
+                                                                return body_ops_set.count(n) != 0;
+                                                            });
+                if (!all_consumers_are_inside) {
+                    const auto constant_copy = constant->clone_with_new_inputs({});
+                    input.replace_source_output(constant_copy);
                 }
             } else if (body_ops_set.count(parent) == 0) {
-                auto parameter = std::make_shared<ov::opset1::Parameter>(input.get_element_type(), input.get_partial_shape());
-                body_parameters.push_back(parameter);
-                body_parameters.back()->set_friendly_name(input.get_source_output().get_node_shared_ptr()->get_friendly_name());
-                body_inputs.push_back(parameter->output(0));
-                subgraph_inputs.push_back(input.get_source_output());
-                node->input(i).replace_source_output(parameter);
+                // If subgraph has two inputs from the same parent, we need to introduce only one Parameter
+                if (parent2parameter.count(parent) == 0) {
+                    auto parameter = std::make_shared<ov::opset1::Parameter>(input.get_element_type(),
+                                                                             input.get_partial_shape());
+                    parameter->set_friendly_name(parent->get_friendly_name());
+                    parent2parameter[parent] = parameter;
+                    body_parameters.push_back(parameter);
+                    subgraph_inputs.push_back(source_output);
+                }
+                node->input(i).replace_source_output(parent2parameter[parent]);
             }
         }
     };
