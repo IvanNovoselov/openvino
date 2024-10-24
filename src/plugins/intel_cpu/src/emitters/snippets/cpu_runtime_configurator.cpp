@@ -48,7 +48,9 @@ void CPURuntimeConfigurator::initialization(const ov::snippets::lowered::LinearI
 
 void CPURuntimeConfigurator::update(const ov::snippets::lowered::LinearIRCPtr& linear_ir) {
     m_config->master_shape = linear_ir->get_master_shape();
-    update_loop_info(linear_ir);
+    if (linear_ir->is_dynamic()) {
+        update_loop_info(linear_ir);
+    }
 
     if (!m_optimizer.optimize()) {
         // If the optimization was not applied, offsets are updated using shapes from descriptors
