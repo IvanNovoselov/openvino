@@ -44,16 +44,6 @@ LinearIR::constExprIt BrgemmCPUBlocking::move_new_memory_buffer(LinearIR& linear
     return std::prev(brgemm_it);
 }
 
-LinearIR::constExprIt BrgemmCPUBlocking::get_loop_begin_pos(LinearIR& linear_ir, const LinearIR::constExprIt& brgemm_it) {
-    auto loop_begin_it = brgemm_it;
-    const auto& brgemm_expr = *brgemm_it;
-    const auto brgemm = ov::as_type_ptr<intel_cpu::BrgemmCPU>(brgemm_expr->get_node());
-    OPENVINO_ASSERT(brgemm, "get_loop_begin_pos must be called only for BrgemmCPU expression");
-    if (with_amx(brgemm->get_type()))
-        loop_begin_it = move_new_memory_buffer(linear_ir, brgemm_it);
-    return loop_begin_it;
-}
-
 size_t BrgemmCPUBlocking::get_default_n_blk(size_t n) const {
     return dnnl::impl::cpu::x64::mayiuse(dnnl::impl::cpu::x64::avx512_core) ? 64 : 24;
 }

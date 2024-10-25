@@ -40,9 +40,6 @@ private:
     static snippets::lowered::LinearIR::constExprIt move_new_memory_buffer(snippets::lowered::LinearIR& linear_ir,
                                                                            const snippets::lowered::LinearIR::constExprIt& brgemm_it);
 
-    static snippets::lowered::LinearIR::constExprIt get_loop_begin_pos(snippets::lowered::LinearIR& linear_ir,
-                                                                       const snippets::lowered::LinearIR::constExprIt& brgemm_it);
-
     snippets::lowered::SpecificIterationHandlers get_k_loop_handlers(size_t work_amount, size_t block_size) const override;
 
     bool mark_blocking_loops(snippets::lowered::LinearIR& linear_ir,
