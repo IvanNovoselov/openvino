@@ -193,8 +193,6 @@ TEST_F(BrgemmCPUBlockingTest, BlockingIsNotNeeded) {
 }
 
 TEST_F(BrgemmCPUBlockingTest, WithDataRepacking) {
-    // Skipped because K,N blocking is disabled until heuristic is updated (ticket: 156014)
-    GTEST_SKIP();
     const ov::Dimension::value_type m = 384;
     const ov::Dimension::value_type k = 1024;
     const ov::Dimension::value_type n = 384;
@@ -230,8 +228,6 @@ TEST_F(BrgemmCPUBlockingTest, WithDataRepacking) {
 }
 
 TEST_F(BrgemmCPUBlockingTest, WithCompensations) {
-    // Skipped because K,N blocking is disabled until heuristic is updated (ticket: 156014)
-    GTEST_SKIP();
     const ov::Dimension::value_type m = 384;
     const ov::Dimension::value_type k = 1024;
     const ov::Dimension::value_type n = 384;
